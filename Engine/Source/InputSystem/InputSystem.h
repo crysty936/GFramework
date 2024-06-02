@@ -6,7 +6,7 @@
 #include "Entity/Entity.h"
 #include "CursorMode.h"
 #include "Core/WindowsPlatform.h"
-#include "Core/EngineCore.h"
+#include "Core/AppCore.h"
 #include "InputDelegates.h"
 
 class InputSystem

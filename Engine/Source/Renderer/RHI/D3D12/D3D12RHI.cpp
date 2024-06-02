@@ -1,7 +1,7 @@
 #include "D3D12RHI.h"
 
 #include "Core/EngineUtils.h"
-#include "Core/EngineCore.h"
+#include "Core/AppCore.h"
 #include "Window/WindowsWindow.h"
 #include "Utils/IOUtils.h"
 
@@ -1109,15 +1109,15 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
  	textureDesc.Height = inHeight;
  	textureDesc.MipLevels = 1;
  	textureDesc.Format = texFormat;
- 	textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+ 	textureDesc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
  	textureDesc.DepthOrArraySize = 1;
  	textureDesc.SampleDesc.Count = 1;
  	textureDesc.SampleDesc.Quality = 0;
- 	textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
- 	textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+ 	textureDesc.Dimension = D3D12_RESOURCE_DIMENSION::D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+ 	textureDesc.Layout = D3D12_TEXTURE_LAYOUT::D3D12_TEXTURE_LAYOUT_UNKNOWN;
  	textureDesc.Alignment = 0;
  
- 	const D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+ 	const D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
  
  	D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommittedResource(
  		&D3D12Utility::GetDefaultHeapProps(),

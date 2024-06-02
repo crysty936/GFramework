@@ -1,5 +1,5 @@
 #include "EditorController.h"
-#include "Core/EngineCore.h"
+#include "Core/AppCore.h"
 
 EditorController::EditorController()
 {

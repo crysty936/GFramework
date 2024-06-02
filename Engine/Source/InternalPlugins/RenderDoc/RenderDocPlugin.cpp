@@ -1,5 +1,5 @@
 #include "RenderDocPlugin.h"
-#include "Core/EngineCore.h"
+#include "Core/AppCore.h"
 #include "Controller/ControllerBase.h"
 #include "Editor/Editor.h"
 #include "Window/WindowsWindow.h"

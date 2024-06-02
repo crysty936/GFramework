@@ -1,17 +1,16 @@
-#include "Core/EngineCore.h"
+#include "Core/AppCore.h"
 #include "Core/WindowsPlatform.h"
 #include "Logger/Logger.h"
 #include "InputSystem/InputSystem.h"
 #include "Scene/SceneManager.h"
 #include "Scene/Scene.h"
 #include "Entity/Entity.h"
-#include "Core/GameModeBase.h"
+#include "Core/AppModeBase.h"
 #include "Timer/TimersManager.h"
 #include "Renderer/Material/MaterialsManager.h"
 #include "Window/WindowsWindow.h"
 #include "Renderer/RHI/RHI.h"
 #include "Renderer/RHI/D3D12/D3D12RHI.h"
-#include "Renderer/Renderer.h"
 #include "backends/imgui_impl_win32.h"
 #include "imgui.h"
 #include "Editor/Editor.h"
@@ -21,7 +20,7 @@ constexpr float IdealFrameRate = 60.f;
 constexpr float IdealFrameTime = 1.0f / IdealFrameRate;
 bool bIsRunning = true;
 
-EngineCore* GEngine = nullptr;
+AppCore* GEngine = nullptr;
 uint64_t GFrameCounter = 0;
 
 static eastl::vector<PluginAndName>& GetInternalPluginsList()
@@ -36,7 +35,7 @@ void AddInternalPlugin(IInternalPlugin* inNewPlugin, const eastl::string& inName
 	GetInternalPluginsList().push_back({ inNewPlugin, inName });
 }
 
-EngineCore::EngineCore()
+AppCore::AppCore()
 	: CurrentDeltaT{ 0.f }
 {
 	static bool engineExists = false;
@@ -45,13 +44,13 @@ EngineCore::EngineCore()
 	engineExists = true;
 }
 
-EngineCore::~EngineCore() = default;
+AppCore::~AppCore() = default;
 
 // Init all engine subsystems
-void EngineCore::Init()
+void AppCore::Init()
 {
-	GEngine = new EngineCore{};
-	GEngine->CurrentGameMode = GameModeBase::Get();
+	GEngine = new AppCore{};
+	GEngine->CurrentApp = AppModeBase::Get();
 
 	InputSystem::Init();
 
@@ -74,14 +73,11 @@ void EngineCore::Init()
 	 //Hide Cursor for input
 	//InputSystem::Get().SetCursorMode(ECursorMode::Disabled, GEngine->MainWindow->GetHandle());// RHIWorkDisabled
 
-	Renderer::Init();// RHIWorkDisabled
-
 	TimersManager::Init();
 
-	SceneManager::Get().LoadScene();
-
-	 //TODO [Editor-Game Separation]: Only if compiled with editor
 	Editor::Init();
+
+	GEngine->CurrentApp->Init();
 
 	 //After initializing all engine subsystems, Game Mode init is called 
 	 //TODO [Editor-Game Separation]: This should be initialized like this only when editor is missing otherwise by the editor
@@ -91,14 +87,12 @@ void EngineCore::Init()
 }
 
 
-void EngineCore::Terminate()
+void AppCore::Terminate()
 {
-
-	// TODO [Editor-Game Separation]: Only if compiled with editor
 	Editor::Terminate();
 
 	TimersManager::Terminate();
-	Renderer::Terminate();
+	GEngine->CurrentApp->Terminate();
 
 	for (PluginAndName& container : GetInternalPluginsList())
 	{
@@ -116,7 +110,31 @@ void EngineCore::Terminate()
 	delete GEngine;
 }
 
-void EngineCore::Run()
+static inline float WaitAndCalculateDeltaT(double& deltaTime, double& lastTime)
+{
+	double currentTime = WindowsPlatform::GetTime();
+	double timeSpent = currentTime - lastTime;
+	double timeLeft = IdealFrameTime - timeSpent;
+
+	// Sleep 0 until time is out, granularity can be set to avoid this but it works well
+	while (timeLeft > 0)
+	{
+		WindowsPlatform::Sleep(0);
+
+		currentTime = WindowsPlatform::GetTime();
+		timeSpent = currentTime - lastTime;
+
+		timeLeft = IdealFrameTime - timeSpent;
+	}
+
+	const float currentDeltaT = static_cast<float>(currentTime - lastTime);
+	//Logger::GetLogger().Log("Delta time: %lf", currentDeltaT);
+	lastTime = currentTime;
+
+	return currentDeltaT;
+}
+
+void AppCore::Run()
 {
 	WindowsPlatform::InitCycles();
 	double deltaTime = 0.0;
@@ -124,32 +142,14 @@ void EngineCore::Run()
 
 	while (bIsRunning)
 	{
-		double currentTime = WindowsPlatform::GetTime();
-		double timeSpent = currentTime - lastTime;
-		double timeLeft = IdealFrameTime - timeSpent;
+		const float CurrentDeltaT = WaitAndCalculateDeltaT(deltaTime, lastTime);
 
-		// Sleep 0 until time is out, granularity can be set to avoid this but this works well
-		while (timeLeft > 0)
-		{
-			WindowsPlatform::Sleep(0);
-
-			currentTime = WindowsPlatform::GetTime();
-			timeSpent = currentTime - lastTime;
-
-			timeLeft = IdealFrameTime - timeSpent;
-		}
-
-		CurrentDeltaT = static_cast<float>(currentTime - lastTime);
 		eastl::wstring text;
 		text.sprintf(L"Seconds: %f", CurrentDeltaT);
 		WindowsPlatform::SetWindowsWindowText(text);
 
-		//Logger::GetLogger().Log("Delta time: %lf", CurrentDeltaT);
-		lastTime = currentTime;
 
 		InputSystem::Get().PollEvents();
-
-		//Call tickableObjects (Camera, etc)
 
 		 //Tick Timers
 		TimersManager::Get().TickTimers(CurrentDeltaT);
@@ -160,18 +160,15 @@ void EngineCore::Run()
  
  		//ImGui::ShowDemoWindow();
 
- 		//SceneManager::Get().GetCurrentScene().TickObjects(CurrentDeltaT);// RHIWorkDisabled
- 		//SceneManager::Get().GetCurrentScene().DisplayObjects();// RHIWorkDisabled
-
-		 //TODO [Editor-Game Separation]: If editor is not present
- 		//CurrentGameMode->Tick(CurrentDeltaT); 
-
+		CurrentApp->BeginFrame();
 		D3D12RHI::Get()->BeginFrame();
 
 		GEditor->Tick(CurrentDeltaT);
 
-		//Renderer::Get().Draw();// RHIWorkDisabled
+		// RHIWorkDisabled
+		//Renderer::Get().Draw();
 		D3D12RHI::Get()->Test();
+		CurrentApp->Draw();
 
  		for (PluginAndName& container : GetInternalPluginsList())
  		{
@@ -183,7 +180,9 @@ void EngineCore::Run()
 		ImGui::Render();
 		D3D12RHI::Get()->ImGuiRenderDrawData();
 
-		D3D12RHI::Get()->SwapBuffers(); //Renderer::Get().Present();// RHIWorkDisabled
+		// RHIWorkDisabled
+		//Renderer::Get().Present();
+		D3D12RHI::Get()->SwapBuffers(); 
 
 		CheckShouldCloseWindow();
 
@@ -193,7 +192,7 @@ void EngineCore::Run()
 	Terminate();
 }
 
-void EngineCore::CheckShouldCloseWindow()
+void AppCore::CheckShouldCloseWindow()
 {
 	if (MainWindow->ShouldClose())
 	{
@@ -201,17 +200,17 @@ void EngineCore::CheckShouldCloseWindow()
 	}
 }
 
-bool EngineCore::IsRunning()
+bool AppCore::IsRunning()
 {
 	return bIsRunning;
 }
 
-void EngineCore::StopEngine()
+void AppCore::StopEngine()
 {
 	bIsRunning = false;
 }
 
-IInternalPlugin* EngineCore::GetPluginPrivate(const eastl::string& inName)
+IInternalPlugin* AppCore::GetPluginPrivate(const eastl::string& inName)
 {
 	for (PluginAndName& container : GetInternalPluginsList())
 	{

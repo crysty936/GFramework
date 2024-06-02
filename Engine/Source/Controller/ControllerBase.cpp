@@ -1,5 +1,5 @@
 #include "ControllerBase.h"
-#include "Core/EngineCore.h"
+#include "Core/AppCore.h"
 
 ControllerBase::ControllerBase() = default;
 ControllerBase::~ControllerBase() = default;

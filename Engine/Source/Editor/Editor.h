@@ -17,13 +17,12 @@
      Editor();
      ~Editor();
 
-     void Internal_PostInit();
+     void Internal_Init();
 
      void MoveCameraLeft();
      void MoveCameraRight();
      void MoveCameraUp();
      void MoveCameraDown();
-     void OnChangeDrawMode();
      void DebugCursorMode();
      void BoostCameraSpeed();
      void OnMouseRightPressed();
@@ -33,7 +32,6 @@
  private:
 	eastl::unique_ptr<class EditorController> Controller;
 	eastl::shared_ptr<class Camera> ViewportCamera;
-	class GameModeBase* CurrentGameMode = nullptr;
     bool InViewportNavigateMode = false;
 
  };

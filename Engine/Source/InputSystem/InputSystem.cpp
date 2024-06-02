@@ -1,7 +1,7 @@
 #include "InputSystem/InputSystem.h"
 #include "Core/WindowsPlatform.h"
 #include "Window/WindowsWindow.h"
-#include "Core/EngineCore.h"
+#include "Core/AppCore.h"
 
 InputSystem* InputSystem::Instance;
 

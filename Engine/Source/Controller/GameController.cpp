@@ -1,5 +1,5 @@
 #include "GameController.h"
-#include "Core/EngineCore.h"
+#include "Core/AppCore.h"
 
 GameController::GameController()
 {

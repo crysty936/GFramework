@@ -1,8 +1,8 @@
-#include "GameModeBase.h"
-#include "EngineCore.h"
+#include "AppModeBase.h"
+#include "AppCore.h"
 
 int main(int argc, char** argv)
 {
-	EngineCore::Init();
+	AppCore::Init();
 	GEngine->Run();
 }

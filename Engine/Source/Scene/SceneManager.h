@@ -15,7 +15,6 @@ public:
 	static void Init();
 	static void Terminate();
 
-	void LoadScene();
 	static inline SceneManager& Get() { return *Instance; }
 
 	inline class Scene& GetCurrentScene() const { return *CurrentScene; }

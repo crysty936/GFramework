@@ -7,11 +7,11 @@
 
 using PostInitCallback = MulticastDelegate<>;
 
-class EngineCore
+class AppCore
 {
 public:
-	EngineCore();
-	~EngineCore();
+	AppCore();
+	~AppCore();
 
 public:
 	static void Init();
@@ -32,16 +32,16 @@ private:
 	IInternalPlugin* GetPluginPrivate(const eastl::string& inName);
 
 private:
+	class AppModeBase* CurrentApp = nullptr;
 	PostInitCallback InitDoneMulticast;
 	float CurrentDeltaT;
 
-	class GameModeBase* CurrentGameMode = nullptr;
 	// TODO 
 	// Engine core holds ownership over Window for now, it should be moved to application layer later
 	eastl::unique_ptr<class WindowsWindow> MainWindow = nullptr;
 };
 
-extern EngineCore* GEngine;
+extern AppCore* GEngine;
 extern uint64_t GFrameCounter;
 
 void AddInternalPlugin(class IInternalPlugin* inNewPlugin, const eastl::string& inName);
@@ -66,7 +66,7 @@ public:
 
 
 template<class PluginType>
-PluginType* EngineCore::GetInternalPlugin(const eastl::string& inName)
+PluginType* AppCore::GetInternalPlugin(const eastl::string& inName)
 {
 	IInternalPlugin* plugin = GetPluginPrivate(inName);
 

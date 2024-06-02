@@ -1,6 +1,5 @@
 #include "DrawDebugHelpers.h"
 #include "Utils/InlineVector.h"
-#include "Renderer.h"
 #include "RenderUtils.h"
 #include "RHI/RHI.h"
 #include "Material/MaterialsManager.h"

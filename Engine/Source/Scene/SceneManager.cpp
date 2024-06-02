@@ -24,11 +24,6 @@ void SceneManager::Init()
 	Instance = new SceneManager{};
 }
 
-void SceneManager::LoadScene()
-{
-	// TODO Should be implemented to read the scene from a serialized output
-}
-
 void SceneManager::Terminate()
 {
 	ASSERT(Instance);

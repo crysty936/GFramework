@@ -3,7 +3,7 @@
 #include "Core/EngineUtils.h"
 #include "Renderer/Material/MaterialHelpers.h"
 #include "Renderer/DrawDebugHelpers.h"
-#include "Core/EngineCore.h"
+#include "Core/AppCore.h"
 #include "Window/WindowProperties.h"
 #include "Window/WindowsWindow.h"
 

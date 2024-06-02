@@ -5,7 +5,6 @@
 #include "assimp/postprocess.h"
 #include "Renderer/Material/MaterialsManager.h"
 #include "Renderer/RenderCommand.h"
-#include "Renderer/Renderer.h"
 #include "Renderer/RenderingPrimitives.h"
 #include "Renderer/RHI/Resources/MeshDataContainer.h"
 #include "Renderer/RHI/Resources/RHITexture.h"

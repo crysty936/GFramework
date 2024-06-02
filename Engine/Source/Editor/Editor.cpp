@@ -4,7 +4,7 @@
 #include "Entity/TransformObject.h"
 #include "Scene/Scene.h"
 #include "Camera/Camera.h"
-#include "Core/GameModeBase.h"
+#include "Core/AppModeBase.h"
 #include "imgui.h"
 
 Editor* GEditor = nullptr;
@@ -12,7 +12,7 @@ Editor* GEditor = nullptr;
 void Editor::Init()
 {
 	GEditor = new Editor();
-	GEditor->Internal_PostInit();
+	GEditor->Internal_Init();
 }
 
 void Editor::Terminate()
@@ -23,9 +23,6 @@ void Editor::Terminate()
 void Editor::Tick(float inDeltaT)
 {
 	Controller->ExecuteCallbacks();
-
-	// TODO [Editor-Game Separation]: Only do this based on if the game is started
-	//CurrentGameMode->Tick(inDeltaT);
 }
 
 Editor::Editor()
@@ -35,11 +32,8 @@ Editor::Editor()
 
 Editor::~Editor() = default;
 
-void Editor::Internal_PostInit()
+void Editor::Internal_Init()
 {
-	//CurrentGameMode = GameModeBase::Get();
-	//CurrentGameMode->Init();
-
 	SceneManager& sManager = SceneManager::Get();
 	Scene& currentScene = sManager.GetCurrentScene();
 	ViewportCamera = currentScene.GetCurrentCamera();
@@ -89,14 +83,6 @@ void Editor::Internal_PostInit()
 	}
 
 	{
-		KeyActionDelegate del = KeyActionDelegate::CreateRaw(this, &Editor::OnChangeDrawMode);
-		EInputKey key = EInputKey::F;
-		OnKeyAction action = { del, {}, key, true };
-
-		Controller->AddListener(action);
-	}
-
-	{
 		KeyActionDelegate del = KeyActionDelegate::CreateRaw(this, &Editor::DebugCursorMode);
 		EInputKey key = EInputKey::Q;
 		OnKeyAction action = { del, {}, key, true };
@@ -132,7 +118,6 @@ void Editor::MoveCameraLeft()
 	}
 
 	ViewportCamera->Move(MovementDirection::Left, CameraSpeed);
-	//ViewportCamera->GetRelativeTransform().Rotate(5.f, glm::vec3(0.f, 1.f, 0.f));
 }
 
 void Editor::MoveCameraRight()
@@ -143,7 +128,6 @@ void Editor::MoveCameraRight()
 	}
 
 	ViewportCamera->Move(MovementDirection::Right, CameraSpeed);
-	//ViewportCamera->GetRelativeTransform().Rotate(-5.f, glm::vec3(0.f, 1.f, 0.f));
 }
 
 void Editor::MoveCameraUp()
@@ -164,15 +148,6 @@ void Editor::MoveCameraDown()
 	}
 
 	ViewportCamera->Move(MovementDirection::Back, CameraSpeed);
-}
-
-void Editor::OnChangeDrawMode()
-{
-	static bool drawMode = false;
-
-	//RHI->SetDrawMode(drawMode ? EDrawMode::NORMAL : EDrawMode::DEPTH);
-
-	drawMode = !drawMode;
 }
 
 static bool mouseTest = false;
