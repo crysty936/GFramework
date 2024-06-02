@@ -1,0 +1,11 @@
+Model Information:
+* title:	High Poly Blender Monkey (Suzanne)
+* source:	https://sketchfab.com/3d-models/high-poly-blender-monkey-suzanne-396cc8d256514020b18dbf59d646294d
+* author:	robfaulkner549 (https://sketchfab.com/robfaulkner549)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "High Poly Blender Monkey (Suzanne)" (https://sketchfab.com/3d-models/high-poly-blender-monkey-suzanne-396cc8d256514020b18dbf59d646294d) by robfaulkner549 (https://sketchfab.com/robfaulkner549) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
