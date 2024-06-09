@@ -2,6 +2,7 @@
 #include "Renderer/Drawable/ShapesUtils/BasicShapesData.h"
 #include "Renderer/RHI/Resources/MeshDataContainer.h"
 #include "Renderer/Material/MaterialsManager.h"
+#if 0
 #include "Renderer/RenderCommand.h"
 #include "Renderer/Renderer.h"
 #include "Core/SceneHelper.h"
@@ -15,7 +16,6 @@
 #include "Renderer/Material/EngineMaterials/RenderMaterial_LightSource.h"
 #include "Renderer/Material/EngineMaterials/RenderMaterial_DeferredDecal.h"
 
-#if 0
 
 
 TriangleShape::TriangleShape(const eastl::string& inName)

@@ -20,6 +20,7 @@ public:
 	void CheckShouldCloseWindow();
 	bool IsRunning();
 	void StopEngine();
+	bool IsImguiEnabled() const;
 
 	class WindowsWindow& GetMainWindow() { return *MainWindow; }
 	inline PostInitCallback& GetPostInitMulticast() { return InitDoneMulticast; }

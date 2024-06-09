@@ -1,6 +1,8 @@
 #include "D3D12Utility.h"
 
 ID3D12Device* D3D12Globals::Device;
+IDXGISwapChain3* D3D12Globals::SwapChain;
+ID3D12CommandQueue* D3D12Globals::CommandQueue;
 uint64_t D3D12Globals::CurrentFrameIndex = 0;
 D3D12DescriptorHeap D3D12Globals::GlobalRTVHeap;
 D3D12DescriptorHeap D3D12Globals::GlobalSRVHeap;

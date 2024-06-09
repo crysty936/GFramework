@@ -1,7 +1,6 @@
 #include "RenderUtils.h"
 #include "EASTL/string.h"
 #include "RHI/Resources/VertexInputLayout.h"
-#include "Renderer.h"
 #include "Drawable/ShapesUtils/BasicShapesData.h"
 #include "RHI/RHI.h"
 #include "Material/MaterialsManager.h"

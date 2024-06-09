@@ -7,4 +7,6 @@ public:
 	virtual void Shutdown() = 0;
 
 	virtual void Tick(const float inDeltaTime) = 0;
+
+	virtual bool IsInit() = 0;
 };

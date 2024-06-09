@@ -17,7 +17,7 @@ LOG_ERROR(inMessage, __VA_ARGS__);							\
 #define ENSURE_MSG(x, inMessage, ...)						\
   ((!!(x)) || ([&](){										\
 static bool bExecuted = false;								\
-  if(!bExecuted)									\
+  if(!bExecuted)											\
   {															\
 bExecuted = true;											\
 LOG_ERROR(inMessage, __VA_ARGS__);							\
@@ -25,16 +25,16 @@ LOG_ERROR(inMessage, __VA_ARGS__);							\
  return false;												\
   }()))														\
 
-#define ASSERT(x, ...)						\
+#define ASSERT(x, ...)										\
   ((!!(x)) || ([&](){										\
  __debugbreak();											\
  return false;												\
-  }()))															\
+  }()))														\
 
 #define ENSURE(x)											\
   ((!!(x)) || ([](){										\
 static bool bExecuted = false;								\
-  if(!bExecuted)									\
+  if(!bExecuted)											\
   {															\
 bExecuted = true;											\
  __debugbreak();}											\

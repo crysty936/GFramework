@@ -4,11 +4,15 @@
 #include <winerror.h>
 #include "Core/EngineUtils.h"
 #include <d3d12.h>
+#include <dxgi1_6.h>
 #include "D3D12GraphicsTypes_Internal.h"
 
 namespace D3D12Globals
 {
 	extern ID3D12Device* Device;
+	extern IDXGISwapChain3* SwapChain;
+	extern ID3D12CommandQueue* CommandQueue;
+
 	extern uint64_t CurrentFrameIndex;
 	constexpr uint32_t NumFramesInFlight = 2;
 

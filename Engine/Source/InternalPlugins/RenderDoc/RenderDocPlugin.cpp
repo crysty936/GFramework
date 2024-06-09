@@ -92,6 +92,8 @@ void RenderDocPlugin::Init()
 
 	RenderDocAPI->SetLogFilePathTemplate(capturesOutputPath.c_str());
 	//const char* logFilePath = RenderDocAPI->GetLogFilePathTemplate();
+
+	bIsInit = true;
 }
 
 
@@ -126,15 +128,17 @@ HWND GetWindowHandle()
 
 void RenderDocPlugin::Tick(const float inDeltaTime)
 {
-	//ImGui::Begin("RenderDoc"); // RHIWorkDisabled
+	if (GEngine->IsImguiEnabled())
+	{
+		ImGui::Begin("RenderDoc"); // RHIWorkDisabled
 
-	//if (ImGui::Button("Do RenderDoc Capture")) // RHIWorkDisabled
-	//{
-	//	DoCapture();
-	//}
+		if (ImGui::Button("Do RenderDoc Capture")) // RHIWorkDisabled
+		{
+			DoCapture();
+		}
 
-	//ImGui::End();
-
+		ImGui::End();
+	}
 
 	if (bCaptureInProgress)
 	{
@@ -164,6 +168,11 @@ void RenderDocPlugin::Tick(const float inDeltaTime)
 void RenderDocPlugin::DoCapture()
 {
 	bPendingCapture = true;
+}
+
+bool RenderDocPlugin::IsInit()
+{
+	return bIsInit;
 }
 
 void RenderDocPlugin::LaunchRenderDoc()

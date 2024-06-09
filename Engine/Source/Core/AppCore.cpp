@@ -9,12 +9,9 @@
 #include "Timer/TimersManager.h"
 #include "Renderer/Material/MaterialsManager.h"
 #include "Window/WindowsWindow.h"
-#include "Renderer/RHI/RHI.h"
-#include "Renderer/RHI/D3D12/D3D12RHI.h"
-#include "backends/imgui_impl_win32.h"
-#include "imgui.h"
 #include "Editor/Editor.h"
 #include "InternalPlugins/IInternalPlugin.h"
+#include "imgui_internal.h"
 
 constexpr float IdealFrameRate = 60.f;
 constexpr float IdealFrameTime = 1.0f / IdealFrameRate;
@@ -50,7 +47,6 @@ AppCore::~AppCore() = default;
 void AppCore::Init()
 {
 	GEngine = new AppCore{};
-	GEngine->CurrentApp = AppModeBase::Get();
 
 	InputSystem::Init();
 
@@ -67,17 +63,14 @@ void AppCore::Init()
  		container.Plugin->Init();
  	}
 
-	D3D12RHI::Init();
-	D3D12RHI::Get()->ImGuiInit();
+	TimersManager::Init();
+	Editor::Init();
+
+	GEngine->CurrentApp = AppModeBase::Get();
+	GEngine->CurrentApp->Init();
 
 	 //Hide Cursor for input
 	//InputSystem::Get().SetCursorMode(ECursorMode::Disabled, GEngine->MainWindow->GetHandle());// RHIWorkDisabled
-
-	TimersManager::Init();
-
-	Editor::Init();
-
-	GEngine->CurrentApp->Init();
 
 	 //After initializing all engine subsystems, Game Mode init is called 
 	 //TODO [Editor-Game Separation]: This should be initialized like this only when editor is missing otherwise by the editor
@@ -92,16 +85,15 @@ void AppCore::Terminate()
 	Editor::Terminate();
 
 	TimersManager::Terminate();
-	GEngine->CurrentApp->Terminate();
 
 	for (PluginAndName& container : GetInternalPluginsList())
 	{
 		container.Plugin->Shutdown();
 	}
 
-	InputSystem::Terminate();
+	GEngine->CurrentApp->Terminate();
 
-	D3D12RHI::Terminate();
+	InputSystem::Terminate();
 	MaterialsManager::Terminate();
 
 	SceneManager::Terminate();
@@ -110,7 +102,7 @@ void AppCore::Terminate()
 	delete GEngine;
 }
 
-static inline float WaitAndCalculateDeltaT(double& deltaTime, double& lastTime)
+static inline float CalculateDeltaTAndWait(double& deltaTime, double& lastTime)
 {
 	double currentTime = WindowsPlatform::GetTime();
 	double timeSpent = currentTime - lastTime;
@@ -142,47 +134,34 @@ void AppCore::Run()
 
 	while (bIsRunning)
 	{
-		const float CurrentDeltaT = WaitAndCalculateDeltaT(deltaTime, lastTime);
+		const float CurrentDeltaT = CalculateDeltaTAndWait(deltaTime, lastTime);
 
 		eastl::wstring text;
 		text.sprintf(L"Seconds: %f", CurrentDeltaT);
 		WindowsPlatform::SetWindowsWindowText(text);
-
 
 		InputSystem::Get().PollEvents();
 
 		 //Tick Timers
 		TimersManager::Get().TickTimers(CurrentDeltaT);
 
-		D3D12RHI::Get()->ImGuiBeginFrame();
- 		ImGui_ImplWin32_NewFrame();
- 		ImGui::NewFrame();
- 
- 		//ImGui::ShowDemoWindow();
-
 		CurrentApp->BeginFrame();
-		D3D12RHI::Get()->BeginFrame();
 
 		GEditor->Tick(CurrentDeltaT);
 
-		// RHIWorkDisabled
-		//Renderer::Get().Draw();
-		D3D12RHI::Get()->Test();
 		CurrentApp->Draw();
 
  		for (PluginAndName& container : GetInternalPluginsList())
  		{
+			if (!container.Plugin->IsInit())
+			{
+				continue;
+			}
+
  			container.Plugin->Tick(static_cast<float>(deltaTime));
  		}
 
-		 //Draw ImGui
-		ImGui::EndFrame();
-		ImGui::Render();
-		D3D12RHI::Get()->ImGuiRenderDrawData();
-
-		// RHIWorkDisabled
-		//Renderer::Get().Present();
-		D3D12RHI::Get()->SwapBuffers(); 
+		CurrentApp->EndFrame();
 
 		CheckShouldCloseWindow();
 
@@ -208,6 +187,11 @@ bool AppCore::IsRunning()
 void AppCore::StopEngine()
 {
 	bIsRunning = false;
+}
+
+bool AppCore::IsImguiEnabled() const
+{
+	return !!GImGui;
 }
 
 IInternalPlugin* AppCore::GetPluginPrivate(const eastl::string& inName)

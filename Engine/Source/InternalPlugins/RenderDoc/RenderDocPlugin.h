@@ -12,8 +12,11 @@ public:
 	void Init() override;
 	void Shutdown() override;
 	void Tick(const float inDeltaTime) override;
+	bool IsInit() override;
 
 	void DoCapture();
+
+
 
 private:
 	void OnCapturePressed();
@@ -29,6 +32,7 @@ private:
 
 
 private:
+	bool bIsInit = false;
 	bool bPendingCapture = false;
 	bool bCaptureInProgress = false;
 	uint64_t CaptureEndFrame = 0;
