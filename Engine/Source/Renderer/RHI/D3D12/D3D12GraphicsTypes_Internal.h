@@ -9,10 +9,10 @@ struct D3D12DescHeapAllocationDesc
 	uint32_t Index = -1;
 };
 
-struct D3D12Internal_DescriptorHeap
+struct D3D12DescriptorHeap
 {
 public:
-	~D3D12Internal_DescriptorHeap();
+	~D3D12DescriptorHeap();
 
 	void Init(bool inShaderVisible, uint32_t inNumPersistent, D3D12_DESCRIPTOR_HEAP_TYPE inHeapType);
 	D3D12DescHeapAllocationDesc AllocatePersistent();
@@ -38,11 +38,11 @@ struct MapResult
 	uint64_t GPUAddress = 0;
 };
 
-struct D3D12Internal_ConstantBuffer
+struct D3D12ConstantBuffer
 {
 
 public:
-	~D3D12Internal_ConstantBuffer();
+	~D3D12ConstantBuffer();
 
 	void Init(const uint64_t inSize);
 

@@ -10,8 +10,7 @@ AppModeBase::AppModeBase()
 	GameMode = this;
 }
 
-AppModeBase::~AppModeBase()
-= default;
+AppModeBase::~AppModeBase() = default;
 
 void AppModeBase::BeginFrame()
 {

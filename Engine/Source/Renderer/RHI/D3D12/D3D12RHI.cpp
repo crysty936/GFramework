@@ -139,9 +139,6 @@ ComPtr<ID3D12GraphicsCommandList> m_commandList;
 eastl::shared_ptr<D3D12VertexBuffer> m_vertexBuffer;
 eastl::shared_ptr<D3D12IndexBuffer> m_indexBuffer;
 
-// Have started going towards abstraction. Another texture is now created by a CubeShape initialization. It seems to look wrong, though. Check why that is and
-// continue abstracting towards standard game mode that can init stuff normally. The uniform buffer might need to go away and be replaced with specific types in materials, maybe.
-// TODO NEXT
 eastl::shared_ptr<D3D12Texture2D> m_texture;
 
 // Hack to keep upload buffers referenced by command lists alive on the GPU until they finish execution
@@ -163,7 +160,7 @@ static_assert((sizeof(SceneConstantBuffer) % 256) == 0, "Constant Buffer size mu
 float StaticOffset = 0.f;
 
 SceneConstantBuffer m_constantBufferData;
-D3D12Internal_ConstantBuffer m_constantBuffer;
+D3D12ConstantBuffer m_constantBuffer;
 
 //static uint8_t* FrameConstantBufferCPUMem[D3D12Globals::NumFramesInFlight] = {};
 //static uint64_t FrameConstantBufferGPUMem[D3D12Globals::NumFramesInFlight] = {};
@@ -180,30 +177,13 @@ UINT64 m_fenceValues[D3D12Globals::NumFramesInFlight];
 UINT64 m_fenceValue;
 #endif
 
-
-struct FBrushStampBatchItemData
-{
-	glm::vec3 BrushPosition;
-	glm::vec3 BrushExtent;
-	glm::vec3 BrushScale;
-	float BrushAngle;
-	uint32_t BlendMode;
-	uint32_t TextureIndex;
-
-
-};
-
 void InitPipeline(const WindowsWindow& inWindow)
 {
-
-	const size_t size = sizeof(FBrushStampBatchItemData);
-
-
 	UINT dxgiFactoryFlags = 0;
 
-	//#if defined(_DEBUG)
-		// Enable the debug layer (requires the Graphics Tools "optional feature").
-		// NOTE: Enabling the debug layer after device creation will invalidate the active device.
+	// Enable the debug layer (requires the Graphics Tools "optional feature").
+	// NOTE: Enabling the debug layer after device creation will invalidate the active device.
+	#if defined(_DEBUG)
 	{
 		ComPtr<ID3D12Debug> debugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
@@ -214,7 +194,7 @@ void InitPipeline(const WindowsWindow& inWindow)
 			dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 		}
 	}
-	//#endif
+	#endif
 
 	ComPtr<IDXGIFactory4> factory;
 	D3D12Utility::DXAssert(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&factory)));
@@ -305,7 +285,7 @@ void D3D12RHI::Init_Internal()
 
 	const WindowProperties& props = mainWindow.GetProperties();
 
-	m_GBufferAlbedo = eastl::static_shared_pointer_cast<D3D12RenderTarget2D>(CreateRenderTexture(props.Width, props.Height, ERHITexturePrecision::UnsignedByte, ERHITextureFilter::Nearest));
+	m_GBufferAlbedo = CreateRenderTexture(props.Width, props.Height, L"GBufferAlbedo", ERHITexturePrecision::UnsignedByte, ERHITextureFilter::Nearest);
 
 	// Load Assets
 
@@ -1079,14 +1059,15 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	return newTexture;
 }
 
-eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const int32_t inWidth, const int32_t inHeight, const ERHITexturePrecision inPrecision /*= ERHITexturePrecision::UnsignedByte*/, const ERHITextureFilter inFilter /*= ERHITextureFilter::Linear*/)
+eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName,
+	const ERHITexturePrecision inPrecision /*= ERHITexturePrecision::UnsignedByte*/, const ERHITextureFilter inFilter /*= ERHITextureFilter::Linear*/)
 {
 	eastl::shared_ptr<D3D12RenderTarget2D> newRT = eastl::make_shared<D3D12RenderTarget2D>();
 	eastl::unique_ptr<D3D12Texture2D> ownedTexture = eastl::make_unique<D3D12Texture2D>();
 
  	D3D12_RESOURCE_DESC textureDesc = {};
  
- 	DXGI_FORMAT texFormat;
+	DXGI_FORMAT texFormat = DXGI_FORMAT_UNKNOWN;
  
  	switch (inPrecision)
  	{
@@ -1102,8 +1083,9 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
  	}
  	default:
  		break;
- 
  	}
+
+	ASSERT(texFormat != DXGI_FORMAT_UNKNOWN);
  
  	textureDesc.Width = inWidth;
  	textureDesc.Height = inHeight;
@@ -1130,9 +1112,8 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
  	static int32_t RenderTargetIndex = 0;
  	++RenderTargetIndex;
  
- 	eastl::wstring textureName = L"RenderTarget ";
- 	const eastl::wstring textureIndex = eastl::to_wstring(RenderTargetIndex);
- 	textureName += textureIndex;
+ 	eastl::wstring textureName = L"RenderTarget_";
+ 	textureName.append(inName);
  
 	ownedTexture->Resource->SetName(textureName.c_str());
  

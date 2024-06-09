@@ -2,8 +2,8 @@
 
 ID3D12Device* D3D12Globals::Device;
 uint64_t D3D12Globals::CurrentFrameIndex = 0;
-D3D12Internal_DescriptorHeap D3D12Globals::GlobalRTVHeap;
-D3D12Internal_DescriptorHeap D3D12Globals::GlobalSRVHeap;
+D3D12DescriptorHeap D3D12Globals::GlobalRTVHeap;
+D3D12DescriptorHeap D3D12Globals::GlobalSRVHeap;
 
 D3D12_HEAP_PROPERTIES& D3D12Utility::GetDefaultHeapProps()
 {
