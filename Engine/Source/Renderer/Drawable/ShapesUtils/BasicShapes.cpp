@@ -2,6 +2,43 @@
 #include "Renderer/Drawable/ShapesUtils/BasicShapesData.h"
 #include "Renderer/RHI/Resources/MeshDataContainer.h"
 #include "Renderer/Material/MaterialsManager.h"
+#include "Renderer/RHI/D3D12/D3D12RHI.h"
+
+CubeShape::CubeShape(const eastl::string& inName, ID3D12GraphicsCommandList* inCommandList)
+	: Model3D(inName)
+{
+	eastl::shared_ptr<MeshNode> cubeNode = eastl::make_shared<MeshNode>("Cube Mesh");
+
+	cubeNode->IndexBuffer = D3D12RHI::Get()->CreateIndexBuffer(BasicShapesData::GetCubeIndices(), BasicShapesData::GetCubeIndicesCount());
+
+	// Create the vertex buffer.
+	{
+		VertexInputLayout vbLayout;
+		// Vertex points
+		vbLayout.Push<float>(3, VertexInputType::Position);
+		// Vertex Tex Coords
+		vbLayout.Push<float>(3, VertexInputType::Normal);
+		vbLayout.Push<float>(2, VertexInputType::TexCoords);
+
+		cubeNode->VertexBuffer = D3D12RHI::Get()->CreateVertexBuffer(vbLayout, BasicShapesData::GetCubeVertices(), BasicShapesData::GetCubeVerticesCount(), cubeNode->IndexBuffer);
+	}
+
+	eastl::shared_ptr<D3D12Texture2D> newTex = D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, inCommandList);
+	cubeNode->Textures.push_back(newTex);
+
+}
+
+CubeShape::~CubeShape() = default;
+
+
+
+
+
+
+
+
+
+
 #if 0
 #include "Renderer/RenderCommand.h"
 #include "Renderer/Renderer.h"
@@ -186,98 +223,6 @@ void SquareShape::CreateProxy()
 			newCommand.Triangles.push_back(pathTraceTriangle);
 		}
 	}
-
-	Renderer::Get().AddCommand(newCommand);
-}
-
-CubeShape::CubeShape(const eastl::string& inName)
-	: Model3D(inName)
-{
-
-}
-CubeShape::~CubeShape() = default;
-
-void CubeShape::CreateProxy()
-{
-  	const eastl::string RenderDataContainerID = "cubeVAO";
- 	eastl::shared_ptr<MeshDataContainer> dataContainer{ nullptr };
-
-	const bool existingContainer = Renderer::Get().GetOrCreateContainer(RenderDataContainerID, dataContainer);
-	VertexInputLayout inputLayout;
-	// Vertex points
-	inputLayout.Push<float>(3, VertexInputType::Position);
-    // Vertex Normal
-	inputLayout.Push<float>(3, VertexInputType::Normal);
-	// Vertex Tex Coords
-	inputLayout.Push<float>(2, VertexInputType::TexCoords);
-
- 	if (!existingContainer)
-  	{
-		int32_t indicesCount = BasicShapesData::GetCubeIndicesCount();
-		eastl::shared_ptr<RHIIndexBuffer> ib = RHI::Get()->CreateIndexBuffer(BasicShapesData::GetCubeIndices(), indicesCount);
-
-
-		int32_t verticesCount = BasicShapesData::GetCubeVerticesCount();
-		const eastl::shared_ptr<RHIVertexBuffer> vb = RHI::Get()->CreateVertexBuffer(inputLayout, BasicShapesData::GetCubeVertices(), verticesCount, ib);
-
-		dataContainer->VBuffer = vb;
-  	}
-  
-  	MaterialsManager& matManager = MaterialsManager::Get();
-  	bool materialExists = false;
-	eastl::shared_ptr<RenderMaterial> material = matManager.GetOrAddMaterial<RenderMaterial>("cube_material", materialExists);
-  
-  	if (!materialExists)
-  	{
-		eastl::shared_ptr<RHITexture2D> tex = RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", true);
-		material->OwnedTextures.push_back(tex);
-
-		eastl::vector<ShaderSourceInput> shaders = {
-		{ "DefaultCubeMaterial/VS_Pos-UV-Normal_WithShadow", EShaderType::Sh_Vertex },
-		{ "DefaultCubeMaterial/PS_BasicTex_WithShadow", EShaderType::Sh_Fragment } };
-
-		material->Shader = RHI::Get()->CreateShaderFromPath(shaders, inputLayout);
-  	}
-  
-  	eastl::shared_ptr<MeshNode> cubeNode = eastl::make_shared<MeshNode>("Cube Mesh");
-  	AddChild(cubeNode);
-  
-	RenderCommand newCommand;
-	newCommand.Material = material;
-	newCommand.DataContainer = dataContainer;
-	newCommand.Parent = cubeNode;
-	newCommand.DrawType = EDrawType::DrawElements;
-
-	// For Pathtracer
-	{
-
-		const uint32_t* indices = BasicShapesData::GetCubeIndices();
-		const int32_t indicesCount = BasicShapesData::GetCubeIndicesCount();
-
-		const float* vertices = BasicShapesData::GetCubeVertices();
-		const int32_t verticesCount = BasicShapesData::GetCubeVerticesCount();
-
-		for (int32_t i = 0; i < indicesCount; i += 3)
-		{
-			glm::vec3 v[3];
-
-			const size_t vertexSize = sizeof(glm::vec3);
-
-			for (int32_t j = 0; j < 3; ++j)
-			{
-				constexpr int32_t stride = 8; // 3 floats for Pos vec3, 3 for Normal vec3 and 2 for UVs vec2 
-
-				const int32_t index = indices[i + j];
-				const float* startPos = vertices + index * stride;
-				memcpy(&v[j], startPos, vertexSize);
-			}
-
-			PathTraceTriangle pathTraceTriangle = PathTraceTriangle(v);
-
-			newCommand.Triangles.push_back(pathTraceTriangle);
-		}
-	}
-
 
 	Renderer::Get().AddCommand(newCommand);
 }

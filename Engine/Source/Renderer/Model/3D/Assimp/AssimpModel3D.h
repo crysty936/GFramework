@@ -11,8 +11,6 @@ public:
 	AssimpModel3D(const eastl::string& inPath, const eastl::string& inName, glm::vec3 inOverrideColor = glm::vec3(1.f, 1.f, 1.f));
 	virtual ~AssimpModel3D();
 
-	virtual void CreateProxy() override;
-
 	void LoadModelToRoot(const eastl::string inPath, TransformObjPtr inParent);
 
 protected:

@@ -46,7 +46,7 @@ AppModeBase::AppModeBase()
 HANDLE m_fenceEvent;
 ComPtr<ID3D12Fence> m_fence;
 
-#define FRAME_BUFFERING 0
+#define FRAME_BUFFERING 1
 
 #if FRAME_BUFFERING
 UINT64 m_fenceValues[D3D12Globals::NumFramesInFlight];
@@ -341,10 +341,9 @@ void AppModeBase::CreateInitialResources()
 	// Create the command list.
 	D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Globals::CurrentFrameIndex].Get(), m_MainMeshPipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
 
-	const int32_t aspectRatio = props.Width / props.Height;
+	// Cube creation
 
-	eastl::shared_ptr<RHIIndexBuffer> newIndexBuffer = D3D12RHI::Get()->CreateIndexBuffer(BasicShapesData::GetCubeIndices(), BasicShapesData::GetCubeIndicesCount());
-	m_indexBuffer = eastl::static_shared_pointer_cast<D3D12IndexBuffer>(newIndexBuffer);
+	m_indexBuffer = D3D12RHI::Get()->CreateIndexBuffer(BasicShapesData::GetCubeIndices(), BasicShapesData::GetCubeIndicesCount());
 
 	// Create the vertex buffer.
 	{
@@ -355,17 +354,19 @@ void AppModeBase::CreateInitialResources()
 		vbLayout.Push<float>(3, VertexInputType::Normal);
 		vbLayout.Push<float>(2, VertexInputType::TexCoords);
 
-		eastl::shared_ptr<RHIVertexBuffer> newVertexBuffer = D3D12RHI::Get()->CreateVertexBuffer(vbLayout, BasicShapesData::GetCubeVertices(), BasicShapesData::GetCubeVerticesCount(), m_indexBuffer);
-		m_vertexBuffer = eastl::static_shared_pointer_cast<D3D12VertexBuffer>(newVertexBuffer);
+		m_vertexBuffer = D3D12RHI::Get()->CreateVertexBuffer(vbLayout, BasicShapesData::GetCubeVertices(), BasicShapesData::GetCubeVerticesCount(), m_indexBuffer);
 	}
+
+	m_texture = D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, m_commandList.Get());
+
+	// Cube creation
+
 
 	// Create the constant buffer.
 	{
 		m_constantBuffer.Init(2 * 1024 * 1024);
 		memcpy(m_constantBuffer.Map().CPUAddress, &m_constantBufferData, sizeof(m_constantBufferData));
 	}
-
-	m_texture = eastl::static_shared_pointer_cast<D3D12Texture2D>(D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, m_commandList.Get()));
 
 	D3D12Utility::DXAssert(m_commandList->Close());
 	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
@@ -467,8 +468,6 @@ D3D12_VIEWPORT m_viewport;
 
 void AppModeBase::Draw()
 {
-	//D3D12RHI::Get()->Test();
-
 	glm::mat4 modelMatrix(1.f);
 
 	if (GEngine->IsImguiEnabled())

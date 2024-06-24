@@ -15,20 +15,6 @@ public:
 	inline void SetVisible(const bool inValue) { bIsVisible = inValue; }
 	inline bool IsVisible() const { return bIsVisible; }
 
-	virtual void CreateProxy() {};
-
 private:
 	bool bIsVisible{ true };
 };
-
-// Drawable Container is the one that sets up the Render Commmands for the DrawableObjects
-class IDrawableContainer
-{
-public:
-	virtual ~IDrawableContainer() = default;
-
-	virtual void CreateProxy() = 0;
-};
-
-
-

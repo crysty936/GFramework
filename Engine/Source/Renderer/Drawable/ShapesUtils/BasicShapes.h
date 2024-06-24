@@ -4,6 +4,13 @@
 #include "Renderer/RenderCommand.h"
 #include "Renderer/LightTypes.h"
 
+class CubeShape : public Model3D
+{
+public:
+	CubeShape(const eastl::string& inName, struct ID3D12GraphicsCommandList* inCommandList);
+	virtual ~CubeShape();
+};
+
 #if 0
 
 
@@ -25,14 +32,6 @@ public:
 	void CreateProxy() override;
  };
 
-class CubeShape : public Model3D
-{
-public:
-	CubeShape(const eastl::string& inName);
-	virtual ~CubeShape();
-
-	virtual void CreateProxy() override;
-};
 
 class LightSource : public Model3D
 {

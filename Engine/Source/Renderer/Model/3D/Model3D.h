@@ -3,22 +3,24 @@
 #include "Renderer/Material/RenderMaterial.h"
 #include "Entity/TransformObject.h"
 #include "Renderer/Drawable/Drawable.h"
+#include "Renderer/RHI/D3D12/D3D12Resources.h"
 
-// TODO: Remake this and get rid of the horrible IDrawableContainer thing
-
-// Each mesh node has a number of meshes. Those meshes don't have their own location as it's the
-// Node that holds the transform for all of them. One Mesh Node to many Render Commands, each Render Command represent a mesh
+// MeshNodes are stored as TransformObject children to the main Model3D
 
 struct MeshNode : public DrawableObject
 {
 	MeshNode(const eastl::string& inName);
 	virtual ~MeshNode() = default;
-	//eastl::vector<Mesh3D> Meshes; // Not used as the meshes are stored as Transform Children
+
+	eastl::shared_ptr<D3D12VertexBuffer> VertexBuffer;
+	eastl::shared_ptr<D3D12IndexBuffer> IndexBuffer;
+	eastl::vector<eastl::shared_ptr<D3D12Texture2D>> Textures;
 };
 
-class Model3D : public TransformObject , public IDrawableContainer
+class Model3D : public TransformObject
 {
 public:
 	Model3D(const eastl::string& inModelName);
 	virtual ~Model3D();
+
 };

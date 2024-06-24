@@ -30,23 +30,11 @@ static Transform aiMatrixToTransform(const aiMatrix4x4& inMatrix)
 
 AssimpModel3D::AssimpModel3D(const eastl::string& inPath, const eastl::string& inName, glm::vec3 inOverrideColor)
 	: Model3D(inName), ModelPath{ inPath }, OverrideColor(inOverrideColor)
-{}
-
-AssimpModel3D::~AssimpModel3D() = default;
-
-void AssimpModel3D::CreateProxy()
 {
-
-	// TODO: Make this work with multithreaded again
-	//eastl::shared_ptr<AssimpModel3D> thisShared = this_shared(this);
-	//RenderingLoadCommand loadCommand;
-	//loadCommand.LoadDel = LoadRenderResourceDelegate::CreateStatic(LoadModelToRoot);
-	//loadCommand.ModelPath = ModelPath;
-	//loadCommand.Parent = thisShared;
-	// Add load command
-	
 	LoadModelToRoot(ModelPath, shared_from_this());
 }
+
+AssimpModel3D::~AssimpModel3D() = default;
 
 void AssimpModel3D::LoadModelToRoot(const eastl::string inPath, TransformObjPtr inParent)
 {

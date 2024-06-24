@@ -108,7 +108,7 @@ void Editor::Internal_Init()
 	InputSystem::Get().SetCursorMode(ECursorMode::Enabled);
 }
 
-float CameraSpeed = 0.4f;
+float CameraSpeed = 0.1f;
 
 void Editor::MoveCameraLeft()
 {

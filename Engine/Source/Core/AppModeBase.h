@@ -21,6 +21,7 @@ public:
 	// Game Mode Tick is Run after all other objects
 	virtual void Tick(float inDeltaT);
 	void WaitForPreviousFrame();
+	void MoveToNextFrame();
 	void ImGuiInit();
 	void ImGuiRenderDrawData();
 
