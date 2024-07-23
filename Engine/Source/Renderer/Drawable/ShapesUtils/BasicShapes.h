@@ -7,8 +7,11 @@
 class CubeShape : public Model3D
 {
 public:
-	CubeShape(const eastl::string& inName, struct ID3D12GraphicsCommandList* inCommandList);
+	CubeShape(const eastl::string& inName);
 	virtual ~CubeShape();
+
+	void Init(ID3D12GraphicsCommandList* inCommandList) override;
+
 };
 
 #if 0

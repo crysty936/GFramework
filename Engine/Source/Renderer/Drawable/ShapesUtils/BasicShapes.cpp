@@ -4,8 +4,14 @@
 #include "Renderer/Material/MaterialsManager.h"
 #include "Renderer/RHI/D3D12/D3D12RHI.h"
 
-CubeShape::CubeShape(const eastl::string& inName, ID3D12GraphicsCommandList* inCommandList)
+CubeShape::CubeShape(const eastl::string& inName)
 	: Model3D(inName)
+{}
+
+CubeShape::~CubeShape() = default;
+
+
+void CubeShape::Init(ID3D12GraphicsCommandList* inCommandList)
 {
 	eastl::shared_ptr<MeshNode> cubeNode = eastl::make_shared<MeshNode>("Cube Mesh");
 
@@ -26,18 +32,9 @@ CubeShape::CubeShape(const eastl::string& inName, ID3D12GraphicsCommandList* inC
 	eastl::shared_ptr<D3D12Texture2D> newTex = D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, inCommandList);
 	cubeNode->Textures.push_back(newTex);
 
+
+	AddChild(cubeNode);
 }
-
-CubeShape::~CubeShape() = default;
-
-
-
-
-
-
-
-
-
 
 #if 0
 #include "Renderer/RenderCommand.h"

@@ -368,8 +368,8 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	UploadHeapProps.VisibleNodeMask = 1;
 
 
-	DirectX::ScratchImage dxImageTest = {};
-	DirectX::TexMetadata dxMetadataTest = {};
+	DirectX::ScratchImage dxImage = {};
+	DirectX::TexMetadata dxMetadata = {};
 
 	const int32_t pathLength = inDataPath.length();
 	wchar_t* wideString = new wchar_t[pathLength + 1];
@@ -379,20 +379,20 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	}
 	wideString[pathLength] = L'\0';
 
-	HRESULT hresult = DirectX::LoadFromWICFile(wideString, DirectX::WIC_FLAGS_NONE, &dxMetadataTest, dxImageTest);
+	HRESULT hresult = DirectX::LoadFromWICFile(wideString, DirectX::WIC_FLAGS_NONE, &dxMetadata, dxImage);
 	const bool success = SUCCEEDED(hresult);
 
 	ENSURE(success);
 
 	DirectX::ScratchImage res;
-	DirectX::GenerateMipMaps(*dxImageTest.GetImage(0, 0, 0), DirectX::TEX_FILTER_FLAGS::TEX_FILTER_DEFAULT, 0, res, false);
+	DirectX::GenerateMipMaps(*dxImage.GetImage(0, 0, 0), DirectX::TEX_FILTER_FLAGS::TEX_FILTER_DEFAULT, 0, res, false);
 
 	// Describe and create a Texture2D on GPU(Default Heap)
 	D3D12_RESOURCE_DESC textureDesc = {};
 	textureDesc.MipLevels = (uint16_t)res.GetImageCount();
 	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	textureDesc.Width = (uint32_t)dxMetadataTest.width;
-	textureDesc.Height = (uint32_t)dxMetadataTest.height;
+	textureDesc.Width = (uint32_t)dxMetadata.width;
+	textureDesc.Height = (uint32_t)dxMetadata.height;
 	textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 	textureDesc.DepthOrArraySize = 1;
 	textureDesc.SampleDesc.Count = 1;

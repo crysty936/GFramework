@@ -9,13 +9,7 @@ SceneManager* SceneManager::Instance = nullptr;
 SceneManager::SceneManager()
 {
 	// TODO Should be implemented to read the scene from a serialized output
-
 	CurrentScene = eastl::make_unique<class Scene>();
-
-	// !Trying to copy the gameplay engine tactic to see if it works
-	EntityPtr CameraParent = eastl::make_shared<Entity>("Camera Parent");
-	CameraParent->AddChild(CurrentScene->GetCurrentCamera());
-	CurrentScene->AddObject(CameraParent);
 }
 SceneManager::~SceneManager() = default;
 

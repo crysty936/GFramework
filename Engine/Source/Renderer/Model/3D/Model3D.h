@@ -23,4 +23,6 @@ public:
 	Model3D(const eastl::string& inModelName);
 	virtual ~Model3D();
 
+
+	virtual void Init(struct ID3D12GraphicsCommandList* inCommandList) = 0;
 };

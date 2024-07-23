@@ -27,6 +27,9 @@ public:
 	//inline void AddLight(const eastl::shared_ptr<LightSource>& inLightData);
 	//inline const eastl::vector<eastl::shared_ptr<LightSource>>& GetLights() const;
 
+
+	inline const eastl::vector<TransformObjPtr>& GetAllObjects() { return Objects; }
+
 private:
 	void RecursivelyTickObjects(float inDeltaT, eastl::vector<TransformObjPtr>& inObjects);
 	void RecursivelyInitObjects(eastl::vector<TransformObjPtr>& inObjects);
