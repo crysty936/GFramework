@@ -13,7 +13,7 @@ void D3D12DescriptorHeap::Init(bool inShaderVisible, uint32_t inNumPersistent, D
 	rtvHeapDesc.NumDescriptors = inNumPersistent;
 	rtvHeapDesc.Type = inHeapType;
 	rtvHeapDesc.Flags = inShaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	D3D12Utility::DXAssert(D3D12Globals::Device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&Heap)));
+	DXAssert(D3D12Globals::Device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&Heap)));
 
 	NumPersistentDescriptors = inNumPersistent;
 	DescriptorSize = D3D12Globals::Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -87,7 +87,7 @@ void D3D12ConstantBuffer::Init(const uint64_t inSize)
 	constantBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	constantBufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-	D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommittedResource(
+	DXAssert(D3D12Globals::Device->CreateCommittedResource(
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&constantBufferDesc,
@@ -103,7 +103,7 @@ void D3D12ConstantBuffer::Init(const uint64_t inSize)
 	//readRange.Begin = 0;
 	//readRange.End = 0;      // We do not intend to read from this resource on the CPU.
 
-	D3D12Utility::DXAssert(Handle->Map(0, &readRange, reinterpret_cast<void**>(&CPUAddress)));
+	DXAssert(Handle->Map(0, &readRange, reinterpret_cast<void**>(&CPUAddress)));
 }
 
 MapResult D3D12ConstantBuffer::Map()
@@ -150,7 +150,7 @@ MapResult D3D12ConstantBuffer::Map()
 // 
 // 	const D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATE_RENDER_TARGET;
 // 
-// 	D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommittedResource(
+// 	DXAssert(D3D12Globals::Device->CreateCommittedResource(
 // 		&D3D12Utility::GetDefaultHeapProps(),
 // 		D3D12_HEAP_FLAG_NONE,
 // 		&textureDesc,

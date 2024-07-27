@@ -43,7 +43,7 @@ eastl::shared_ptr<class D3D12IndexBuffer> D3D12RHI::CreateIndexBuffer(const uint
 	heapProps.CreationNodeMask = 1;
 	heapProps.VisibleNodeMask = 1;
 
-	D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommittedResource(
+	DXAssert(D3D12Globals::Device->CreateCommittedResource(
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&indexBufferDesc,
@@ -57,7 +57,7 @@ eastl::shared_ptr<class D3D12IndexBuffer> D3D12RHI::CreateIndexBuffer(const uint
 	D3D12_RANGE indexReadRange;
 	indexReadRange.Begin = 0;
 	indexReadRange.End = 0;
-	D3D12Utility::DXAssert(resource->Map(0, &indexReadRange, reinterpret_cast<void**>(&pIndexDataBegin)));
+	DXAssert(resource->Map(0, &indexReadRange, reinterpret_cast<void**>(&pIndexDataBegin)));
 
 	memcpy(pIndexDataBegin, inData, indexBufferSize);
 
@@ -103,7 +103,7 @@ eastl::shared_ptr<class D3D12VertexBuffer> D3D12RHI::CreateVertexBuffer(const cl
 	vertexBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	vertexBufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-	D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommittedResource(
+	DXAssert(D3D12Globals::Device->CreateCommittedResource(
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&vertexBufferDesc,
@@ -116,7 +116,7 @@ eastl::shared_ptr<class D3D12VertexBuffer> D3D12RHI::CreateVertexBuffer(const cl
 	D3D12_RANGE readRange;
 	readRange.Begin = 0;
 	readRange.End = 0;
-	D3D12Utility::DXAssert(resource->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
+	DXAssert(resource->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
 
 	memcpy(pVertexDataBegin, inVertices, vertexBufferSize);
 	resource->Unmap(0, nullptr);

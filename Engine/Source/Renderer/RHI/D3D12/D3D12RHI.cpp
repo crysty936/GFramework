@@ -147,12 +147,12 @@ void D3D12RHI::InitPipeline()
 	#endif
 
 	ComPtr<IDXGIFactory4> factory;
-	D3D12Utility::DXAssert(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&factory)));
+	DXAssert(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&factory)));
 
 	ComPtr<IDXGIAdapter1> hardwareAdapter;
 	GetHardwareAdapter(factory.Get(), &hardwareAdapter, false);
 
-	D3D12Utility::DXAssert(D3D12CreateDevice(
+	DXAssert(D3D12CreateDevice(
 		hardwareAdapter.Get(),
 		D3D_FEATURE_LEVEL_11_0,
 		IID_PPV_ARGS(&D3D12Globals::Device)
@@ -164,7 +164,7 @@ void D3D12RHI::InitPipeline()
 	queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 	queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
-	D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&D3D12Globals::CommandQueue)));
+	DXAssert(D3D12Globals::Device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&D3D12Globals::CommandQueue)));
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
@@ -180,7 +180,7 @@ void D3D12RHI::InitPipeline()
 	swapChainDesc.SampleDesc.Count = 1;
 
 	ComPtr<IDXGISwapChain1> swapChain;
-	D3D12Utility::DXAssert(factory->CreateSwapChainForHwnd(
+	DXAssert(factory->CreateSwapChainForHwnd(
 		D3D12Globals::CommandQueue,        // Swap chain needs the queue so that it can force a flush on it.
 		static_cast<HWND>(mainWindow.GetHandle()),
 		&swapChainDesc,
@@ -191,24 +191,13 @@ void D3D12RHI::InitPipeline()
 
 
 	ComPtr<IDXGISwapChain3> swapChain3;
-	D3D12Utility::DXAssert(swapChain.As(&swapChain3));
+	DXAssert(swapChain.As(&swapChain3));
 
 	D3D12Globals::SwapChain = swapChain3.Detach();
 	
 
 
 }
-
-
-void UploadTextureBlocking(ID3D12Resource* inDestResource, ID3D12Resource* inUploadResource, const D3D12_SUBRESOURCE_DATA* inSrcData, uint32_t NumSubresources, ID3D12GraphicsCommandList* inCmdList, DirectX::ScratchImage& inRes);
-
-// One constant buffer view per signature, in the root
-// One table pointing to the global SRV heap where either 
-// A: all descriptors are stored and just the root for the table is modified per drawcall or
-// B: Just the necessary descriptors are stored and they are copied over before the drawcall from non shader-visible heaps
-
-// Constant Buffer is double buffered to allow modifying it each frame
-// Descriptors should also be double buffered
 
 void UploadTextureBlocking(ID3D12Resource* inDestResource, ID3D12Resource* inUploadResource, uint32_t NumSubresources, ID3D12GraphicsCommandList* inCmdList, DirectX::ScratchImage& inRes)
 {
@@ -356,41 +345,24 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 {
 	eastl::shared_ptr<D3D12Texture2D> newTexture = eastl::make_shared<D3D12Texture2D>();
 
-	ComPtr<ID3D12Resource>& newTextureUploadHeap = TextureUploadBuffers.emplace_back();
-
-	ID3D12Resource* textureUploadHeap = newTextureUploadHeap.Get();
 	ID3D12Resource* texResource;
-
-	D3D12_HEAP_PROPERTIES UploadHeapProps;
-	UploadHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-	UploadHeapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	UploadHeapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-	UploadHeapProps.CreationNodeMask = 1;
-	UploadHeapProps.VisibleNodeMask = 1;
-
 
 	DirectX::ScratchImage dxImage = {};
 	DirectX::TexMetadata dxMetadata = {};
 
-	/*const int32_t pathLength = inDataPath.length();
-	wchar_t* wideString = new wchar_t[pathLength + 1];
-	for (int32_t i = 0; i < pathLength; ++i)
-	{
-		wideString[i] = inDataPath[i];
-	}
-	wideString[pathLength] = L'\0';*/
+	const eastl::wstring dataPathWide = AnsiToWString(inDataPath.c_str());
 
-	eastl::wstring wideString = AnsiToWString(inDataPath.c_str());
-
-	HRESULT hresult = DirectX::LoadFromWICFile(wideString.c_str(), DirectX::WIC_FLAGS_NONE, &dxMetadata, dxImage);
+	// Load the texture in cpu memory using DirectXTex
+	HRESULT hresult = DirectX::LoadFromWICFile(dataPathWide.c_str(), DirectX::WIC_FLAGS_NONE, &dxMetadata, dxImage);
 	const bool success = SUCCEEDED(hresult);
 
 	ENSURE(success);
 
+	// Generate mip maps for it
 	DirectX::ScratchImage res;
 	DirectX::GenerateMipMaps(*dxImage.GetImage(0, 0, 0), DirectX::TEX_FILTER_FLAGS::TEX_FILTER_DEFAULT, 0, res, false);
 
-	// Describe and create a Texture2D on GPU(Default Heap)
+	// Describe and create the Texture on GPU(Default Heap)
 	D3D12_RESOURCE_DESC textureDesc = {};
 	textureDesc.MipLevels = (uint16_t)res.GetImageCount();
 	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -402,7 +374,7 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	textureDesc.SampleDesc.Quality = 0;
 	textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 
-	D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommittedResource(
+	DXAssert(D3D12Globals::Device->CreateCommittedResource(
 		&D3D12Utility::GetDefaultHeapProps(),
 		D3D12_HEAP_FLAG_NONE,
 		&textureDesc,
@@ -410,13 +382,29 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 		nullptr,
 		IID_PPV_ARGS(&texResource)));
 
+	texResource->SetName(dataPathWide.c_str());
+
+	// Describe and create a SRV for the texture.
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Format = textureDesc.Format;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Texture2D.MipLevels = (uint32_t)res.GetImageCount();
+
+	D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalSRVHeap.AllocatePersistent();
+	newTexture->SRVIndex = descAllocation.Index;
+	D3D12Globals::Device->CreateShaderResourceView(texResource, &srvDesc, descAllocation.CPUHandle);
+
 	// Get required size by device
 	UINT64 uploadBufferSize = 0;
 	D3D12Globals::Device->GetCopyableFootprints(&textureDesc, 0, (uint32_t)res.GetImageCount(), 0, nullptr, nullptr, nullptr, &uploadBufferSize);
-
 	// Same thing
 	//const UINT64 uploadBufferSize = GetRequiredIntermediateSize(textureHandle, 0, 1);
 
+
+
+
+	// Create a one time upload buffer
 	D3D12_RESOURCE_DESC UploadBufferDesc;
 	UploadBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	UploadBufferDesc.Alignment = 0;
@@ -430,31 +418,31 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	UploadBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	UploadBufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-	// Create the CPU -> GPU Upload Buffer
-	D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommittedResource(
+
+	D3D12_HEAP_PROPERTIES UploadHeapProps;
+	UploadHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+	UploadHeapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	UploadHeapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	UploadHeapProps.CreationNodeMask = 1;
+	UploadHeapProps.VisibleNodeMask = 1;
+
+	ComPtr<ID3D12Resource>& newTextureUploadHeapCom = TextureUploadBuffers.emplace_back();
+	ID3D12Resource* newtextureUploadHeap = newTextureUploadHeapCom.Get();
+
+	// Create the CPU -> GPU Staging Buffer
+	DXAssert(D3D12Globals::Device->CreateCommittedResource(
 		&UploadHeapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&UploadBufferDesc,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
-		IID_PPV_ARGS(&textureUploadHeap)));
+		IID_PPV_ARGS(&newtextureUploadHeap)));
 
 	// Blocking call
-	UploadTextureBlocking(texResource, textureUploadHeap, 1, inCommandList, res);
+	UploadTextureBlocking(texResource, newtextureUploadHeap, 1, inCommandList, res);
 
 	// Transition from copy dest to shader resource
 	D3D12Utility::TransitionResource(inCommandList, texResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-	// Describe and create a SRV for the texture.
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = textureDesc.Format;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Texture2D.MipLevels = (uint32_t)res.GetImageCount();
-
-	D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalSRVHeap.AllocatePersistent();
-	newTexture->SRVIndex = descAllocation.Index;
-	D3D12Globals::Device->CreateShaderResourceView(texResource, &srvDesc, descAllocation.CPUHandle);
 
 	newTexture->NumMips = (uint16_t)res.GetImageCount();
 	newTexture->ChannelsType = ERHITextureChannelsType::RGBA;
@@ -511,7 +499,7 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
  
  	const D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
  
- 	D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommittedResource(
+ 	DXAssert(D3D12Globals::Device->CreateCommittedResource(
  		&D3D12Utility::GetDefaultHeapProps(),
  		D3D12_HEAP_FLAG_NONE,
  		&textureDesc,

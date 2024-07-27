@@ -87,6 +87,14 @@ static_assert((sizeof(MeshConstantBuffer) % 256) == 0, "Constant Buffer size mus
 float StaticOffset = 0.f;
 
 MeshConstantBuffer m_constantBufferData;
+
+// One constant buffer view per signature, in the root
+// One table pointing to the global SRV heap where either 
+// A: all descriptors are stored and just the root for the table is modified per drawcall or
+// B: Just the necessary descriptors are stored and they are copied over before the drawcall from non shader-visible heaps
+
+// Constant Buffer is double buffered to allow modifying it each frame
+// Descriptors should also be double buffered
 D3D12ConstantBuffer m_constantBuffer;
 uint64_t UsedCBMemory[D3D12Globals::NumFramesInFlight] = { 0 };
 
@@ -124,13 +132,13 @@ void AppModeBase::CreateInitialResources()
 			D3D12DescHeapAllocationDesc newAllocation = D3D12Globals::GlobalRTVHeap.AllocatePersistent();
 
 			// Get a reference to the swapchain buffer
-			D3D12Utility::DXAssert(D3D12Globals::SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_BackBuffers[i])));
+			DXAssert(D3D12Globals::SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_BackBuffers[i])));
 
 			// Create the descriptor at the target location in the heap
 			D3D12Globals::Device->CreateRenderTargetView(m_BackBuffers[i].Get(), nullptr, newAllocation.CPUHandle);
 
 			// Create the command allocator
-			D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[i])));
+			DXAssert(D3D12Globals::Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[i])));
 		}
 	}
 
@@ -210,14 +218,14 @@ void AppModeBase::CreateInitialResources()
 
 		ComPtr<ID3DBlob> signature;
 		ComPtr<ID3DBlob> error;
-		if (!D3D12Utility::DXAssert(D3D12SerializeVersionedRootSignature(&rootSignatureDesc, &signature, &error)))
+		if (!DXAssert(D3D12SerializeVersionedRootSignature(&rootSignatureDesc, &signature, &error)))
 		{
 			const char* errText = (char*)error->GetBufferPointer();
 			LOG_ERROR("%s", errText);
 		}
 
 
-		D3D12Utility::DXAssert(D3D12Globals::Device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
+		DXAssert(D3D12Globals::Device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
 	}
 
 	eastl::string fullPath = "shaders";
@@ -330,10 +338,10 @@ void AppModeBase::CreateInitialResources()
 	psoDesc.RTVFormats[1] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.SampleDesc.Count = 1;
 
-	D3D12Utility::DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_MainMeshPipelineState)));
+	DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_MainMeshPipelineState)));
 
 	// Create the command list.
-	D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Globals::CurrentFrameIndex].Get(), m_MainMeshPipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
+	DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Globals::CurrentFrameIndex].Get(), m_MainMeshPipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
 
 	// Cube creation
 
@@ -360,7 +368,7 @@ void AppModeBase::CreateInitialResources()
 		memcpy(m_constantBuffer.Map().CPUAddress, &m_constantBufferData, sizeof(m_constantBufferData));
 	}
 
-	D3D12Utility::DXAssert(m_commandList->Close());
+	DXAssert(m_commandList->Close());
 	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
 	D3D12Globals::CommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
@@ -369,10 +377,10 @@ void AppModeBase::CreateInitialResources()
 #if FRAME_BUFFERING
 		m_fenceValues[0] = m_fenceValues[1] = 1;
 
-		D3D12Utility::DXAssert(D3D12Globals::Device->CreateFence(m_fenceValues[0], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
+		DXAssert(D3D12Globals::Device->CreateFence(m_fenceValues[0], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
 		m_fenceValues[0]++;
 #else
-		D3D12Utility::DXAssert(D3D12Globals::Device->CreateFence(m_fenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
+		DXAssert(D3D12Globals::Device->CreateFence(m_fenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
 		m_fenceValue++;
 #endif
 
@@ -380,7 +388,7 @@ void AppModeBase::CreateInitialResources()
 		m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 		if (m_fenceEvent == nullptr)
 		{
-			D3D12Utility::DXAssert(HRESULT_FROM_WIN32(GetLastError()));
+			DXAssert(HRESULT_FROM_WIN32(GetLastError()));
 		}
 
 		// Wait for the command list to execute; we are reusing the same command 
@@ -398,7 +406,7 @@ void AppModeBase::SwapBuffers()
 {
 	D3D12Utility::TransitionResource(m_commandList.Get(), m_BackBuffers[D3D12Globals::CurrentFrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 
-	D3D12Utility::DXAssert(m_commandList->Close());
+	DXAssert(m_commandList->Close());
 
 	bCmdListOpen = false;
 
@@ -434,12 +442,12 @@ void AppModeBase::ResetFrameResources()
 	// Command list allocators can only be reset when the associated 
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
-	D3D12Utility::DXAssert(m_commandAllocators[D3D12Globals::CurrentFrameIndex]->Reset());
+	DXAssert(m_commandAllocators[D3D12Globals::CurrentFrameIndex]->Reset());
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
-	D3D12Utility::DXAssert(m_commandList->Reset(m_commandAllocators[D3D12Globals::CurrentFrameIndex].Get(), m_MainMeshPipelineState.Get()));
+	DXAssert(m_commandList->Reset(m_commandAllocators[D3D12Globals::CurrentFrameIndex].Get(), m_MainMeshPipelineState.Get()));
 }
 
 void AppModeBase::BeginFrame()
@@ -636,10 +644,10 @@ void AppModeBase::WaitForPreviousFrame()
 {
 	const UINT64 currentFrameRequiredFenceValue = m_fenceValues[D3D12Globals::CurrentFrameIndex];
 	// We want that fence to be set to that value from the GPU side
-	D3D12Utility::DXAssert(D3D12Globals::CommandQueue->Signal(m_fence.Get(), m_fenceValues[D3D12Globals::CurrentFrameIndex]));
+	DXAssert(D3D12Globals::CommandQueue->Signal(m_fence.Get(), m_fenceValues[D3D12Globals::CurrentFrameIndex]));
 
 	// Tell m_fence to raise this event once it's equal fence value
-	D3D12Utility::DXAssert(m_fence->SetEventOnCompletion(m_fenceValues[D3D12Globals::CurrentFrameIndex], m_fenceEvent));
+	DXAssert(m_fence->SetEventOnCompletion(m_fenceValues[D3D12Globals::CurrentFrameIndex], m_fenceEvent));
 
 	// Wait until that event is raised
 	WaitForSingleObject(m_fenceEvent, INFINITE);
@@ -661,14 +669,14 @@ void AppModeBase::WaitForPreviousFrame()
 	// Signal and increment the fence value.
 	const UINT64 fence = m_fenceValue;
 	// We want that fence to be set to that value from the GPU side
-	D3D12Utility::DXAssert(D3D12Globals::CommandQueue->Signal(m_fence.Get(), fence));
+	DXAssert(D3D12Globals::CommandQueue->Signal(m_fence.Get(), fence));
 	m_fenceValue++;
 
 	const UINT64 fenceValue = m_fence->GetCompletedValue();
 	if (fenceValue < fence)
 	{
 		// Tell m_fence to raise this event once it's equal fence value
-		D3D12Utility::DXAssert(m_fence->SetEventOnCompletion(fence, m_fenceEvent));
+		DXAssert(m_fence->SetEventOnCompletion(fence, m_fenceEvent));
 
 		// Wait until that event is raised
 		WaitForSingleObject(m_fenceEvent, INFINITE);
@@ -689,7 +697,7 @@ void AppModeBase::MoveToNextFrame()
 	const UINT64 submittedFrameFenceValue = m_fenceValues[D3D12Globals::CurrentFrameIndex];
 
 	// Place signal for frame that was just submitted
-	D3D12Utility::DXAssert(D3D12Globals::CommandQueue->Signal(m_fence.Get(), submittedFrameFenceValue));
+	DXAssert(D3D12Globals::CommandQueue->Signal(m_fence.Get(), submittedFrameFenceValue));
 
 	// Move onto next frame. Backbuffer index was changed as Present was called before this
 	D3D12Globals::CurrentFrameIndex = D3D12Globals::SwapChain->GetCurrentBackBufferIndex();
@@ -703,7 +711,7 @@ void AppModeBase::MoveToNextFrame()
 
 	if (presentFenceValue < toStartFrameFenceValue)
 	{
-		D3D12Utility::DXAssert(m_fence->SetEventOnCompletion(toStartFrameFenceValue, m_fenceEvent));
+		DXAssert(m_fence->SetEventOnCompletion(toStartFrameFenceValue, m_fenceEvent));
 		WaitForSingleObjectEx(m_fenceEvent, INFINITE, false);
 	}
 
@@ -737,7 +745,7 @@ void AppModeBase::ImGuiInit()
 	srvHeapDesc.NumDescriptors = 1;
 	srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	D3D12Utility::DXAssert(D3D12Globals::Device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_imguiCbvSrvHeap)));
+	DXAssert(D3D12Globals::Device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_imguiCbvSrvHeap)));
 
 	D3D12_CPU_DESCRIPTOR_HANDLE fontSrvCpuHandle = m_imguiCbvSrvHeap->GetCPUDescriptorHandleForHeapStart();
 	D3D12_GPU_DESCRIPTOR_HANDLE fontSrvGpuHandle = m_imguiCbvSrvHeap->GetGPUDescriptorHandleForHeapStart();

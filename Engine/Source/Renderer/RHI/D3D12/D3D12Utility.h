@@ -22,16 +22,16 @@ namespace D3D12Globals
 	extern D3D12DescriptorHeap GlobalSRVHeap;
 }
 
+inline bool DXAssert(HRESULT inRez)
+{
+	const bool success = SUCCEEDED(inRez);
+	ASSERT_MSG(success, "Direct3D12 Operation failed with code 0x%08X", static_cast<uint32_t>(inRez));
+
+	return success;
+}
+
 namespace D3D12Utility
 {
-	inline bool DXAssert(HRESULT inRez)
-	{
-		const bool success = SUCCEEDED(inRez);
-		ASSERT_MSG(success, "Direct3D12 Operation failed with code 0x%08X", static_cast<uint32_t>(inRez));
-
-		return success;
-	}
-
 	D3D12_HEAP_PROPERTIES& GetDefaultHeapProps();
 
 	void TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter);
