@@ -20,17 +20,17 @@ void Editor::Terminate()
 	delete GEditor;
 }
 
-void Editor::Tick(float inDeltaT)
-{
-	Controller->ExecuteCallbacks();
-}
-
 Editor::Editor()
 {
 	Controller = eastl::make_unique<EditorController>();
 }
 
 Editor::~Editor() = default;
+
+void Editor::Tick(float inDeltaT)
+{
+	Controller->ExecuteCallbacks();
+}
 
 void Editor::Internal_Init()
 {
@@ -117,7 +117,7 @@ void Editor::MoveCameraLeft()
 		return;
 	}
 
-	ViewportCamera->Move(MovementDirection::Left, CameraSpeed);
+	ViewportCamera->Move(EMovementDirection::Left, CameraSpeed);
 }
 
 void Editor::MoveCameraRight()
@@ -127,7 +127,7 @@ void Editor::MoveCameraRight()
 		return;
 	}
 
-	ViewportCamera->Move(MovementDirection::Right, CameraSpeed);
+	ViewportCamera->Move(EMovementDirection::Right, CameraSpeed);
 }
 
 void Editor::MoveCameraUp()
@@ -137,7 +137,7 @@ void Editor::MoveCameraUp()
 		return;
 	}
 
-	ViewportCamera->Move(MovementDirection::Forward, CameraSpeed);
+	ViewportCamera->Move(EMovementDirection::Forward, CameraSpeed);
 }
 
 void Editor::MoveCameraDown()
@@ -147,7 +147,7 @@ void Editor::MoveCameraDown()
 		return;
 	}
 
-	ViewportCamera->Move(MovementDirection::Back, CameraSpeed);
+	ViewportCamera->Move(EMovementDirection::Back, CameraSpeed);
 }
 
 static bool mouseTest = false;
@@ -200,7 +200,5 @@ ControllerBase& Editor::GetController()
 {
 	return *Controller;
 }
-
-
 
 

@@ -149,8 +149,10 @@ void AppCore::Run()
 
 		GEditor->Tick(CurrentDeltaT);
 
+		CurrentApp->Tick(CurrentDeltaT);
 		CurrentApp->Draw();
 
+		// Tick plugins
  		for (PluginAndName& container : GetInternalPluginsList())
  		{
 			if (!container.Plugin->IsInit())

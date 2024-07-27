@@ -20,7 +20,7 @@ void Camera::Tick(const float inDeltaT)
 	
 }
 
-void Camera::Move(MovementDirection inDirection, const float inSpeed) 
+void Camera::Move(EMovementDirection inDirection, const float inSpeed) 
 {
 	constexpr glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 
@@ -41,16 +41,16 @@ void Camera::Move(MovementDirection inDirection, const float inSpeed)
 
 		switch (inDirection)
 		{
-		case MovementDirection::Forward:
+		case EMovementDirection::Forward:
 			movementVector = front * inSpeed;
 			break;
-		case MovementDirection::Back:
+		case EMovementDirection::Back:
 			movementVector -= front * inSpeed;
 			break;
-		case MovementDirection::Right:
+		case EMovementDirection::Right:
 			movementVector = right * inSpeed;
 			break;
-		case MovementDirection::Left:
+		case EMovementDirection::Left:
 			movementVector -= right * inSpeed;
 			break;
 		default:

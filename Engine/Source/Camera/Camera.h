@@ -2,7 +2,7 @@
 #include "Entity/Entity.h"
 #include "EASTL/shared_ptr.h"
 
-enum class MovementDirection
+enum class EMovementDirection
 {
 	Forward,
 	Back,
@@ -19,7 +19,7 @@ public:
 	virtual void Init() override;
 	virtual void Tick(const float inDeltaT) override;
 	
-	void Move(MovementDirection inDirection, const float inSpeed = 0.1f);
+	void Move(EMovementDirection inDirection, const float inSpeed = 0.1f);
 	void SetMovementDelegates(class ControllerBase& inController);
 	void OnMouseScrollChanged(const float inNewY);
 	glm::mat4 GetLookAt();

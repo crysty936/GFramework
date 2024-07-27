@@ -41,7 +41,6 @@ AppModeBase::AppModeBase()
 	GameMode = this;
 }
 
-
 // Synchronization objects.
 HANDLE m_fenceEvent;
 ComPtr<ID3D12Fence> m_fence;
@@ -54,7 +53,6 @@ UINT64 m_fenceValues[D3D12Globals::NumFramesInFlight];
 UINT64 m_fenceValue;
 #endif
 
-
 AppModeBase::~AppModeBase()
 {
 	WaitForPreviousFrame();
@@ -62,10 +60,9 @@ AppModeBase::~AppModeBase()
 	CloseHandle(m_fenceEvent);
 }
 
-
 // Pipeline objects.
 
-ComPtr<ID3D12Resource> m_renderTargets[D3D12Globals::NumFramesInFlight];
+ComPtr<ID3D12Resource> m_BackBuffers[D3D12Globals::NumFramesInFlight];
 eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferAlbedo;
 
 ComPtr<ID3D12CommandAllocator> m_commandAllocators[D3D12Globals::NumFramesInFlight];
@@ -74,8 +71,6 @@ ComPtr<ID3D12RootSignature> m_rootSignature;
 ComPtr<ID3D12GraphicsCommandList> m_commandList;
 
 ComPtr<ID3D12PipelineState> m_MainMeshPipelineState;
-
-Scene MainScene;
 
 eastl::shared_ptr<Model3D> TheCube;
 
@@ -129,10 +124,10 @@ void AppModeBase::CreateInitialResources()
 			D3D12DescHeapAllocationDesc newAllocation = D3D12Globals::GlobalRTVHeap.AllocatePersistent();
 
 			// Get a reference to the swapchain buffer
-			D3D12Utility::DXAssert(D3D12Globals::SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_renderTargets[i])));
+			D3D12Utility::DXAssert(D3D12Globals::SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_BackBuffers[i])));
 
 			// Create the descriptor at the target location in the heap
-			D3D12Globals::Device->CreateRenderTargetView(m_renderTargets[i].Get(), nullptr, newAllocation.CPUHandle);
+			D3D12Globals::Device->CreateRenderTargetView(m_BackBuffers[i].Get(), nullptr, newAllocation.CPUHandle);
 
 			// Create the command allocator
 			D3D12Utility::DXAssert(D3D12Globals::Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[i])));
@@ -349,10 +344,15 @@ void AppModeBase::CreateInitialResources()
 	theCube2->Init(m_commandList.Get());
 
 
-	MainScene.GetCurrentCamera()->Move(MovementDirection::Back, 5.f);
+	SceneManager& sManager = SceneManager::Get();
+	Scene& currentScene = sManager.GetCurrentScene();
 
-	MainScene.AddObject(TheCube);
-	MainScene.AddObject(theCube2);
+	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
+
+	TheCube->Move(glm::vec3(-5.f, 0.f, 0.f));
+
+	currentScene.AddObject(TheCube);
+	currentScene.AddObject(theCube2);
 
 	// Create the constant buffer.
 	{
@@ -396,7 +396,7 @@ void AppModeBase::CreateInitialResources()
 
 void AppModeBase::SwapBuffers()
 {
-	D3D12Utility::TransitionResource(m_commandList.Get(), m_renderTargets[D3D12Globals::CurrentFrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	D3D12Utility::TransitionResource(m_commandList.Get(), m_BackBuffers[D3D12Globals::CurrentFrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 
 	D3D12Utility::DXAssert(m_commandList->Close());
 
@@ -465,7 +465,11 @@ void AppModeBase::Draw()
 	if (GEngine->IsImguiEnabled())
 	{
 		ImGui::Begin("Scene");
-		MainScene.DisplayObjects();
+
+		SceneManager& sManager = SceneManager::Get();
+		Scene& currentScene = sManager.GetCurrentScene();
+		currentScene.DisplayObjects();
+
 		ImGui::End();
 
 		ImGui::Begin("D3D12 Settings");
@@ -506,10 +510,13 @@ void AppModeBase::Draw()
 	renderTargets[1] = m_GBufferAlbedo->RTV;
 
 	m_commandList->OMSetRenderTargets(2, renderTargets, FALSE, nullptr);
-	D3D12Utility::TransitionResource(m_commandList.Get(), m_renderTargets[D3D12Globals::CurrentFrameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	D3D12Utility::TransitionResource(m_commandList.Get(), m_BackBuffers[D3D12Globals::CurrentFrameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+	SceneManager& sManager = SceneManager::Get();
+	Scene& currentScene = sManager.GetCurrentScene();
 
 	// Draw meshes
-	const eastl::vector<eastl::shared_ptr<TransformObject>>& objects = MainScene.GetAllObjects();
+	const eastl::vector<eastl::shared_ptr<TransformObject>>& objects = currentScene.GetAllObjects();
 
 	for (int32_t i = 0; i < objects.size(); ++i)
 	{
@@ -535,36 +542,39 @@ void AppModeBase::Draw()
 		const float CAMERA_FAR = 10000.f;
 
 		glm::mat4 projection = glm::perspectiveLH_ZO(glm::radians(CAMERA_FOV), windowWidth / windowHeight, CAMERA_NEAR, CAMERA_FAR);
-		const glm::mat4 view = MainScene.GetCurrentCamera()->GetLookAt();
+		const glm::mat4 view = currentScene.GetCurrentCamera()->GetLookAt();
 
 		m_constantBufferData.Projection = projection;
 		m_constantBufferData.View = view;
 
 		// Use temp buffer in main constant buffer
-		// TODO: Abstract this
-		MapResult cBufferMap = m_constantBuffer.Map();
+		{
+			// TODO: Abstract this
 
-		const uint64_t cbSize = sizeof(m_constantBufferData);
-		const uint64_t ConstantBufferAlignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
+			MapResult cBufferMap = m_constantBuffer.Map();
 
-		// Used memory sizes should be aligned
-		const uint64_t offset = UsedCBMemory[D3D12Globals::CurrentFrameIndex];
+			const uint64_t cbSize = sizeof(m_constantBufferData);
+			constexpr uint64_t constantBufferAlignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
 
-		// Align size
-		const uint64_t finalSize = ((cbSize + ConstantBufferAlignment - 1) / ConstantBufferAlignment) * ConstantBufferAlignment;
-		UsedCBMemory[D3D12Globals::CurrentFrameIndex] += finalSize;
+			// Used memory sizes should be aligned
+			const uint64_t offset = UsedCBMemory[D3D12Globals::CurrentFrameIndex];
 
-		ASSERT(finalSize < m_constantBuffer.Size);
+			// Align size
+			const uint64_t finalSize = ((cbSize + constantBufferAlignment - 1) / constantBufferAlignment) * constantBufferAlignment;
+			UsedCBMemory[D3D12Globals::CurrentFrameIndex] += finalSize;
 
-		uint8_t* CPUAddress = cBufferMap.CPUAddress;
-		CPUAddress += offset;
+			ASSERT(finalSize < m_constantBuffer.Size);
 
-		uint64_t GPUAddress = cBufferMap.GPUAddress;
-		GPUAddress += offset;
+			uint8_t* CPUAddress = cBufferMap.CPUAddress;
+			CPUAddress += offset;
 
-		memcpy(CPUAddress, &m_constantBufferData, sizeof(m_constantBufferData));
+			uint64_t GPUAddress = cBufferMap.GPUAddress;
+			GPUAddress += offset;
 
-		m_commandList->SetGraphicsRootConstantBufferView(0, GPUAddress);
+			memcpy(CPUAddress, &m_constantBufferData, sizeof(m_constantBufferData));
+
+			m_commandList->SetGraphicsRootConstantBufferView(0, GPUAddress);
+		}
 
 
 		// Record commands
@@ -591,6 +601,7 @@ void AppModeBase::Draw()
 	}
 
 
+
 }
 
 void AppModeBase::EndFrame()
@@ -601,7 +612,6 @@ void AppModeBase::EndFrame()
 
 	ImGuiRenderDrawData();
 
-	//Renderer::Get().Present();
 	SwapBuffers();
 }
 
@@ -617,9 +627,9 @@ void AppModeBase::Terminate()
 }
 
 void AppModeBase::Tick(float inDeltaT)
-{}
+{
 
-
+}
 
 #if FRAME_BUFFERING
 void AppModeBase::WaitForPreviousFrame()
