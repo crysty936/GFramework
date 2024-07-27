@@ -6,6 +6,7 @@
 #include "Core/WindowsPlatform.h"
 #include <windows.h>
 #include <WinUser.h>
+#include <winnls.h>
 #include "Logger/Logger.h"
 #include "InputSystem/InputType.h"
 #include "InputSystem/InputSystem.h"
@@ -27,6 +28,38 @@ namespace WindowsPlatform
 	 // Timing
 
 	static double SecondsPerCycle = 0;
+
+	eastl::string GetWin32ErrorStringAnsi(uint32_t inErrorCode)
+	{
+		char errorString[MAX_PATH];
+		::FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM,
+			0,
+			inErrorCode,
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+			errorString,
+			MAX_PATH,
+			NULL);
+
+		eastl::string message = "Win32 Error: ";
+		message += errorString;
+		return message;
+	}
+
+	eastl::wstring GetWin32ErrorString(uint32_t inErrorCode)
+	{
+		wchar_t errorString[MAX_PATH];
+		::FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM,
+			0,
+			inErrorCode,
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+			errorString,
+			MAX_PATH,
+			NULL);
+
+		eastl::wstring message = L"Win32 Error: ";
+		message += errorString;
+		return message;
+	}
 
 	void InitCycles()
 	{
@@ -1377,4 +1410,18 @@ namespace WindowsPlatform
 
 		return newWindow;
 	}
+}
+
+eastl::wstring AnsiToWString(const char* ansiString)
+{
+	wchar_t buffer[512];
+	Win32Call(MultiByteToWideChar(CP_ACP, 0, ansiString, -1, buffer, 512));
+	return eastl::wstring(buffer);
+}
+
+eastl::string WStringToAnsi(const wchar_t* wideString)
+{
+	char buffer[512];
+	Win32Call(WideCharToMultiByte(CP_ACP, 0, wideString, -1, buffer, 612, NULL, NULL));
+	return eastl::string(buffer);
 }

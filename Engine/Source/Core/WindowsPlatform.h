@@ -20,10 +20,14 @@ namespace Windows
 	typedef HKEY__* HKEY;
 }
 
+eastl::wstring AnsiToWString(const char* ansiString);
+eastl::string WStringToAnsi(const wchar_t* wideString);
+
 // Wrapper for windows.h to not pollute the dev environment
 namespace WindowsPlatform
 {
-
+	eastl::string GetWin32ErrorStringAnsi(uint32_t inErrorCode);
+	eastl::wstring GetWin32ErrorString(uint32_t inErrorCode);
 
 	void InitCycles();
 	double GetTime();
@@ -44,3 +48,12 @@ namespace WindowsPlatform
 	bool CreateDirectoryTree(const eastl::string& Directory);
 	bool CreateDirectoryInternal(const eastl::string& Directory);
 }
+
+
+#define Win32Call(x)                                                            \
+    do                                                                          \
+    {                                                                           \
+        BOOL res_ = x;                                                          \
+        ASSERT(res_ != 0, WindowsPlatform::GetWin32ErrorStringAnsi(GetLastError()).c_str()); \
+    }                                                                           \
+    while(0)

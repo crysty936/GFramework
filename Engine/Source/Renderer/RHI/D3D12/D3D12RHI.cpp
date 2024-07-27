@@ -37,6 +37,7 @@
 #include "D3D12Utility.h"
 #include "D3D12GraphicsTypes_Internal.h"
 #include "D3D12Resources.h"
+#include "Core/WindowsPlatform.h"
 
 
 // D3D12 RHI stuff to do:
@@ -371,15 +372,17 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	DirectX::ScratchImage dxImage = {};
 	DirectX::TexMetadata dxMetadata = {};
 
-	const int32_t pathLength = inDataPath.length();
+	/*const int32_t pathLength = inDataPath.length();
 	wchar_t* wideString = new wchar_t[pathLength + 1];
 	for (int32_t i = 0; i < pathLength; ++i)
 	{
 		wideString[i] = inDataPath[i];
 	}
-	wideString[pathLength] = L'\0';
+	wideString[pathLength] = L'\0';*/
 
-	HRESULT hresult = DirectX::LoadFromWICFile(wideString, DirectX::WIC_FLAGS_NONE, &dxMetadata, dxImage);
+	eastl::wstring wideString = AnsiToWString(inDataPath.c_str());
+
+	HRESULT hresult = DirectX::LoadFromWICFile(wideString.c_str(), DirectX::WIC_FLAGS_NONE, &dxMetadata, dxImage);
 	const bool success = SUCCEEDED(hresult);
 
 	ENSURE(success);
