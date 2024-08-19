@@ -39,5 +39,5 @@ namespace D3D12Utility
 	void MakeTextureReadable(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource);
 	void MakeTextureWriteable(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource);
 
-
+	constexpr float ClearColor[4] = { 0.0f, 0.2f, 0.4f, 1.0f };
 }

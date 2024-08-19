@@ -41,21 +41,21 @@ AppModeBase::AppModeBase()
 	GameMode = this;
 }
 
+#define FRAME_BUFFERING 1
+
 // Synchronization objects.
 HANDLE m_fenceEvent;
 ComPtr<ID3D12Fence> m_fence;
+ComPtr<ID3D12Fence> m_FlushGPUFence;
 
-#define FRAME_BUFFERING 1
+UINT64 m_FlushFenceValue = 0;
 
-#if FRAME_BUFFERING
-UINT64 m_fenceValues[D3D12Globals::NumFramesInFlight];
-#else
-UINT64 m_fenceValue;
-#endif
+uint64_t CurrentCPUFrame = 0;
+uint64_t CurrentGPUFrame = 0;
 
 AppModeBase::~AppModeBase()
 {
-	WaitForPreviousFrame();
+	FlushGPU();
 
 	CloseHandle(m_fenceEvent);
 }
@@ -136,6 +136,13 @@ void AppModeBase::CreateInitialResources()
 
 			// Create the descriptor at the target location in the heap
 			D3D12Globals::Device->CreateRenderTargetView(m_BackBuffers[i].Get(), nullptr, newAllocation.CPUHandle);
+			eastl::wstring rtName = L"BackBuffer RenderTarget ";
+			rtName += eastl::to_wstring(i);
+
+			m_BackBuffers[i].Get()->SetName(rtName.c_str());
+
+			//D3D12_CLEAR_VALUE
+			//m_BackBuffers[i].
 
 			// Create the command allocator
 			DXAssert(D3D12Globals::Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[i])));
@@ -342,6 +349,7 @@ void AppModeBase::CreateInitialResources()
 
 	// Create the command list.
 	DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Globals::CurrentFrameIndex].Get(), m_MainMeshPipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
+	m_commandList->SetName(L"Main GFX Cmd List");
 
 	// Cube creation
 
@@ -374,15 +382,13 @@ void AppModeBase::CreateInitialResources()
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
 	{
-#if FRAME_BUFFERING
-		m_fenceValues[0] = m_fenceValues[1] = 1;
+		CurrentCPUFrame = 0;
 
-		DXAssert(D3D12Globals::Device->CreateFence(m_fenceValues[0], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
-		m_fenceValues[0]++;
-#else
-		DXAssert(D3D12Globals::Device->CreateFence(m_fenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
-		m_fenceValue++;
-#endif
+		DXAssert(D3D12Globals::Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
+		++CurrentCPUFrame;
+
+		DXAssert(D3D12Globals::Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_FlushGPUFence)));
+		++m_FlushFenceValue;
 
 		// Create an event handle to use for frame synchronization.
 		m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
@@ -394,7 +400,7 @@ void AppModeBase::CreateInitialResources()
 		// Wait for the command list to execute; we are reusing the same command 
 		// list in our main loop but for now, we just want to wait for setup to 
 		// complete before continuing.
-		WaitForPreviousFrame();
+		FlushGPU();
 
 		// Make sure commandlist is open for object creations
 		ResetFrameResources();
@@ -421,11 +427,15 @@ void AppModeBase::SwapBuffers()
 
 	D3D12Globals::SwapChain->Present(1, 0);
 
+	// D3D12Globals::SwapChain->GetCurrentBackBufferIndex() could potentially be used as well;
+	D3D12Globals::CurrentFrameIndex = (D3D12Globals::CurrentFrameIndex + 1) % D3D12Globals::NumFramesInFlight;
+
+	++CurrentCPUFrame;
 
 #if FRAME_BUFFERING
 	MoveToNextFrame();
 #else
-	WaitForPreviousFrame();
+	FlushGPU();
 #endif
 
 }
@@ -508,17 +518,16 @@ void AppModeBase::Draw()
 
 	// Backbuffers are the first 2 RTVs in the Global Heap
 	D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Globals::CurrentFrameIndex);
+	D3D12Utility::TransitionResource(m_commandList.Get(), m_BackBuffers[D3D12Globals::CurrentFrameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
-	m_commandList->ClearRenderTargetView(currentBackbufferRTDescriptor, clearColor, 0, nullptr);
-	m_commandList->ClearRenderTargetView(m_GBufferAlbedo->RTV, clearColor, 0, nullptr);
+	m_commandList->ClearRenderTargetView(currentBackbufferRTDescriptor, D3D12Utility::ClearColor, 0, nullptr);
+	m_commandList->ClearRenderTargetView(m_GBufferAlbedo->RTV, D3D12Utility::ClearColor, 0, nullptr);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[2];
-	renderTargets[0] = currentBackbufferRTDescriptor; // TODO: This has to be removed from the RTs and stuff has to be rendered/copied into the backbuffer at the end
+	renderTargets[0] = currentBackbufferRTDescriptor; // TODO: This has to be removed from the RTs and final output has to be rendered/copied into the backbuffer at the end
 	renderTargets[1] = m_GBufferAlbedo->RTV;
 
 	m_commandList->OMSetRenderTargets(2, renderTargets, FALSE, nullptr);
-	D3D12Utility::TransitionResource(m_commandList.Get(), m_BackBuffers[D3D12Globals::CurrentFrameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 	SceneManager& sManager = SceneManager::Get();
 	Scene& currentScene = sManager.GetCurrentScene();
@@ -639,86 +648,46 @@ void AppModeBase::Tick(float inDeltaT)
 
 }
 
-#if FRAME_BUFFERING
-void AppModeBase::WaitForPreviousFrame()
+void AppModeBase::FlushGPU()
 {
-	const UINT64 currentFrameRequiredFenceValue = m_fenceValues[D3D12Globals::CurrentFrameIndex];
-	// We want that fence to be set to that value from the GPU side
-	DXAssert(D3D12Globals::CommandQueue->Signal(m_fence.Get(), m_fenceValues[D3D12Globals::CurrentFrameIndex]));
+	const uint64_t beforeFenceValue = m_FlushGPUFence->GetCompletedValue();
+	ASSERT(beforeFenceValue != UINT64_MAX);
 
-	// Tell m_fence to raise this event once it's equal fence value
-	DXAssert(m_fence->SetEventOnCompletion(m_fenceValues[D3D12Globals::CurrentFrameIndex], m_fenceEvent));
+	// We want that fence to be set to that value from the GPU side, once all the commandlists are done
+	DXAssert(D3D12Globals::CommandQueue->Signal(m_FlushGPUFence.Get(), m_FlushFenceValue));
 
-	// Wait until that event is raised
-	WaitForSingleObject(m_fenceEvent, INFINITE);
+	const uint64_t afterFenceValue = m_FlushGPUFence->GetCompletedValue();
 
-	m_fenceValues[D3D12Globals::CurrentFrameIndex]++;
-}
-#else
-void AppModeBase::WaitForPreviousFrame()
-{
-	// WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE.
-	// This is code implemented as such for simplicity. The D3D12HelloFrameBuffering
-	// sample illustrates how to use fences for efficient resource usage and to
-	// maximize GPU utilization.
+	// Happens if Graphics device is removed while running
+	ASSERT(afterFenceValue != UINT64_MAX);
 
-
-	// Basically tells the GPU that it should set that fence to that value.
-	// Because of the way the queue works, that command is only going to be executed once all other command lists in the queue are done
-
-	// Signal and increment the fence value.
-	const UINT64 fence = m_fenceValue;
-	// We want that fence to be set to that value from the GPU side
-	DXAssert(D3D12Globals::CommandQueue->Signal(m_fence.Get(), fence));
-	m_fenceValue++;
-
-	const UINT64 fenceValue = m_fence->GetCompletedValue();
-	if (fenceValue < fence)
+	if (m_FlushGPUFence->GetCompletedValue() != m_FlushFenceValue)
 	{
-		// Tell m_fence to raise this event once it's equal fence value
-		DXAssert(m_fence->SetEventOnCompletion(fence, m_fenceEvent));
+		// Tell m_fence to raise this event once it's equal to fence value
+		DXAssert(m_FlushGPUFence->SetEventOnCompletion(m_FlushFenceValue, m_fenceEvent));
 
 		// Wait until that event is raised
 		WaitForSingleObject(m_fenceEvent, INFINITE);
 	}
 
-	D3D12Globals::CurrentFrameIndex = D3D12Globals::SwapChain->GetCurrentBackBufferIndex();
-
-	// Clean all used up upload buffers
-	D3D12RHI::Get()->DoTextureUploadHack();
+	++m_FlushFenceValue;
 }
-#endif
 
-
-#if FRAME_BUFFERING
 // Prepare to render the next frame.
 void AppModeBase::MoveToNextFrame()
 {
-	const UINT64 submittedFrameFenceValue = m_fenceValues[D3D12Globals::CurrentFrameIndex];
+	DXAssert(D3D12Globals::CommandQueue->Signal(m_fence.Get(), CurrentCPUFrame));
 
-	// Place signal for frame that was just submitted
-	DXAssert(D3D12Globals::CommandQueue->Signal(m_fence.Get(), submittedFrameFenceValue));
+	CurrentGPUFrame = m_fence->GetCompletedValue();
 
-	// Move onto next frame. Backbuffer index was changed as Present was called before this
-	D3D12Globals::CurrentFrameIndex = D3D12Globals::SwapChain->GetCurrentBackBufferIndex();
-
-	const UINT64 presentFenceValue = m_fence->GetCompletedValue();
-
-	// Happens if Graphics device is removed while running
-	ASSERT(presentFenceValue != UINT64_MAX);
-
-	const UINT64 toStartFrameFenceValue = m_fenceValues[D3D12Globals::CurrentFrameIndex];
-
-	if (presentFenceValue < toStartFrameFenceValue)
+	const uint64_t gpuLag = CurrentCPUFrame - CurrentGPUFrame;
+	if (gpuLag > D3D12Globals::NumFramesInFlight)
 	{
-		DXAssert(m_fence->SetEventOnCompletion(toStartFrameFenceValue, m_fenceEvent));
-		WaitForSingleObjectEx(m_fenceEvent, INFINITE, false);
+		// Wait until we get up to correct latency
+		DXAssert(m_fence->SetEventOnCompletion(CurrentCPUFrame - D3D12Globals::NumFramesInFlight, m_fenceEvent));
+		WaitForSingleObject(m_fenceEvent, INFINITE);
 	}
-
-	m_fenceValues[D3D12Globals::CurrentFrameIndex] = submittedFrameFenceValue + 1;
 }
-#endif
-
 
 ComPtr<ID3D12DescriptorHeap> m_imguiCbvSrvHeap;
 

@@ -45,8 +45,11 @@ PSInput VSMain(float4 position : POSITION, float3 normal : NORMAL, float2 uv : T
 
 PSOutput PSMain(PSInput input)
 {
+    float2 uv = input.uv;
+
     PSOutput output;
-    output.Color = g_texture.Sample(g_sampler, input.uv);
+    output.Color = g_texture.Sample(g_sampler, uv);
+
     output.Color2 = float4(1.f, 0.f, 0.f, 1.f);
 
     return output;

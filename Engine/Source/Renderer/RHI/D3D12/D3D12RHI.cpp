@@ -499,12 +499,19 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
  
  	const D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
  
+	D3D12_CLEAR_VALUE clearValue;
+	clearValue.Format = texFormat;
+	clearValue.Color[0] = D3D12Utility::ClearColor[0];
+	clearValue.Color[1] = D3D12Utility::ClearColor[1];
+	clearValue.Color[2] = D3D12Utility::ClearColor[2];
+	clearValue.Color[3] = D3D12Utility::ClearColor[3];
+
  	DXAssert(D3D12Globals::Device->CreateCommittedResource(
  		&D3D12Utility::GetDefaultHeapProps(),
  		D3D12_HEAP_FLAG_NONE,
  		&textureDesc,
  		initState,
- 		nullptr,
+		&clearValue,
  		IID_PPV_ARGS(&ownedTexture->Resource)));
  
  	static int32_t RenderTargetIndex = 0;
