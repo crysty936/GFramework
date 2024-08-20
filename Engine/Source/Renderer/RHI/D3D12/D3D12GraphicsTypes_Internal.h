@@ -52,10 +52,28 @@ public:
 
 public:
 
-	ID3D12Resource* Handle = nullptr;
+	ID3D12Resource* D3D12Resource = nullptr;
 	uint8_t* CPUAddress = nullptr;
 	uint64_t GPUAddress = 0;
 	uint64_t Size = 0;
+
+
+};
+
+struct D3D12Fence
+{
+	~D3D12Fence();
+
+	ID3D12Fence* FenceHandle = nullptr;
+	HANDLE FenceEvent = INVALID_HANDLE_VALUE;
+
+	void Init(uint64_t inInitialValue = 0);
+
+	void Signal(ID3D12CommandQueue* inQueue, uint64_t inValue);
+	void Wait(uint64_t inValue);
+	bool IsCompleted(uint64_t inValue) const;
+	uint64_t GetValue() const;
+
 
 
 };

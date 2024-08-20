@@ -11,7 +11,7 @@ namespace D3D12Globals
 {
 	extern ID3D12Device* Device;
 	extern IDXGISwapChain3* SwapChain;
-	extern ID3D12CommandQueue* CommandQueue;
+	extern ID3D12CommandQueue* GraphicsCommandQueue;
 
 	extern uint64_t CurrentFrameIndex;
 	constexpr uint32_t NumFramesInFlight = 2;

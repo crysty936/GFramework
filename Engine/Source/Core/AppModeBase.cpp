@@ -44,11 +44,10 @@ AppModeBase::AppModeBase()
 #define FRAME_BUFFERING 1
 
 // Synchronization objects.
-HANDLE m_fenceEvent;
-ComPtr<ID3D12Fence> m_fence;
-ComPtr<ID3D12Fence> m_FlushGPUFence;
+D3D12Fence m_fence;
+D3D12Fence m_FlushGPUFence;
 
-UINT64 m_FlushFenceValue = 0;
+UINT64 m_FlushGPUFenceValue = 0;
 
 uint64_t CurrentCPUFrame = 0;
 uint64_t CurrentGPUFrame = 0;
@@ -56,8 +55,6 @@ uint64_t CurrentGPUFrame = 0;
 AppModeBase::~AppModeBase()
 {
 	FlushGPU();
-
-	CloseHandle(m_fenceEvent);
 }
 
 // Pipeline objects.
@@ -380,24 +377,17 @@ void AppModeBase::CreateInitialResources()
 
 	DXAssert(m_commandList->Close());
 	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
-	D3D12Globals::CommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+	D3D12Globals::GraphicsCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
 	{
 		CurrentCPUFrame = 0;
 
-		DXAssert(D3D12Globals::Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
+		m_fence.Init(CurrentCPUFrame);
 		++CurrentCPUFrame;
 
-		DXAssert(D3D12Globals::Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_FlushGPUFence)));
-		++m_FlushFenceValue;
-
-		// Create an event handle to use for frame synchronization.
-		m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-		if (m_fenceEvent == nullptr)
-		{
-			DXAssert(HRESULT_FROM_WIN32(GetLastError()));
-		}
+		m_FlushGPUFence.Init(0);
+		++m_FlushGPUFenceValue;
 
 		// Wait for the command list to execute; we are reusing the same command 
 		// list in our main loop but for now, we just want to wait for setup to 
@@ -419,7 +409,7 @@ void AppModeBase::SwapBuffers()
 	bCmdListOpen = false;
 
 	ID3D12CommandList* commandLists[] = { m_commandList.Get() };
-	D3D12Globals::CommandQueue->ExecuteCommandLists(1, commandLists);
+	D3D12Globals::GraphicsCommandQueue->ExecuteCommandLists(1, commandLists);
 
 	if (GEngine->IsImguiEnabled() && ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 	{
@@ -655,49 +645,32 @@ void AppModeBase::Tick(float inDeltaT)
 
 void AppModeBase::FlushGPU()
 {
-	const uint64_t beforeFenceValue = m_FlushGPUFence->GetCompletedValue();
-	ASSERT(beforeFenceValue != UINT64_MAX);
+	m_FlushGPUFence.Signal(D3D12Globals::GraphicsCommandQueue, m_FlushGPUFenceValue);
+	m_FlushGPUFence.Wait(m_FlushGPUFenceValue);
 
-	// We want that fence to be set to that value from the GPU side, once all the commandlists are done
-	DXAssert(D3D12Globals::CommandQueue->Signal(m_FlushGPUFence.Get(), m_FlushFenceValue));
-
-	const uint64_t afterFenceValue = m_FlushGPUFence->GetCompletedValue();
-
-	// Happens if Graphics device is removed while running
-	ASSERT(afterFenceValue != UINT64_MAX);
-
-	if (m_FlushGPUFence->GetCompletedValue() != m_FlushFenceValue)
-	{
-		// Tell m_fence to raise this event once it's equal to fence value
-		DXAssert(m_FlushGPUFence->SetEventOnCompletion(m_FlushFenceValue, m_fenceEvent));
-
-		// Wait until that event is raised
-		WaitForSingleObject(m_fenceEvent, INFINITE);
-	}
-
-	++m_FlushFenceValue;
+	++m_FlushGPUFenceValue;
 }
 
 // Prepare to render the next frame.
 void AppModeBase::MoveToNextFrame()
 {
-	DXAssert(D3D12Globals::CommandQueue->Signal(m_fence.Get(), CurrentCPUFrame));
+	m_fence.Signal(D3D12Globals::GraphicsCommandQueue, CurrentCPUFrame);
 
-	CurrentGPUFrame = m_fence->GetCompletedValue();
+	CurrentGPUFrame = m_fence.GetValue();
 
 	const uint64_t gpuLag = CurrentCPUFrame - CurrentGPUFrame;
-	if (gpuLag > D3D12Globals::NumFramesInFlight)
+	if (gpuLag >= D3D12Globals::NumFramesInFlight)
 	{
-		// Wait until we get up to correct latency
-		DXAssert(m_fence->SetEventOnCompletion(CurrentGPUFrame + 1, m_fenceEvent));
-		WaitForSingleObject(m_fenceEvent, INFINITE);
+		// Wait for one frame
+		m_fence.Wait(CurrentGPUFrame + 1);
 	}
 }
 
-ComPtr<ID3D12DescriptorHeap> m_imguiCbvSrvHeap;
+static ComPtr<ID3D12DescriptorHeap> m_imguiCbvSrvHeap;
 
 void AppModeBase::ImGuiInit()
 {
+
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;

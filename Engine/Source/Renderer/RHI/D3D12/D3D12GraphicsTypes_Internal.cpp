@@ -5,6 +5,7 @@
 D3D12DescriptorHeap::~D3D12DescriptorHeap()
 {
 	Heap->Release();
+	Heap = nullptr;
 }
 
 void D3D12DescriptorHeap::Init(bool inShaderVisible, uint32_t inNumPersistent, D3D12_DESCRIPTOR_HEAP_TYPE inHeapType)
@@ -52,7 +53,8 @@ D3D12_CPU_DESCRIPTOR_HANDLE D3D12DescriptorHeap::GetCPUHandle(uint32_t inIndex)
 
 D3D12ConstantBuffer::~D3D12ConstantBuffer()
 {
-	Handle->Release();
+	D3D12Resource->Release();
+	D3D12Resource = nullptr;
 }
 
 void D3D12ConstantBuffer::Init(const uint64_t inSize)
@@ -93,9 +95,9 @@ void D3D12ConstantBuffer::Init(const uint64_t inSize)
 		&constantBufferDesc,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
-		IID_PPV_ARGS(&Handle)));
+		IID_PPV_ARGS(&D3D12Resource)));
 
-	GPUAddress = Handle->GetGPUVirtualAddress();
+	GPUAddress = D3D12Resource->GetGPUVirtualAddress();
 
 	// Map and initialize the constant buffer. We don't unmap this until the
 	// app closes. Keeping things mapped for the lifetime of the resource is okay.
@@ -103,7 +105,7 @@ void D3D12ConstantBuffer::Init(const uint64_t inSize)
 	//readRange.Begin = 0;
 	//readRange.End = 0;      // We do not intend to read from this resource on the CPU.
 
-	DXAssert(Handle->Map(0, &readRange, reinterpret_cast<void**>(&CPUAddress)));
+	DXAssert(D3D12Resource->Map(0, &readRange, reinterpret_cast<void**>(&CPUAddress)));
 }
 
 MapResult D3D12ConstantBuffer::Map()
@@ -191,3 +193,51 @@ MapResult D3D12ConstantBuffer::Map()
 // 
 // }
 
+D3D12Fence::~D3D12Fence()
+{
+	FenceHandle->Release();
+	CloseHandle(FenceEvent);
+}
+
+void D3D12Fence::Init(uint64_t inInitialValue)
+{
+	DXAssert(D3D12Globals::Device->CreateFence(inInitialValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&FenceHandle)));
+
+	FenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+	if (FenceEvent == nullptr)
+	{
+		DXAssert(HRESULT_FROM_WIN32(GetLastError()));
+	}
+}
+
+void D3D12Fence::Signal(ID3D12CommandQueue* inQueue, uint64_t inValue)
+{
+	DXAssert(inQueue->Signal(FenceHandle, inValue));
+}
+
+void D3D12Fence::Wait(uint64_t inValue)
+{
+	if (!IsCompleted(inValue))
+	{
+		// Tell fence to raise this event once it's equal to fence value
+		DXAssert(FenceHandle->SetEventOnCompletion(inValue, FenceEvent));
+
+		// Wait until that event is raised
+		WaitForSingleObject(FenceEvent, INFINITE);
+	}
+}
+
+bool D3D12Fence::IsCompleted(uint64_t inValue) const
+{
+	return GetValue() >= inValue;
+}
+
+uint64_t D3D12Fence::GetValue() const
+{
+	const uint64_t fenceValue = FenceHandle->GetCompletedValue();
+
+	// Happens if Graphics device is removed while running
+	ASSERT(fenceValue != UINT64_MAX);
+
+	return fenceValue;
+}

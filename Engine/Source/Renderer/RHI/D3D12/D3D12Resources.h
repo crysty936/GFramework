@@ -49,13 +49,3 @@ public:
 
 };
 
-
-
-struct D3D12Fence
-{
-	ID3D12Fence* D3DFence = nullptr;
-	//HANDLE
-
-};
-
-

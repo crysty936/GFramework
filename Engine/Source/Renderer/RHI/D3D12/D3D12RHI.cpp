@@ -175,7 +175,7 @@ void D3D12RHI::InitPipeline()
 	queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 	queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
-	DXAssert(D3D12Globals::Device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&D3D12Globals::CommandQueue)));
+	DXAssert(D3D12Globals::Device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&D3D12Globals::GraphicsCommandQueue)));
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
@@ -192,7 +192,7 @@ void D3D12RHI::InitPipeline()
 
 	ComPtr<IDXGISwapChain1> swapChain;
 	DXAssert(factory->CreateSwapChainForHwnd(
-		D3D12Globals::CommandQueue,        // Swap chain needs the queue so that it can force a flush on it.
+		D3D12Globals::GraphicsCommandQueue,        // Swap chain needs the queue so that it can force a flush on it.
 		static_cast<HWND>(mainWindow.GetHandle()),
 		&swapChainDesc,
 		nullptr,
