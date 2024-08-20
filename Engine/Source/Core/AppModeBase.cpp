@@ -141,11 +141,13 @@ void AppModeBase::CreateInitialResources()
 
 			m_BackBuffers[i].Get()->SetName(rtName.c_str());
 
-			//D3D12_CLEAR_VALUE
-			//m_BackBuffers[i].
-
 			// Create the command allocator
 			DXAssert(D3D12Globals::Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[i])));
+
+			eastl::wstring commandAllocatorName = L"CommandAllocator ";
+			commandAllocatorName += eastl::to_wstring(i);
+
+			m_commandAllocators[i].Get()->SetName(commandAllocatorName.c_str());
 		}
 	}
 
@@ -427,8 +429,7 @@ void AppModeBase::SwapBuffers()
 
 	D3D12Globals::SwapChain->Present(1, 0);
 
-	// D3D12Globals::SwapChain->GetCurrentBackBufferIndex() could potentially be used as well;
-	D3D12Globals::CurrentFrameIndex = (D3D12Globals::CurrentFrameIndex + 1) % D3D12Globals::NumFramesInFlight;
+	D3D12Globals::CurrentFrameIndex = D3D12Globals::SwapChain->GetCurrentBackBufferIndex();
 
 	++CurrentCPUFrame;
 
@@ -630,6 +631,8 @@ void AppModeBase::EndFrame()
 	ImGuiRenderDrawData();
 
 	SwapBuffers();
+
+
 }
 
 
@@ -641,6 +644,8 @@ void AppModeBase::Terminate()
 
 	delete GameMode;
 	GameMode = nullptr;
+
+	
 }
 
 void AppModeBase::Tick(float inDeltaT)
@@ -684,7 +689,7 @@ void AppModeBase::MoveToNextFrame()
 	if (gpuLag > D3D12Globals::NumFramesInFlight)
 	{
 		// Wait until we get up to correct latency
-		DXAssert(m_fence->SetEventOnCompletion(CurrentCPUFrame - D3D12Globals::NumFramesInFlight, m_fenceEvent));
+		DXAssert(m_fence->SetEventOnCompletion(CurrentGPUFrame + 1, m_fenceEvent));
 		WaitForSingleObject(m_fenceEvent, INFINITE);
 	}
 }

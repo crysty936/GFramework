@@ -17,6 +17,7 @@
 #include <DirectXMath.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
+#include <dxgidebug.h>
 //#include "glm/ext/vector_common.inl"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/glm.hpp"
@@ -152,12 +153,22 @@ void D3D12RHI::InitPipeline()
 	ComPtr<IDXGIAdapter1> hardwareAdapter;
 	GetHardwareAdapter(factory.Get(), &hardwareAdapter, false);
 
+	ComPtr<ID3D12Device> d3d12Device;
 	DXAssert(D3D12CreateDevice(
 		hardwareAdapter.Get(),
 		D3D_FEATURE_LEVEL_11_0,
-		IID_PPV_ARGS(&D3D12Globals::Device)
+		IID_PPV_ARGS(&d3d12Device)
 	));
 
+	ComPtr<ID3D12InfoQueue> infoQueue;
+	HRESULT hr = d3d12Device.As(&infoQueue);
+	if (SUCCEEDED(hr))
+	{
+		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
+		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
+	}
+
+	D3D12Globals::Device = d3d12Device.Detach();
 
 	// Describe and create the command queue.
 	D3D12_COMMAND_QUEUE_DESC queueDesc = {};
@@ -314,8 +325,21 @@ void D3D12RHI::Init()
 	Instance->InitPipeline();
 }
 
+// Contains DXGI_DEBUG_ALL implementation
+#pragma comment(lib, "dxguid.lib") 
+
 void D3D12RHI::Terminate()
 {
+
+#if defined(_DEBUG)
+	IDXGIDebug1* pDebug = nullptr;
+	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&pDebug))))
+	{
+		pDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_SUMMARY);
+		pDebug->Release();
+	}
+#endif
+
 	ASSERT(Instance);
 	delete Instance;
 }
