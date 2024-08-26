@@ -87,13 +87,13 @@ namespace D3D12Upload
 	// having commands for a request added and being submitted. Optimal for uploading big chunks of memory(textures), suboptimal for small and numerous requests
 	struct UploadRingBuffer
 	{
-		static const uint64_t MaxSubmissions = 16;
+		static const uint64_t MaxSubmissions = 512;
 		UploadSubmission Submissions[MaxSubmissions];
 
 		uint64_t SubmissionStart = 0;
 		uint64_t SubmissionsUsed = 0;
 
-		uint64_t BufferSize = 64 * 1024 * 1024;
+		uint64_t BufferSize = 128 * 1024 * 1024;
 		ID3D12Resource* D3DBuffer = nullptr;
 		uint8_t* BufferCPUAddress = nullptr;
 
@@ -169,7 +169,7 @@ namespace D3D12Upload
 				return uint64_t(-1);
 			}
 
-			const uint64_t submissionIdx = (SubmissionStart + SubmissionsUsed) * MaxSubmissions;
+			const uint64_t submissionIdx = (SubmissionStart + SubmissionsUsed) % MaxSubmissions;
 
 			const uint64_t start = BufferStart;
 			const uint64_t end = BufferStart + BufferUsed;
@@ -234,17 +234,22 @@ namespace D3D12Upload
 				UploadSubmission& currSubmission = Submissions[idx];
 
 				// This can be allowed to be -1 only if using multithreading and submitting upload requests on different threads
+				// Otherwise, it's because ResourceEndUpload has not been called somewhere
 				ASSERT(currSubmission.FenceValue != uint64_t(-1));
 
 				ID3D12Fence* submitFence = UsedUploadQueue->Fence.FenceHandle;
 
-				if (i < inForceWaitCount && submitFence->GetCompletedValue() < currSubmission.FenceValue)
+				uint64_t uploadQueueFenceValue = submitFence->GetCompletedValue();
+
+				if (i < inForceWaitCount && uploadQueueFenceValue < currSubmission.FenceValue)
 				{
 					// This does not return until FenceValue has been reached
 					submitFence->SetEventOnCompletion(currSubmission.FenceValue, nullptr);
 				}
 
-				if (submitFence->GetCompletedValue() >= currSubmission.FenceValue)
+				uploadQueueFenceValue = submitFence->GetCompletedValue();
+
+				if (uploadQueueFenceValue >= currSubmission.FenceValue)
 				{
 					// Advance start position
 
@@ -339,6 +344,8 @@ namespace D3D12Upload
 			ASSERT(inContext.SubmissionIndex != uint64_t(-1));
 
 			UploadSubmission& currSubmission = Submissions[inContext.SubmissionIndex];
+
+			DXAssert(currSubmission.CmdList->Close());
 			currSubmission.FenceValue = UsedUploadQueue->SubmitCmdList(currSubmission.CmdList);
 
 			inContext = UploadContext();

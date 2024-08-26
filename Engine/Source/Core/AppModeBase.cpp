@@ -16,6 +16,7 @@
 #include "Scene/Scene.h"
 #include "Camera/Camera.h"
 #include "Utils/Utils.h"
+#include "Utils/PerfUtils.h"
 
 
 // Windows includes
@@ -108,6 +109,8 @@ void AppModeBase::Init()
 
 void AppModeBase::CreateInitialResources()
 {
+	BENCH_SCOPE("Create Resources");
+
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
 
@@ -351,14 +354,11 @@ void AppModeBase::CreateInitialResources()
 	DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Globals::CurrentFrameIndex].Get(), m_MainMeshPipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
 	m_commandList->SetName(L"Main GFX Cmd List");
 
-	// Memory test
-
-	for (int i = 0; i < 200; ++i)
-	{
-		D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, m_commandList.Get());
-
-	}
-
+	// Memory upload test
+	//for (int i = 0; i < 500; ++i)
+	//{
+		//D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, m_commandList.Get());
+	//}
 
 	// Cube creation
 
@@ -623,7 +623,6 @@ void AppModeBase::Draw()
 
 void AppModeBase::EndFrame()
 {
-
 	//Draw ImGui
 	ImGui::EndFrame();
 	ImGui::Render();
@@ -632,7 +631,7 @@ void AppModeBase::EndFrame()
 
 	SwapBuffers();
 
-	D3D12RHI::Get()->DoTextureUploadHack();
+	D3D12RHI::Get()->EndFrame();
 }
 
 
