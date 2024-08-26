@@ -28,6 +28,21 @@ D3D12_HEAP_PROPERTIES& D3D12Utility::GetDefaultHeapProps()
 }
 
 
+D3D12_HEAP_PROPERTIES& D3D12Utility::GetUploadHeapProps()
+{
+	static D3D12_HEAP_PROPERTIES UploadHeapProps
+	{
+		D3D12_HEAP_TYPE_UPLOAD,
+		D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+		D3D12_MEMORY_POOL_UNKNOWN,
+		0,
+		0
+	};
+
+	return UploadHeapProps;
+}
+
+
 D3D12_RESOURCE_BARRIER MakeTransitionBarrier(ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter)
 {
 	D3D12_RESOURCE_BARRIER barrier = {};

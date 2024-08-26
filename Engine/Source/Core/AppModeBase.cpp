@@ -15,6 +15,7 @@
 #include "Scene/SceneManager.h"
 #include "Scene/Scene.h"
 #include "Camera/Camera.h"
+#include "Utils/Utils.h"
 
 
 // Windows includes
@@ -350,6 +351,15 @@ void AppModeBase::CreateInitialResources()
 	DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Globals::CurrentFrameIndex].Get(), m_MainMeshPipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
 	m_commandList->SetName(L"Main GFX Cmd List");
 
+	// Memory test
+
+	for (int i = 0; i < 200; ++i)
+	{
+		D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, m_commandList.Get());
+
+	}
+
+
 	// Cube creation
 
 	TheCube = eastl::make_shared<CubeShape>("TheCube");
@@ -562,13 +572,12 @@ void AppModeBase::Draw()
 			MapResult cBufferMap = m_constantBuffer.Map();
 
 			const uint64_t cbSize = sizeof(m_constantBufferData);
-			constexpr uint64_t constantBufferAlignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
 
 			// Used memory sizes should be aligned
 			const uint64_t offset = UsedCBMemory[D3D12Globals::CurrentFrameIndex];
 
 			// Align size
-			const uint64_t finalSize = ((cbSize + constantBufferAlignment - 1) / constantBufferAlignment) * constantBufferAlignment;
+			const uint64_t finalSize = Utils::AlignTo(cbSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 			UsedCBMemory[D3D12Globals::CurrentFrameIndex] += finalSize;
 
 			ASSERT(finalSize < m_constantBuffer.Size);
@@ -614,6 +623,7 @@ void AppModeBase::Draw()
 
 void AppModeBase::EndFrame()
 {
+
 	//Draw ImGui
 	ImGui::EndFrame();
 	ImGui::Render();
@@ -622,7 +632,7 @@ void AppModeBase::EndFrame()
 
 	SwapBuffers();
 
-
+	D3D12RHI::Get()->DoTextureUploadHack();
 }
 
 

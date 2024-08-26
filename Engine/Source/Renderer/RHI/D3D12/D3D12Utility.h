@@ -33,6 +33,8 @@ inline bool DXAssert(HRESULT inRez)
 namespace D3D12Utility
 {
 	D3D12_HEAP_PROPERTIES& GetDefaultHeapProps();
+	D3D12_HEAP_PROPERTIES& GetUploadHeapProps();
+
 
 	void TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter);
 

@@ -39,6 +39,7 @@
 #include "D3D12GraphicsTypes_Internal.h"
 #include "D3D12Resources.h"
 #include "Core/WindowsPlatform.h"
+#include "D3D12Upload.h"
 
 
 // D3D12 RHI stuff to do:
@@ -122,11 +123,9 @@ void GetHardwareAdapter(
 
 
 // Hack to keep upload buffers referenced by command lists alive on the GPU until they finish execution
-// ComPtr's are CPU objects
 // GPU will be flushed at end of frame before this is cleaned up to ensure that resources are not prematurely destroyed
 // TODO: Replace this hack with a copy queue ring buffer approach
-eastl::vector<ComPtr<ID3D12Resource>> TextureUploadBuffers;
-
+eastl::vector<ID3D12Resource*> DeferredReleaseTextureUploadBuffers;
 
 void D3D12RHI::InitPipeline()
 {
@@ -207,6 +206,7 @@ void D3D12RHI::InitPipeline()
 	D3D12Globals::SwapChain = swapChain3.Detach();
 	
 
+	D3D12Upload::InitUpload();
 
 }
 
@@ -426,8 +426,6 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	//const UINT64 uploadBufferSize = GetRequiredIntermediateSize(textureHandle, 0, 1);
 
 
-
-
 	// Create a one time upload buffer
 	D3D12_RESOURCE_DESC UploadBufferDesc;
 	UploadBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -442,21 +440,12 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	UploadBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	UploadBufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-
-	D3D12_HEAP_PROPERTIES UploadHeapProps;
-	UploadHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-	UploadHeapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	UploadHeapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-	UploadHeapProps.CreationNodeMask = 1;
-	UploadHeapProps.VisibleNodeMask = 1;
-
-	ComPtr<ID3D12Resource>& newTextureUploadHeapCom = TextureUploadBuffers.emplace_back();
-	ID3D12Resource* newtextureUploadHeap = newTextureUploadHeapCom.Get();
+	ID3D12Resource*& newtextureUploadHeap = DeferredReleaseTextureUploadBuffers.emplace_back();
 
 	// Create the CPU -> GPU Staging Buffer
 	DXAssert(D3D12Globals::Device->CreateCommittedResource(
-		&UploadHeapProps,
-		D3D12_HEAP_FLAG_NONE,
+		&D3D12Utility::GetUploadHeapProps(),
+		D3D12_HEAP_FLAG_CREATE_NOT_ZEROED, // Commited resources being created each frame is not great, creating and zero'ing them is even worse
 		&UploadBufferDesc,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
@@ -532,7 +521,7 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 
  	DXAssert(D3D12Globals::Device->CreateCommittedResource(
  		&D3D12Utility::GetDefaultHeapProps(),
- 		D3D12_HEAP_FLAG_NONE,
+		D3D12_HEAP_FLAG_NONE,
  		&textureDesc,
  		initState,
 		&clearValue,
@@ -572,6 +561,11 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 
 void D3D12RHI::DoTextureUploadHack()
 {
-	TextureUploadBuffers.clear();
+	for (ID3D12Resource* resource : DeferredReleaseTextureUploadBuffers)
+	{
+		resource->Release();
+	}
+
+	DeferredReleaseTextureUploadBuffers.clear();
 }
 

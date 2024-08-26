@@ -33,3 +33,8 @@ public:
 		  CODEBLOCK										\
 	  }													\
 	  std::cout << TITLE << " took: " <<__time__##__LINE__ << "us (" << __time__##__LINE__ * 0.001 << "ms)\n";
+
+#define BENCH_SCOPE(TITLE,CODEBLOCK)					\
+	  int64_t __time__##__LINE__ = 0;					\
+	  Utils::Benchmark bench(&__time__##__LINE__);		\
+	  std::cout << TITLE << " took: " <<__time__##__LINE__ << "us (" << __time__##__LINE__ * 0.001 << "ms)\n";
