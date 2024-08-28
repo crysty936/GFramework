@@ -77,8 +77,6 @@ ComPtr<ID3D12GraphicsCommandList> m_commandList;
 ComPtr<ID3D12PipelineState> m_MainMeshPipelineState;
 ComPtr<ID3D12PipelineState> m_LightingPipelineState;
 
-eastl::shared_ptr<Model3D> TheCube;
-
 // Constant Buffer
 struct MeshConstantBuffer
 {
@@ -113,12 +111,26 @@ void AppModeBase::Init()
 	CreateInitialResources();
 }
 
+glm::mat4 MainProjection;
+
+inline const glm::mat4& GetMainProjection()
+{
+	return MainProjection;
+}
+
 void AppModeBase::CreateInitialResources()
 {
 	BENCH_SCOPE("Create Resources");
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
+
+	// Create Main Projection
+	const float CAMERA_FOV = 45.f;
+	const float CAMERA_NEAR = 0.1f;
+	const float CAMERA_FAR = 10000.f;
+
+	MainProjection = glm::perspectiveLH_ZO(glm::radians(CAMERA_FOV), static_cast<float>(props.Width) / static_cast<float>(props.Height), CAMERA_NEAR, CAMERA_FAR);
 
 	// Create descriptor heaps.
 	{
@@ -174,7 +186,7 @@ void AppModeBase::CreateInitialResources()
 	// Memory upload test
 	//for (int i = 0; i < 500; ++i)
 	//{
-		//D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, m_commandList.Get());
+	//	D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, m_commandList.Get());
 	//}
 
 	// Create screen quad data
@@ -189,15 +201,16 @@ void AppModeBase::CreateInitialResources()
 		ScreenQuadVertexBuffer = D3D12RHI::Get()->CreateVertexBuffer(vbLayout, BasicShapesData::GetQuadVertices(), BasicShapesData::GetQuadVerticesCount(), ScreenQuadIndexBuffer);
 	}
 
+	// Cubes creation
 
-
-	// Cube creation
-
-	TheCube = eastl::make_shared<CubeShape>("TheCube");
+	eastl::shared_ptr<Model3D> TheCube = eastl::make_shared<CubeShape>("TheCube");
 	TheCube->Init(m_commandList.Get());
 
 	eastl::shared_ptr<CubeShape> theCube2 = eastl::make_shared<CubeShape>("TheCube2");
 	theCube2->Init(m_commandList.Get());
+
+	TheCube->AddChild(theCube2);
+	theCube2->Move(glm::vec3(-5.f, 0.f, 0.f));
 
 
 	SceneManager& sManager = SceneManager::Get();
@@ -205,10 +218,7 @@ void AppModeBase::CreateInitialResources()
 
 	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
 
-	TheCube->Move(glm::vec3(-5.f, 0.f, 0.f));
-
 	currentScene.AddObject(TheCube);
-	currentScene.AddObject(theCube2);
 
 	// Create the constant buffer.
 	{
@@ -251,7 +261,7 @@ void AppModeBase::CreateRootSignatures()
 		rangesPS[0].NumDescriptors = 1;
 		rangesPS[0].BaseShaderRegister = 0;
 		rangesPS[0].RegisterSpace = 0;
-		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC;
+		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 		rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
 
 		D3D12_ROOT_PARAMETER1 rootParameters[2];
@@ -310,7 +320,7 @@ void AppModeBase::CreateRootSignatures()
 		rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 		rangesPS[0].BaseShaderRegister = 0;
 		rangesPS[0].RegisterSpace = 0;
-		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC;
+		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 		rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
 
 		// GBuffer Albedo and GBuffer Normal
@@ -515,7 +525,69 @@ void AppModeBase::BeginFrame()
 	//ImGui::ShowDemoWindow();
 }
 
-D3D12_VIEWPORT m_viewport;
+
+void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes, const Scene& inCurrentScene)
+{
+	for (const TransformObjPtr& child : inChildNodes)
+	{
+		const TransformObject* childPtr = child.get();
+
+		DrawMeshNodesRecursively(childPtr->GetChildren(), inCurrentScene);
+
+		if (const MeshNode* modelChild = dynamic_cast<const MeshNode*>(childPtr))
+		{
+			const glm::mat4 modelMatrix = modelChild->GetAbsoluteTransform().GetMatrix();
+
+			//LOG_INFO("Translation for object with index %d : %f    %f    %f", i, modelMatrix[3][0], modelMatrix[3][1], modelMatrix[3][2]);
+
+			m_constantBufferData.Model = modelMatrix;
+			m_constantBufferData.Projection = GetMainProjection();
+
+			const glm::mat4 view = inCurrentScene.GetMainCameraLookAt();
+			m_constantBufferData.View = view;
+
+			// Use temp buffer in main constant buffer
+			{
+				// TODO: Abstract this
+
+				MapResult cBufferMap = m_constantBuffer.Map();
+
+				const uint64_t cbSize = sizeof(m_constantBufferData);
+
+				// Used memory sizes should be aligned
+				const uint64_t offset = UsedCBMemory[D3D12Globals::CurrentFrameIndex];
+
+				// Align size
+				const uint64_t finalSize = Utils::AlignTo(cbSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+				UsedCBMemory[D3D12Globals::CurrentFrameIndex] += finalSize;
+
+				ASSERT(finalSize < m_constantBuffer.Size);
+
+				uint8_t* CPUAddress = cBufferMap.CPUAddress;
+				CPUAddress += offset;
+
+				uint64_t GPUAddress = cBufferMap.GPUAddress;
+				GPUAddress += offset;
+
+				memcpy(CPUAddress, &m_constantBufferData, sizeof(m_constantBufferData));
+
+				m_commandList->SetGraphicsRootConstantBufferView(0, GPUAddress);
+			}
+
+			ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heap };
+			m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+			// Set root to index of first texture
+			m_commandList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(modelChild->Textures[0]->SRVIndex));
+
+			m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			m_commandList->IASetVertexBuffers(0, 1, &modelChild->VertexBuffer->VBView());
+			m_commandList->IASetIndexBuffer(&modelChild->IndexBuffer->IBView());
+
+			m_commandList->DrawIndexedInstanced(modelChild->IndexBuffer->IndexCount, 1, 0, 0, 0);
+		}
+	}
+}
 
 void AppModeBase::Draw()
 {
@@ -528,6 +600,8 @@ void AppModeBase::Draw()
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
+
+	static D3D12_VIEWPORT m_viewport;
 	m_viewport.Width = static_cast<float>(props.Width);
 	m_viewport.Height = static_cast<float>(props.Height);
 
@@ -557,14 +631,14 @@ void AppModeBase::Draw()
 	m_commandList->OMSetRenderTargets(2, renderTargets, FALSE, nullptr);
 
 	SceneManager& sManager = SceneManager::Get();
-	Scene& currentScene = sManager.GetCurrentScene();
+	const Scene& currentScene = sManager.GetCurrentScene();
 
 	// Draw meshes
 	const eastl::vector<eastl::shared_ptr<TransformObject>>& objects = currentScene.GetAllObjects();
 
 	for (int32_t i = 0; i < objects.size(); ++i)
 	{
-		// TODO: Replace with proper RenderCommand register and brouped draw because this way it needs to be recursive and casting, etc. It doesn't work properly
+		// TODO: Possibly replace with RenderCommand self registration because this way it needs to be recursive and casting
 		const eastl::shared_ptr<TransformObject>& currObj = objects[i];
 		const eastl::shared_ptr<Model3D> currModel = eastl::static_shared_pointer_cast<Model3D>(currObj);
 
@@ -573,74 +647,9 @@ void AppModeBase::Draw()
 			continue;
 		}
 
-		glm::mat4 modelMatrix = currModel->GetAbsoluteTransform().GetMatrix();
-
-		//LOG_INFO("Translation for object with index %d : %f    %f    %f", i, modelMatrix[3][0], modelMatrix[3][1], modelMatrix[3][2]);
-
-		m_constantBufferData.Model = modelMatrix;
-
-		const float windowWidth = static_cast<float>(GEngine->GetMainWindow().GetProperties().Width);
-		const float windowHeight = static_cast<float>(GEngine->GetMainWindow().GetProperties().Height);
-		const float CAMERA_FOV = 45.f;
-		const float CAMERA_NEAR = 0.1f;
-		const float CAMERA_FAR = 10000.f;
-
-		glm::mat4 projection = glm::perspectiveLH_ZO(glm::radians(CAMERA_FOV), windowWidth / windowHeight, CAMERA_NEAR, CAMERA_FAR);
-		const glm::mat4 view = currentScene.GetCurrentCamera()->GetLookAt();
-
-		m_constantBufferData.Projection = projection;
-		m_constantBufferData.View = view;
-
-		// Use temp buffer in main constant buffer
-		{
-			// TODO: Abstract this
-
-			MapResult cBufferMap = m_constantBuffer.Map();
-
-			const uint64_t cbSize = sizeof(m_constantBufferData);
-
-			// Used memory sizes should be aligned
-			const uint64_t offset = UsedCBMemory[D3D12Globals::CurrentFrameIndex];
-
-			// Align size
-			const uint64_t finalSize = Utils::AlignTo(cbSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-			UsedCBMemory[D3D12Globals::CurrentFrameIndex] += finalSize;
-
-			ASSERT(finalSize < m_constantBuffer.Size);
-
-			uint8_t* CPUAddress = cBufferMap.CPUAddress;
-			CPUAddress += offset;
-
-			uint64_t GPUAddress = cBufferMap.GPUAddress;
-			GPUAddress += offset;
-
-			memcpy(CPUAddress, &m_constantBufferData, sizeof(m_constantBufferData));
-
-			m_commandList->SetGraphicsRootConstantBufferView(0, GPUAddress);
-		}
-
-
 		// Record commands
 		const eastl::vector<TransformObjPtr>& children = currModel->GetChildren();
-		for (const TransformObjPtr& child : children)
-		{
-			const TransformObject* childPtr = child.get();
-
-			if (const MeshNode* modelChild = dynamic_cast<const MeshNode*>(childPtr))
-			{
-				ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heap };
-				m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-
-				// Set root to index of first texture
-				m_commandList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(modelChild->Textures[0]->SRVIndex));
-
-				m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				m_commandList->IASetVertexBuffers(0, 1, &modelChild->VertexBuffer->VBView());
-				m_commandList->IASetIndexBuffer(&modelChild->IndexBuffer->IBView());
-
-				m_commandList->DrawIndexedInstanced(modelChild->IndexBuffer->IndexCount, 1, 0, 0, 0);
-			}
-		}
+		DrawMeshNodesRecursively(children, currentScene);
 	}
 
 	// Draw screen quad
@@ -746,6 +755,8 @@ void AppModeBase::MoveToNextFrame()
 	{
 		// Wait for one frame
 		m_fence.Wait(CurrentGPUFrame + 1);
+
+		LOG_WARNING("Had to wait for GPU");
 	}
 }
 

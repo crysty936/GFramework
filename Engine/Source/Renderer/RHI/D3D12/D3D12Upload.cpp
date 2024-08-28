@@ -27,11 +27,11 @@ namespace D3D12Upload
 
 		}
 
-
-		//void SyncQueues(ID3D12CommandQueue* otherQueue)
-		//{
-
-		//}
+		void SyncQueues(ID3D12CommandQueue* otherQueue)
+		{
+			// Force the other queue to wait for this queue to finish
+			otherQueue->Wait(Fence.FenceHandle, FenceValue);
+		}
 
 		uint64_t SubmitCmdList(ID3D12CommandList* inCmdList)
 		{
@@ -87,13 +87,13 @@ namespace D3D12Upload
 	// having commands for a request added and being submitted. Optimal for uploading big chunks of memory(textures), suboptimal for small and numerous requests
 	struct UploadRingBuffer
 	{
-		static const uint64_t MaxSubmissions = 512;
+		static const uint64_t MaxSubmissions = 16;
 		UploadSubmission Submissions[MaxSubmissions];
 
 		uint64_t SubmissionStart = 0;
 		uint64_t SubmissionsUsed = 0;
 
-		uint64_t BufferSize = 128 * 1024 * 1024;
+		uint64_t BufferSize = 64 * 1024 * 1024;
 		ID3D12Resource* D3DBuffer = nullptr;
 		uint8_t* BufferCPUAddress = nullptr;
 
@@ -374,8 +374,13 @@ namespace D3D12Upload
 
 	void EndFrame()
 	{
-		// Temp
-		RingBuffer.Flush();
+		// TODO
+		// This is basically equivalent to flushing the ring buffer
+		// The wait should not be done for all requests in the queue but checking for individual assets when they are needed, 
+		// if they are done based on their submission Fence Value
+		//RingBuffer.Flush();
+	 	UploadQueue.SyncQueues(D3D12Globals::GraphicsCommandQueue);
+
 	}
 
 	UploadContext ResourceUploadBegin(const uint64_t inSize)

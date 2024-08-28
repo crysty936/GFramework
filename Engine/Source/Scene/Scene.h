@@ -5,6 +5,7 @@
 #include "Renderer/LightTypes.h"
 #include "Renderer/Drawable/ShapesUtils/BasicShapes.h"
 #include "Renderer/RenderUtils.h"
+#include "Camera/Camera.h"
 
 /**
  * Scene graph
@@ -23,12 +24,14 @@ public:
 	
 	void ImGuiDisplaySceneTree();
 
-	inline eastl::shared_ptr<class Camera>& GetCurrentCamera();
+	inline eastl::shared_ptr<Camera>& GetCurrentCamera();
+	inline glm::mat4 GetMainCameraLookAt() const;
+
 	//inline void AddLight(const eastl::shared_ptr<LightSource>& inLightData);
 	//inline const eastl::vector<eastl::shared_ptr<LightSource>>& GetLights() const;
 
 
-	inline const eastl::vector<TransformObjPtr>& GetAllObjects() { return Objects; }
+	inline const eastl::vector<TransformObjPtr>& GetAllObjects() const { return Objects; }
 
 private:
 	void RecursivelyTickObjects(float inDeltaT, eastl::vector<TransformObjPtr>& inObjects);
@@ -37,15 +40,21 @@ private:
 
 private:
 	eastl::vector<TransformObjPtr> Objects;
-	eastl::shared_ptr<class Camera> CurrentCamera;
+	eastl::shared_ptr<Camera> CurrentCamera;
 	//eastl::vector<eastl::shared_ptr<LightSource>> Lights;
 };
 
 
-eastl::shared_ptr<class Camera>& Scene::GetCurrentCamera()
+eastl::shared_ptr<Camera>& Scene::GetCurrentCamera()
 {
 	return CurrentCamera;
 }
+
+glm::mat4 Scene::GetMainCameraLookAt() const
+{
+	return CurrentCamera->GetLookAt();
+}
+
 
 //void Scene::AddLight(const eastl::shared_ptr<LightSource>& inLightData)
 //{
