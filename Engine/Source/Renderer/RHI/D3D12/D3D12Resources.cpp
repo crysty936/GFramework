@@ -43,19 +43,8 @@ eastl::shared_ptr<class D3D12IndexBuffer> D3D12RHI::CreateIndexBuffer(const uint
 	indexBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	indexBufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-	// TODO:
-	// Note: using upload heaps to transfer static data like vert buffers is not 
-	// recommended. Every time the GPU needs it, the upload heap will be marshalled 
-	// over. Replace this with default heap.
-	D3D12_HEAP_PROPERTIES heapProps;
-	heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-	heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-	heapProps.CreationNodeMask = 1;
-	heapProps.VisibleNodeMask = 1;
-
 	DXAssert(D3D12Globals::Device->CreateCommittedResource(
-		&heapProps,
+		&D3D12Utility::GetDefaultHeapProps(),
 		D3D12_HEAP_FLAG_NONE,
 		&indexBufferDesc,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
@@ -63,16 +52,11 @@ eastl::shared_ptr<class D3D12IndexBuffer> D3D12RHI::CreateIndexBuffer(const uint
 		IID_PPV_ARGS(&resource)));
 
 
-	// Copy the triangle data to the index buffer.
-	UINT8* pIndexDataBegin;
-	D3D12_RANGE indexReadRange;
-	indexReadRange.Begin = 0;
-	indexReadRange.End = 0;
-	DXAssert(resource->Map(0, &indexReadRange, reinterpret_cast<void**>(&pIndexDataBegin)));
+	UploadContext indexUploadContext = D3D12Upload::ResourceUploadBegin(indexBufferSize);
 
-	memcpy(pIndexDataBegin, inData, indexBufferSize);
-
-	resource->Unmap(0, nullptr);
+	memcpy(indexUploadContext.CPUAddress, inData, indexBufferSize);
+	indexUploadContext.CmdList->CopyBufferRegion(resource, 0, indexUploadContext.Resource, indexUploadContext.ResourceOffset, indexBufferSize);
+	D3D12Upload::ResourceUploadEnd(indexUploadContext);
 
 	eastl::shared_ptr<D3D12IndexBuffer> newBuffer = eastl::make_shared<D3D12IndexBuffer>();
 	newBuffer->IndexCount = inCount;
@@ -88,18 +72,7 @@ eastl::shared_ptr<class D3D12VertexBuffer> D3D12RHI::CreateVertexBuffer(const Ve
 {
 	ID3D12Resource* resource = nullptr;
 
-	// Note: using upload heaps to transfer static data like vert buffers is not 
-	// recommended. Every time the GPU needs it, the upload heap will be marshalled 
-	// over. Please read up on Default Heap usage. An upload heap is used here for 
-	// code simplicity and because there are very few verts to actually transfer.
-	D3D12_HEAP_PROPERTIES heapProps;
-	heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-	heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-	heapProps.CreationNodeMask = 1;
-	heapProps.VisibleNodeMask = 1;
-
-	const UINT vertexBufferSize = inLayout.Stride * inCount;
+	const uint64_t vertexBufferSize = inLayout.Stride * inCount;
 
 	D3D12_RESOURCE_DESC vertexBufferDesc;
 	vertexBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -115,22 +88,20 @@ eastl::shared_ptr<class D3D12VertexBuffer> D3D12RHI::CreateVertexBuffer(const Ve
 	vertexBufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
 	DXAssert(D3D12Globals::Device->CreateCommittedResource(
-		&heapProps,
+		&D3D12Utility::GetDefaultHeapProps(),
 		D3D12_HEAP_FLAG_NONE,
 		&vertexBufferDesc,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&resource)));
 
-	// Copy the vertex data to the vertex buffer.
-	UINT8* pVertexDataBegin;
-	D3D12_RANGE readRange;
-	readRange.Begin = 0;
-	readRange.End = 0;
-	DXAssert(resource->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
+	ASSERT(resource != nullptr);
 
-	memcpy(pVertexDataBegin, inVertices, vertexBufferSize);
-	resource->Unmap(0, nullptr);
+	UploadContext vertexUploadContext = D3D12Upload::ResourceUploadBegin(vertexBufferDesc.Width);
+
+	memcpy(vertexUploadContext.CPUAddress, inVertices, vertexBufferSize);
+	vertexUploadContext.CmdList->CopyBufferRegion(resource, 0, vertexUploadContext.Resource, vertexUploadContext.ResourceOffset, vertexBufferSize);
+	D3D12Upload::ResourceUploadEnd(vertexUploadContext);
 
 	eastl::shared_ptr<D3D12VertexBuffer> newBuffer = eastl::make_shared<D3D12VertexBuffer>();
 	newBuffer->GPUAddress = resource->GetGPUVirtualAddress();
