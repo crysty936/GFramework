@@ -30,11 +30,11 @@ void Scene::AddObject(TransformObjPtr inObj)
 	Objects.push_back(inObj);
 }
 
-void Scene::DisplayObjects()
+void Scene::ImGuiDisplaySceneTree()
 {
 	ImGui::Begin("Scene");
 
-	RecursivelyDisplayObjects(Objects, true);
+	ImGuiRecursivelyDisplaySceneTree(Objects, true);
 
 	ImGui::End();
 }
@@ -66,7 +66,7 @@ void Scene::RecursivelyInitObjects(eastl::vector<TransformObjPtr>& inObjects)
 	}
 }
 
-void Scene::RecursivelyDisplayObjects(eastl::vector<TransformObjPtr>& inObjects, const bool inDisplayNode)
+void Scene::ImGuiRecursivelyDisplaySceneTree(eastl::vector<TransformObjPtr>& inObjects, const bool inDisplayNode)
 {
 	for (TransformObjPtr& obj : inObjects)
 	{
@@ -91,7 +91,7 @@ void Scene::RecursivelyDisplayObjects(eastl::vector<TransformObjPtr>& inObjects,
 			}
 		}
 
-		RecursivelyDisplayObjects(obj->Children, displayChildNodes);
+		ImGuiRecursivelyDisplaySceneTree(obj->Children, displayChildNodes);
 
 		if (displayChildNodes)
 		{

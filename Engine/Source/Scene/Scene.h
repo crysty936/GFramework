@@ -21,7 +21,7 @@ public:
 	void InitObjects();
 	void AddObject(TransformObjPtr inObj);
 	
-	void DisplayObjects();
+	void ImGuiDisplaySceneTree();
 
 	inline eastl::shared_ptr<class Camera>& GetCurrentCamera();
 	//inline void AddLight(const eastl::shared_ptr<LightSource>& inLightData);
@@ -33,7 +33,7 @@ public:
 private:
 	void RecursivelyTickObjects(float inDeltaT, eastl::vector<TransformObjPtr>& inObjects);
 	void RecursivelyInitObjects(eastl::vector<TransformObjPtr>& inObjects);
-	void RecursivelyDisplayObjects(eastl::vector<TransformObjPtr>& inObjects, const bool inDisplayNode);
+	void ImGuiRecursivelyDisplaySceneTree(eastl::vector<TransformObjPtr>& inObjects, const bool inDisplayNode);
 
 private:
 	eastl::vector<TransformObjPtr> Objects;

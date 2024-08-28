@@ -61,15 +61,21 @@ AppModeBase::~AppModeBase()
 
 // Pipeline objects.
 
+eastl::shared_ptr<D3D12IndexBuffer> ScreenQuadIndexBuffer = nullptr;
+eastl::shared_ptr<D3D12VertexBuffer> ScreenQuadVertexBuffer = nullptr;
+
 ComPtr<ID3D12Resource> m_BackBuffers[D3D12Globals::NumFramesInFlight];
 eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferAlbedo;
+eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferNormal;
 
 ComPtr<ID3D12CommandAllocator> m_commandAllocators[D3D12Globals::NumFramesInFlight];
 
-ComPtr<ID3D12RootSignature> m_rootSignature;
+ComPtr<ID3D12RootSignature> m_GBufferMeshRootSignature;
+ComPtr<ID3D12RootSignature> m_LightingRootSignature;
 ComPtr<ID3D12GraphicsCommandList> m_commandList;
 
 ComPtr<ID3D12PipelineState> m_MainMeshPipelineState;
+ComPtr<ID3D12PipelineState> m_LightingPipelineState;
 
 eastl::shared_ptr<Model3D> TheCube;
 
@@ -152,24 +158,93 @@ void AppModeBase::CreateInitialResources()
 		}
 	}
 
-	m_GBufferAlbedo = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferAlbedo", ERHITexturePrecision::UnsignedByte, ERHITextureFilter::Nearest);
+	m_GBufferAlbedo = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferAlbedo", ERHITexturePrecision::UnsignedByte,ETextureState::Shader_Resource,  ERHITextureFilter::Nearest);
+	m_GBufferNormal = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferNormal", ERHITexturePrecision::Float32, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
+
+	CreateRootSignatures();
 
 	// Load Assets
 
-	// Create root signature
+	CreatePSOs();
+	
+	// Create the command list.
+	DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Globals::CurrentFrameIndex].Get(), m_MainMeshPipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
+	m_commandList->SetName(L"Main GFX Cmd List");
+
+	// Memory upload test
+	//for (int i = 0; i < 500; ++i)
+	//{
+		//D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, m_commandList.Get());
+	//}
+
+	// Create screen quad data
+	ScreenQuadIndexBuffer = D3D12RHI::Get()->CreateIndexBuffer(BasicShapesData::GetQuadIndices(), BasicShapesData::GetQuadIndicesCount());
+
+	// Create the vertex buffer.
 	{
-		D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
+		VertexInputLayout vbLayout;
+		vbLayout.Push<float>(3, VertexInputType::Position);
+		vbLayout.Push<float>(2, VertexInputType::TexCoords);
 
-		// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
-		featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+		ScreenQuadVertexBuffer = D3D12RHI::Get()->CreateVertexBuffer(vbLayout, BasicShapesData::GetQuadVertices(), BasicShapesData::GetQuadVerticesCount(), ScreenQuadIndexBuffer);
+	}
 
-		if (FAILED(D3D12Globals::Device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-		{
-			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-		}
 
-		//////////////////////////////////////////////////////////////////////////
 
+	// Cube creation
+
+	TheCube = eastl::make_shared<CubeShape>("TheCube");
+	TheCube->Init(m_commandList.Get());
+
+	eastl::shared_ptr<CubeShape> theCube2 = eastl::make_shared<CubeShape>("TheCube2");
+	theCube2->Init(m_commandList.Get());
+
+
+	SceneManager& sManager = SceneManager::Get();
+	Scene& currentScene = sManager.GetCurrentScene();
+
+	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
+
+	TheCube->Move(glm::vec3(-5.f, 0.f, 0.f));
+
+	currentScene.AddObject(TheCube);
+	currentScene.AddObject(theCube2);
+
+	// Create the constant buffer.
+	{
+		m_constantBuffer.Init(2 * 1024 * 1024);
+		memcpy(m_constantBuffer.Map().CPUAddress, &m_constantBufferData, sizeof(m_constantBufferData));
+	}
+
+	DXAssert(m_commandList->Close());
+	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
+	D3D12Globals::GraphicsCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+
+	// Create synchronization objects and wait until assets have been uploaded to the GPU.
+	{
+		CurrentCPUFrame = 0;
+
+		m_fence.Init(CurrentCPUFrame);
+		++CurrentCPUFrame;
+
+		m_FlushGPUFence.Init(0);
+		++m_FlushGPUFenceValue;
+
+		// Wait for the command list to execute; we are reusing the same command 
+		// list in our main loop but for now, we just want to wait for setup to 
+		// complete before continuing.
+		FlushGPU();
+
+		// Make sure commandlist is open for object creations
+		ResetFrameResources();
+	}
+}
+
+
+void AppModeBase::CreateRootSignatures()
+{
+	// GBuffer Mesh Pass signature
+	{
 		D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
 		// Texture
 		rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -226,189 +301,154 @@ void AppModeBase::CreateInitialResources()
 		rootSignatureDesc.Desc_1_1.pStaticSamplers = &sampler;
 		rootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
 
-		ComPtr<ID3DBlob> signature;
-		ComPtr<ID3DBlob> error;
-		if (!DXAssert(D3D12SerializeVersionedRootSignature(&rootSignatureDesc, &signature, &error)))
-		{
-			const char* errText = (char*)error->GetBufferPointer();
-			LOG_ERROR("%s", errText);
-		}
-
-
-		DXAssert(D3D12Globals::Device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
+		m_GBufferMeshRootSignature = D3D12RHI::Get()->CreateRootSignature(rootSignatureDesc);
 	}
 
-	eastl::string fullPath = "shaders";
-	fullPath.insert(0, "../Data/Shaders/D3D12/");
-	fullPath.append(".hlsl");
-
-#if defined(_DEBUG)
-	// Enable better shader debugging with the graphics debugging tools.
-	UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_DEBUG_NAME_FOR_SOURCE;
-#else																						  
-	UINT compileFlags = 0;
-#endif
-
-	static eastl::string shaderCode;
-	const bool readSuccess = IOUtils::TryFastReadFile(fullPath, shaderCode);
-
-	ComPtr<ID3DBlob> vertexShader;
-	ID3DBlob* vsErrBlob = nullptr;
-
-	D3DCompile2(shaderCode.data(), shaderCode.size(), "testshadername", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, 0, nullptr, 0, &vertexShader, &vsErrBlob);
-
-
-	if (!ENSURE(!vsErrBlob))
+	// Final lighting root signature
 	{
-		eastl::string errMessage;
-		errMessage.InitialiseToSize(vsErrBlob->GetBufferSize(), '\0');
-		memcpy(errMessage.data(), vsErrBlob->GetBufferPointer(), vsErrBlob->GetBufferSize());
-		LOG_ERROR("%s", errMessage.c_str());
+		D3D12_DESCRIPTOR_RANGE1 rangesPS[2];
+		rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		rangesPS[0].BaseShaderRegister = 0;
+		rangesPS[0].RegisterSpace = 0;
+		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC;
+		rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
+
+		// GBuffer Albedo and GBuffer Normal
+		rangesPS[0].NumDescriptors = 2;
+
+
+		D3D12_ROOT_PARAMETER1 rootParameters[1];
+		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+		rootParameters[0].DescriptorTable.pDescriptorRanges = &rangesPS[0];
+
+		//////////////////////////////////////////////////////////////////////////
+
+		D3D12_STATIC_SAMPLER_DESC sampler = {};
+		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		sampler.MipLODBias = 0;
+		sampler.MaxAnisotropy = 0;
+		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+		sampler.MinLOD = 0.0f;
+		sampler.MaxLOD = D3D12_FLOAT32_MAX;
+		sampler.ShaderRegister = 0;
+		sampler.RegisterSpace = 0;
+		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+		// Allow input layout and deny uneccessary access to certain pipeline stages.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+			| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
+			| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
+			| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+		//| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+
+		D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+		rootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+		rootSignatureDesc.Desc_1_1.NumParameters = _countof(rootParameters);
+		rootSignatureDesc.Desc_1_1.pParameters = &rootParameters[0];
+		rootSignatureDesc.Desc_1_1.NumStaticSamplers = 1;
+		rootSignatureDesc.Desc_1_1.pStaticSamplers = &sampler;
+		rootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
+
+		m_LightingRootSignature = D3D12RHI::Get()->CreateRootSignature(rootSignatureDesc);
 	}
 
-	ComPtr<ID3DBlob> pixelShader;
-	ID3DBlob* psErrBlob = nullptr;
-
-	D3DCompile2(shaderCode.data(), shaderCode.size(), "testshadername", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, 0, nullptr, 0, &pixelShader, &psErrBlob);
-
-	if (!ENSURE(!psErrBlob))
-	{
-		eastl::string errMessage;
-		errMessage.InitialiseToSize(psErrBlob->GetBufferSize(), '\0');
-		memcpy(errMessage.data(), psErrBlob->GetBufferPointer(), psErrBlob->GetBufferSize());
-		LOG_ERROR("%s", errMessage.c_str());
-	}
-
-
-	// Define the vertex input layout.
-	D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
-	{
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-	};
-
-	// shader bytecodes
-	D3D12_SHADER_BYTECODE vsByteCode;
-	vsByteCode.pShaderBytecode = vertexShader->GetBufferPointer();
-	vsByteCode.BytecodeLength = vertexShader->GetBufferSize();
-
-	D3D12_SHADER_BYTECODE psByteCode;
-	psByteCode.pShaderBytecode = pixelShader->GetBufferPointer();
-	psByteCode.BytecodeLength = pixelShader->GetBufferSize();
-
-	// Rasterizer State
-	D3D12_RASTERIZER_DESC rastState;
-	rastState.FillMode = D3D12_FILL_MODE_SOLID;
-	rastState.CullMode = D3D12_CULL_MODE_BACK;
-	//rastState.CullMode = D3D12_CULL_MODE_FRONT;
-	rastState.FrontCounterClockwise = false;
-	//rastState.FrontCounterClockwise = true;
-	rastState.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
-	rastState.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-	rastState.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-	rastState.DepthClipEnable = true;
-	rastState.MultisampleEnable = false;
-	rastState.AntialiasedLineEnable = false;
-	rastState.ForcedSampleCount = 0;
-	rastState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-	// Blend State
-
-	D3D12_BLEND_DESC blendState;
-	blendState.AlphaToCoverageEnable = FALSE;
-	blendState.IndependentBlendEnable = FALSE;
-
-	const D3D12_RENDER_TARGET_BLEND_DESC defaultRenderTargetBlendDesc =
-	{
-		FALSE,FALSE,
-		D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
-		D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
-		D3D12_LOGIC_OP_NOOP,
-		D3D12_COLOR_WRITE_ENABLE_ALL,
-	};
-
-	for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
-		blendState.RenderTarget[i] = defaultRenderTargetBlendDesc;
-
-	// Describe and create the graphics pipeline state object (PSO).
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-	psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-	psoDesc.pRootSignature = m_rootSignature.Get();
-	psoDesc.VS = vsByteCode;
-	psoDesc.PS = psByteCode;
-	psoDesc.RasterizerState = rastState;
-	psoDesc.BlendState = blendState;
-	psoDesc.DepthStencilState.DepthEnable = FALSE;
-	psoDesc.DepthStencilState.StencilEnable = FALSE;
-	psoDesc.SampleMask = UINT_MAX;
-	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	psoDesc.NumRenderTargets = 2;
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.RTVFormats[1] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.SampleDesc.Count = 1;
-
-	DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_MainMeshPipelineState)));
-
-	// Create the command list.
-	DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Globals::CurrentFrameIndex].Get(), m_MainMeshPipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
-	m_commandList->SetName(L"Main GFX Cmd List");
-
-	// Memory upload test
-	//for (int i = 0; i < 500; ++i)
-	//{
-		//D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, m_commandList.Get());
-	//}
-
-	// Cube creation
-
-	TheCube = eastl::make_shared<CubeShape>("TheCube");
-	TheCube->Init(m_commandList.Get());
-
-	eastl::shared_ptr<CubeShape> theCube2 = eastl::make_shared<CubeShape>("TheCube2");
-	theCube2->Init(m_commandList.Get());
-
-
-	SceneManager& sManager = SceneManager::Get();
-	Scene& currentScene = sManager.GetCurrentScene();
-
-	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
-
-	TheCube->Move(glm::vec3(-5.f, 0.f, 0.f));
-
-	currentScene.AddObject(TheCube);
-	currentScene.AddObject(theCube2);
-
-	// Create the constant buffer.
-	{
-		m_constantBuffer.Init(2 * 1024 * 1024);
-		memcpy(m_constantBuffer.Map().CPUAddress, &m_constantBufferData, sizeof(m_constantBufferData));
-	}
-
-	DXAssert(m_commandList->Close());
-	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
-	D3D12Globals::GraphicsCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
-
-	// Create synchronization objects and wait until assets have been uploaded to the GPU.
-	{
-		CurrentCPUFrame = 0;
-
-		m_fence.Init(CurrentCPUFrame);
-		++CurrentCPUFrame;
-
-		m_FlushGPUFence.Init(0);
-		++m_FlushGPUFenceValue;
-
-		// Wait for the command list to execute; we are reusing the same command 
-		// list in our main loop but for now, we just want to wait for setup to 
-		// complete before continuing.
-		FlushGPU();
-
-		// Make sure commandlist is open for object creations
-		ResetFrameResources();
-	}
 }
 
+void AppModeBase::CreatePSOs()
+{
+	// Mesh Pass PSO
+	{
+		eastl::string fullPath = "MeshPass.hlsl";
+		fullPath.insert(0, "../Data/Shaders/D3D12/");
+
+		GraphicsCompiledShaderPair meshShaderPair = D3D12RHI::Get()->CompileGraphicsShaderFromFile(fullPath);
+
+		// Define the vertex input layout.
+		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+		{
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+		};
+
+		// shader bytecodes
+		D3D12_SHADER_BYTECODE vsByteCode;
+		vsByteCode.pShaderBytecode = meshShaderPair.VSByteCode->GetBufferPointer();
+		vsByteCode.BytecodeLength = meshShaderPair.VSByteCode->GetBufferSize();
+
+		D3D12_SHADER_BYTECODE psByteCode;
+		psByteCode.pShaderBytecode = meshShaderPair.PSByteCode->GetBufferPointer();
+		psByteCode.BytecodeLength = meshShaderPair.PSByteCode->GetBufferSize();
+
+		// Describe and create the graphics pipeline state object (PSO).
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+		psoDesc.pRootSignature = m_GBufferMeshRootSignature.Get();
+		psoDesc.VS = vsByteCode;
+		psoDesc.PS = psByteCode;
+		psoDesc.RasterizerState = D3D12Utility::GetRasterizerState(ERasterizerState::BackFaceCull);
+		psoDesc.BlendState = D3D12Utility::GetBlendState(EBlendState::Disabled);
+		psoDesc.DepthStencilState.DepthEnable = FALSE;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 2;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.RTVFormats[1] = DXGI_FORMAT_R32G32B32A32_FLOAT;
+		psoDesc.SampleDesc.Count = 1;
+
+		DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_MainMeshPipelineState)));
+	}
+
+	// Lighting Quad PSO
+	{
+		eastl::string fullPath = "LightingPass.hlsl";
+		fullPath.insert(0, "../Data/Shaders/D3D12/");
+
+		GraphicsCompiledShaderPair meshShaderPair = D3D12RHI::Get()->CompileGraphicsShaderFromFile(fullPath);
+
+		// Define the vertex input layout.
+		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+		{
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+		};
+
+		// shader bytecodes
+		D3D12_SHADER_BYTECODE vsByteCode;
+		vsByteCode.pShaderBytecode = meshShaderPair.VSByteCode->GetBufferPointer();
+		vsByteCode.BytecodeLength = meshShaderPair.VSByteCode->GetBufferSize();
+
+		D3D12_SHADER_BYTECODE psByteCode;
+		psByteCode.pShaderBytecode = meshShaderPair.PSByteCode->GetBufferPointer();
+		psByteCode.BytecodeLength = meshShaderPair.PSByteCode->GetBufferSize();
+
+		// Describe and create the graphics pipeline state object (PSO).
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+		psoDesc.pRootSignature = m_LightingRootSignature.Get();
+		psoDesc.VS = vsByteCode;
+		psoDesc.PS = psByteCode;
+		psoDesc.RasterizerState = D3D12Utility::GetRasterizerState(ERasterizerState::FrontFaceCull);
+		psoDesc.BlendState = D3D12Utility::GetBlendState(EBlendState::Disabled);
+		psoDesc.DepthStencilState.DepthEnable = FALSE;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 2;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.SampleDesc.Count = 1;
+
+		DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_LightingPipelineState)));
+	}
+}
 
 void AppModeBase::SwapBuffers()
 {
@@ -481,23 +521,10 @@ void AppModeBase::Draw()
 {
 	UsedCBMemory[D3D12Globals::CurrentFrameIndex] = 0;
 
-	if (GEngine->IsImguiEnabled())
-	{
-		ImGui::Begin("Scene");
-
-		SceneManager& sManager = SceneManager::Get();
-		Scene& currentScene = sManager.GetCurrentScene();
-		currentScene.DisplayObjects();
-
-		ImGui::End();
-
-		ImGui::Begin("D3D12 Settings");
-		ImGui::End();
-	}
-
 	// Populate Command List
 
-	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+	m_commandList->SetGraphicsRootSignature(m_GBufferMeshRootSignature.Get());
+	m_commandList->SetPipelineState(m_MainMeshPipelineState.Get());
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
@@ -517,16 +544,15 @@ void AppModeBase::Draw()
 
 	// Handle RTs
 
-	// Backbuffers are the first 2 RTVs in the Global Heap
-	D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Globals::CurrentFrameIndex);
-	D3D12Utility::TransitionResource(m_commandList.Get(), m_BackBuffers[D3D12Globals::CurrentFrameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	D3D12Utility::TransitionResource(m_commandList.Get(), m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	D3D12Utility::TransitionResource(m_commandList.Get(), m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	m_commandList->ClearRenderTargetView(currentBackbufferRTDescriptor, D3D12Utility::ClearColor, 0, nullptr);
 	m_commandList->ClearRenderTargetView(m_GBufferAlbedo->RTV, D3D12Utility::ClearColor, 0, nullptr);
+	m_commandList->ClearRenderTargetView(m_GBufferNormal->RTV, D3D12Utility::ClearColor, 0, nullptr);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[2];
-	renderTargets[0] = currentBackbufferRTDescriptor; // TODO: This has to be removed from the RTs and final output has to be rendered/copied into the backbuffer at the end
-	renderTargets[1] = m_GBufferAlbedo->RTV;
+	renderTargets[0] = m_GBufferAlbedo->RTV;
+	renderTargets[1] = m_GBufferNormal->RTV;
 
 	m_commandList->OMSetRenderTargets(2, renderTargets, FALSE, nullptr);
 
@@ -615,6 +641,54 @@ void AppModeBase::Draw()
 				m_commandList->DrawIndexedInstanced(modelChild->IndexBuffer->IndexCount, 1, 0, 0, 0);
 			}
 		}
+	}
+
+	// Draw screen quad
+	// Backbuffers are the first 2 RTVs in the Global Heap
+	D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Globals::CurrentFrameIndex);
+	D3D12Utility::TransitionResource(m_commandList.Get(), m_BackBuffers[D3D12Globals::CurrentFrameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	m_commandList->ClearRenderTargetView(currentBackbufferRTDescriptor, D3D12Utility::ClearColor, 0, nullptr);
+
+	{
+		m_commandList->SetGraphicsRootSignature(m_LightingRootSignature.Get());
+		m_commandList->SetPipelineState(m_LightingPipelineState.Get());
+
+		D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[1];
+		renderTargets[0] = currentBackbufferRTDescriptor;
+
+		m_commandList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
+
+		D3D12Utility::TransitionResource(m_commandList.Get(), m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		D3D12Utility::TransitionResource(m_commandList.Get(), m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_GBufferAlbedo->Texture->SRVIndex));
+
+		m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		m_commandList->IASetVertexBuffers(0, 1, &ScreenQuadVertexBuffer->VBView());
+		m_commandList->IASetIndexBuffer(&ScreenQuadIndexBuffer->IBView());
+
+		m_commandList->DrawIndexedInstanced(ScreenQuadIndexBuffer->IndexCount, 1, 0, 0, 0);
+
+
+	}
+
+
+
+
+
+	if (GEngine->IsImguiEnabled())
+	{
+		ImGui::Begin("Scene");
+
+		SceneManager& sManager = SceneManager::Get();
+		Scene& currentScene = sManager.GetCurrentScene();
+		currentScene.ImGuiDisplaySceneTree();
+
+		ImGui::End();
+
+		ImGui::Begin("D3D12 Settings");
+		ImGui::End();
 	}
 
 

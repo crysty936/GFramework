@@ -41,10 +41,11 @@ public:
 	uint32_t SRVIndex = -1;
 };
 
-class D3D12RenderTarget2D : public RHIRenderTarget2D
+class D3D12RenderTarget2D
 {
-
+	
 public:
+	eastl::unique_ptr<D3D12Texture2D> Texture;
 	D3D12_CPU_DESCRIPTOR_HANDLE RTV = {};
 
 };

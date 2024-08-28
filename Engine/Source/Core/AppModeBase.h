@@ -27,6 +27,8 @@ public:
 
 private:
 	void CreateInitialResources();
+	void CreateRootSignatures();
+	void CreatePSOs();
 
 	void SwapBuffers();
 	void ResetFrameResources();

@@ -19,6 +19,7 @@
 #include <windows.h>
 #include <d3d12.h>
 #include <wrl/client.h>
+#include <dxgidebug.h>
 #include "Core/WindowsPlatform.h"
 
 using Microsoft::WRL::ComPtr;
@@ -393,7 +394,7 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 }
 
 eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName,
-	const ERHITexturePrecision inPrecision /*= ERHITexturePrecision::UnsignedByte*/, const ERHITextureFilter inFilter /*= ERHITextureFilter::Linear*/)
+	const ERHITexturePrecision inPrecision, const ETextureState inInitialState, const ERHITextureFilter inFilter)
 {
 	eastl::shared_ptr<D3D12RenderTarget2D> newRT = eastl::make_shared<D3D12RenderTarget2D>();
 	eastl::unique_ptr<D3D12Texture2D> ownedTexture = eastl::make_unique<D3D12Texture2D>();
@@ -414,6 +415,9 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 		texFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		break;
 	}
+	case ERHITexturePrecision::Float32:
+		texFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
+		break;
 	default:
 		break;
 	}
@@ -432,7 +436,22 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 	textureDesc.Layout = D3D12_TEXTURE_LAYOUT::D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	textureDesc.Alignment = 0;
 
-	const D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
+	D3D12_RESOURCE_STATES initState;
+
+	switch (inInitialState)
+	{
+	case ETextureState::Present:
+		initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_PRESENT;
+		break;
+	case ETextureState::Shader_Resource:
+		initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+		break;
+	case ETextureState::Render_Target:
+		initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
+		break;
+	default:
+		break;
+	}
 
 	D3D12_CLEAR_VALUE clearValue;
 	clearValue.Format = texFormat;

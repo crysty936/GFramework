@@ -113,11 +113,6 @@ eastl::shared_ptr<RenderMaterial> AssimpModel3D::CreateMaterial(const aiMesh& in
 	return thisMaterial;
 }
 
-void AssimpModel3D::AddAdditionalBuffers(eastl::shared_ptr<MeshDataContainer>& inDataContainer) const
-{
-	// to be inherited for instancing, etc
-}
-
 RenderCommand AssimpModel3D::CreateRenderCommand(eastl::shared_ptr<RenderMaterial>& inMaterial, eastl::shared_ptr<MeshNode>& inParent, eastl::shared_ptr<MeshDataContainer>& inDataContainer)
 {
 	RenderCommand newCommand;
@@ -243,8 +238,6 @@ void AssimpModel3D::ProcessMesh(const aiMesh& inMesh, const aiScene& inScene, ea
 		dataContainer->VBuffer = vb;
 
 	}
-
-	AddAdditionalBuffers(dataContainer);
 
 	eastl::shared_ptr<MeshNode> newMesh = eastl::make_shared<MeshNode>(inMesh.mName.C_Str());
 	inCurrentNode->AddChild(newMesh);

@@ -191,7 +191,7 @@ void D3D12RHI::InitPipeline()
 
 	D3D12Globals::SwapChain = swapChain3.Detach();
 	
-
+	D3D12Utility::Init();
 	D3D12Upload::InitUpload();
 
 }
@@ -202,6 +202,70 @@ void D3D12RHI::EndFrame()
 
 	D3D12Upload::EndFrame();
 	//D3D12RHI::Get()->ProcessDeferredReleases();
+}
+
+struct ID3D12RootSignature* D3D12RHI::CreateRootSignature(D3D12_VERSIONED_ROOT_SIGNATURE_DESC& inDesc)
+{
+	ComPtr<ID3DBlob> signature;
+	ComPtr<ID3DBlob> error;
+	if (!DXAssert(D3D12SerializeVersionedRootSignature(&inDesc, &signature, &error)))
+	{
+		const char* errText = (char*)error->GetBufferPointer();
+		LOG_ERROR("%s", errText);
+	}
+
+	ID3D12RootSignature* newSignature = nullptr;
+	DXAssert(D3D12Globals::Device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&newSignature)));
+
+	ASSERT(newSignature != nullptr);
+
+	return newSignature;
+}
+
+GraphicsCompiledShaderPair D3D12RHI::CompileGraphicsShaderFromFile(const eastl::string& inFilePath)
+{
+
+#if defined(_DEBUG)
+	// Enable better shader debugging with the graphics debugging tools.
+	UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_DEBUG_NAME_FOR_SOURCE;
+#else																						  
+	UINT compileFlags = 0;
+#endif
+
+	eastl::string shaderCode;
+
+	const bool readSuccess = IOUtils::TryFastReadFile(inFilePath, shaderCode);
+
+	ID3DBlob* vertexShader = nullptr;
+	ID3DBlob* vsErrBlob = nullptr;
+
+	D3DCompile2(shaderCode.data(), shaderCode.size(), "MeshVS", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, 0, nullptr, 0, &vertexShader, &vsErrBlob);
+
+
+	if (!ENSURE(!vsErrBlob))
+	{
+		eastl::string errMessage;
+		errMessage.InitialiseToSize(vsErrBlob->GetBufferSize(), '\0');
+		memcpy(errMessage.data(), vsErrBlob->GetBufferPointer(), vsErrBlob->GetBufferSize());
+		LOG_ERROR("%s", errMessage.c_str());
+	}
+
+	ID3DBlob* pixelShader = nullptr;
+	ID3DBlob* psErrBlob = nullptr;
+
+	D3DCompile2(shaderCode.data(), shaderCode.size(), "MeshPS", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, 0, nullptr, 0, &pixelShader, &psErrBlob);
+
+	if (!ENSURE(!psErrBlob))
+	{
+		eastl::string errMessage;
+		errMessage.InitialiseToSize(psErrBlob->GetBufferSize(), '\0');
+		memcpy(errMessage.data(), psErrBlob->GetBufferPointer(), psErrBlob->GetBufferSize());
+		LOG_ERROR("%s", errMessage.c_str());
+	}
+
+	ASSERT(vertexShader != nullptr && pixelShader != nullptr);
+
+	return { vertexShader, pixelShader };
 }
 
 void D3D12RHI::ProcessDeferredReleases()

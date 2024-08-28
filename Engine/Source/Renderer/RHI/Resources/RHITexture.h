@@ -20,12 +20,20 @@ enum class ERHITexturePrecision
 {
 	UnsignedByte,
 	Float16,
+	Float32,
 };
 
 enum class ERHITextureFilter
 {
 	Linear,
 	Nearest
+};
+
+enum class ETextureState
+{
+	Present,
+	Shader_Resource,
+	Render_Target
 };
 
 class RHITexture2D
@@ -45,9 +53,3 @@ public:
 	ERHITextureFilter Filter = ERHITextureFilter::Linear;
 };
 
-
-class RHIRenderTarget2D
-{
-public:
-	eastl::unique_ptr<RHITexture2D> Texture;
-};

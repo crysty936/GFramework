@@ -34,7 +34,8 @@ eastl::string GetTimeString()
 
 void RenderDocPlugin::Init()
 {
-	return;
+	//return;
+
 	PostInitCallback& postInitMulticast = GEngine->GetPostInitMulticast();
 	postInitMulticast.BindRaw(this, &RenderDocPlugin::OnEngineInitDone);
 
@@ -68,6 +69,7 @@ void RenderDocPlugin::Init()
 	RenderDocAPI->SetCaptureOptionU32(RENDERDOC_CaptureOption::eRENDERDOC_Option_CaptureCallstacks, 1);
 	RenderDocAPI->SetCaptureOptionU32(RENDERDOC_CaptureOption::eRENDERDOC_Option_CaptureAllCmdLists, 1);
 	RenderDocAPI->SetCaptureOptionU32(RENDERDOC_CaptureOption::eRENDERDOC_Option_SaveAllInitials, 1);
+	//RenderDocAPI->SetCaptureOptionU32(RENDERDOC_CaptureOption::eRENDERDOC_Option_DebugOutputMute, 0); // Not Working
 	RenderDocAPI->MaskOverlayBits(eRENDERDOC_Overlay_None, eRENDERDOC_Overlay_None);
 	//RenderDocAPI->MaskOverlayBits(eRENDERDOC_Overlay_All, eRENDERDOC_Overlay_FrameRate);
 
