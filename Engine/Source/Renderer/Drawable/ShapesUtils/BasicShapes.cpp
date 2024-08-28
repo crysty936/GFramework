@@ -32,8 +32,40 @@ void CubeShape::Init(ID3D12GraphicsCommandList* inCommandList)
 	eastl::shared_ptr<D3D12Texture2D> newTex = D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, inCommandList);
 	cubeNode->Textures.push_back(newTex);
 
-
 	AddChild(cubeNode);
+}
+
+TBNQuadShape::TBNQuadShape(const eastl::string& inName)
+	: Model3D(inName)
+{}
+
+TBNQuadShape::~TBNQuadShape() = default;
+
+
+void TBNQuadShape::Init(ID3D12GraphicsCommandList* inCommandList)
+{
+	eastl::shared_ptr<MeshNode> quadNode = eastl::make_shared<MeshNode>("Quad Mesh");
+
+	quadNode->IndexBuffer = D3D12RHI::Get()->CreateIndexBuffer(BasicShapesData::GetTBNQuadIndices(), BasicShapesData::GetTBNQuadIndicesCount());
+
+	// Create the vertex buffer.
+	{
+		VertexInputLayout vbLayout;
+		// Vertex points
+		vbLayout.Push<float>(3, VertexInputType::Position);
+		// Vertex Tex Coords
+		vbLayout.Push<float>(3, VertexInputType::Normal);
+		vbLayout.Push<float>(2, VertexInputType::TexCoords);
+		vbLayout.Push<float>(3, VertexInputType::Tangent);
+		vbLayout.Push<float>(3, VertexInputType::Bitangent);
+
+		quadNode->VertexBuffer = D3D12RHI::Get()->CreateVertexBuffer(vbLayout, BasicShapesData::GetTBNQuadVertices(), BasicShapesData::GetTBNQuadVerticesCount(), quadNode->IndexBuffer);
+	}
+
+	eastl::shared_ptr<D3D12Texture2D> newTex = D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, inCommandList);
+	quadNode->Textures.push_back(newTex);
+
+	AddChild(quadNode);
 }
 
 #if 0

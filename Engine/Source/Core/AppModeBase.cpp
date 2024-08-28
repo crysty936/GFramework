@@ -31,6 +31,7 @@
 #include <DirectXMath.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
+#include "Renderer/Model/3D/Assimp/AssimpModel3D.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -64,18 +65,21 @@ AppModeBase::~AppModeBase()
 eastl::shared_ptr<D3D12IndexBuffer> ScreenQuadIndexBuffer = nullptr;
 eastl::shared_ptr<D3D12VertexBuffer> ScreenQuadVertexBuffer = nullptr;
 
-ComPtr<ID3D12Resource> m_BackBuffers[D3D12Globals::NumFramesInFlight];
+ID3D12Resource* m_BackBuffers[D3D12Globals::NumFramesInFlight];
 eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferAlbedo;
 eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferNormal;
+eastl::shared_ptr<D3D12DepthBuffer> m_MainDepthBuffer;
 
-ComPtr<ID3D12CommandAllocator> m_commandAllocators[D3D12Globals::NumFramesInFlight];
+ID3D12CommandAllocator* m_commandAllocators[D3D12Globals::NumFramesInFlight];
 
-ComPtr<ID3D12RootSignature> m_GBufferMeshRootSignature;
-ComPtr<ID3D12RootSignature> m_LightingRootSignature;
-ComPtr<ID3D12GraphicsCommandList> m_commandList;
+ID3D12RootSignature* m_GBufferMainMeshRootSignature;
+ID3D12RootSignature* m_GBufferBasicObjectsRootSignature;
+ID3D12RootSignature* m_LightingRootSignature;
+ID3D12GraphicsCommandList* m_commandList;
 
-ComPtr<ID3D12PipelineState> m_MainMeshPipelineState;
-ComPtr<ID3D12PipelineState> m_LightingPipelineState;
+ID3D12PipelineState* m_MainMeshPassPipelineState;
+ID3D12PipelineState* m_BasicObjectsPipelineState;
+ID3D12PipelineState* m_LightingPipelineState;
 
 // Constant Buffer
 struct MeshConstantBuffer
@@ -140,6 +144,9 @@ void AppModeBase::CreateInitialResources()
 
 		constexpr uint32_t numSRVs = 1024;
 		D3D12Globals::GlobalSRVHeap.Init(true, numSRVs, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+		constexpr uint32_t numDSVs = 32;
+		D3D12Globals::GlobalDSVHeap.Init(false, numDSVs, D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 	}
 
 	// Create frame resources.
@@ -154,11 +161,11 @@ void AppModeBase::CreateInitialResources()
 			DXAssert(D3D12Globals::SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_BackBuffers[i])));
 
 			// Create the descriptor at the target location in the heap
-			D3D12Globals::Device->CreateRenderTargetView(m_BackBuffers[i].Get(), nullptr, newAllocation.CPUHandle);
+			D3D12Globals::Device->CreateRenderTargetView(m_BackBuffers[i], nullptr, newAllocation.CPUHandle);
 			eastl::wstring rtName = L"BackBuffer RenderTarget ";
 			rtName += eastl::to_wstring(i);
 
-			m_BackBuffers[i].Get()->SetName(rtName.c_str());
+			m_BackBuffers[i]->SetName(rtName.c_str());
 
 			// Create the command allocator
 			DXAssert(D3D12Globals::Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[i])));
@@ -166,21 +173,22 @@ void AppModeBase::CreateInitialResources()
 			eastl::wstring commandAllocatorName = L"CommandAllocator ";
 			commandAllocatorName += eastl::to_wstring(i);
 
-			m_commandAllocators[i].Get()->SetName(commandAllocatorName.c_str());
+			m_commandAllocators[i]->SetName(commandAllocatorName.c_str());
 		}
 	}
 
 	m_GBufferAlbedo = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferAlbedo", ERHITexturePrecision::UnsignedByte,ETextureState::Shader_Resource,  ERHITextureFilter::Nearest);
 	m_GBufferNormal = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferNormal", ERHITexturePrecision::Float32, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
+	m_MainDepthBuffer = D3D12RHI::Get()->CreateDepthBuffer(props.Width, props.Height, L"Main Depth Buffer");
 
 	CreateRootSignatures();
 
-	// Load Assets
+	// Prepare Data
 
 	CreatePSOs();
 	
 	// Create the command list.
-	DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Globals::CurrentFrameIndex].Get(), m_MainMeshPipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
+	DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Globals::CurrentFrameIndex], m_BasicObjectsPipelineState, IID_PPV_ARGS(&m_commandList)));
 	m_commandList->SetName(L"Main GFX Cmd List");
 
 	// Memory upload test
@@ -201,24 +209,38 @@ void AppModeBase::CreateInitialResources()
 		ScreenQuadVertexBuffer = D3D12RHI::Get()->CreateVertexBuffer(vbLayout, BasicShapesData::GetQuadVertices(), BasicShapesData::GetQuadVerticesCount(), ScreenQuadIndexBuffer);
 	}
 
-	// Cubes creation
-
-	eastl::shared_ptr<Model3D> TheCube = eastl::make_shared<CubeShape>("TheCube");
-	TheCube->Init(m_commandList.Get());
-
-	eastl::shared_ptr<CubeShape> theCube2 = eastl::make_shared<CubeShape>("TheCube2");
-	theCube2->Init(m_commandList.Get());
-
-	TheCube->AddChild(theCube2);
-	theCube2->Move(glm::vec3(-5.f, 0.f, 0.f));
-
-
 	SceneManager& sManager = SceneManager::Get();
 	Scene& currentScene = sManager.GetCurrentScene();
 
+	// Cubes creation
+
+	//eastl::shared_ptr<Model3D> TheCube = eastl::make_shared<CubeShape>("TheCube");
+	//TheCube->Init(m_commandList.Get());
+
+	//eastl::shared_ptr<CubeShape> theCube2 = eastl::make_shared<CubeShape>("TheCube2");
+	//theCube2->Init(m_commandList.Get());
+	//TheCube->AddChild(theCube2);
+	//theCube2->Move(glm::vec3(-5.f, 0.f, 0.f));
+
+	//currentScene.AddObject(TheCube);
+
+	//eastl::shared_ptr<TBNQuadShape> quad = eastl::make_shared<TBNQuadShape>("TBN Quad");
+	//quad->Init(m_commandList.Get());
+	//currentScene.AddObject(quad);
+
+	eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza/Sponza.gltf", "Sponza");
+	model->Init(m_commandList);
+
+	model->Rotate(90.f, glm::vec3(0.f, 1.f, 0.f));
+	model->Move(glm::vec3(0.f, -1.f, -5.f));
+
+	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Shiba/scene.gltf", "Shiba");
+	//model->Init(m_commandList);
+	
+	currentScene.AddObject(model);
+
 	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
 
-	currentScene.AddObject(TheCube);
 
 	// Create the constant buffer.
 	{
@@ -227,7 +249,7 @@ void AppModeBase::CreateInitialResources()
 	}
 
 	DXAssert(m_commandList->Close());
-	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
+	ID3D12CommandList* ppCommandLists[] = { m_commandList };
 	D3D12Globals::GraphicsCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
@@ -253,12 +275,12 @@ void AppModeBase::CreateInitialResources()
 
 void AppModeBase::CreateRootSignatures()
 {
-	// GBuffer Mesh Pass signature
+	// GBuffer Main Mesh Pass signature
 	{
 		D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
 		// Texture
 		rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		rangesPS[0].NumDescriptors = 1;
+		rangesPS[0].NumDescriptors = 3;
 		rangesPS[0].BaseShaderRegister = 0;
 		rangesPS[0].RegisterSpace = 0;
 		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
@@ -282,13 +304,13 @@ void AppModeBase::CreateRootSignatures()
 
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
 		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		sampler.MipLODBias = 0;
 		sampler.MaxAnisotropy = 0;
 		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
 		sampler.MinLOD = 0.0f;
 		sampler.MaxLOD = D3D12_FLOAT32_MAX;
 		sampler.ShaderRegister = 0;
@@ -311,8 +333,70 @@ void AppModeBase::CreateRootSignatures()
 		rootSignatureDesc.Desc_1_1.pStaticSamplers = &sampler;
 		rootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
 
-		m_GBufferMeshRootSignature = D3D12RHI::Get()->CreateRootSignature(rootSignatureDesc);
+		m_GBufferMainMeshRootSignature = D3D12RHI::Get()->CreateRootSignature(rootSignatureDesc);
 	}
+
+
+	// GBuffer Basic Shapes Pass signature
+	//{
+	//	D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
+	//	// Texture
+	//	rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	//	rangesPS[0].NumDescriptors = 1;
+	//	rangesPS[0].BaseShaderRegister = 0;
+	//	rangesPS[0].RegisterSpace = 0;
+	//	rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+	//	rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
+
+	//	D3D12_ROOT_PARAMETER1 rootParameters[2];
+
+	//	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	//	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	//	rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+	//	rootParameters[0].Descriptor.RegisterSpace = 0;
+	//	rootParameters[0].Descriptor.ShaderRegister = 0;
+
+	//	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	//	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	//	rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
+	//	rootParameters[1].DescriptorTable.pDescriptorRanges = &rangesPS[0];
+
+
+	//	//////////////////////////////////////////////////////////////////////////
+
+	//	D3D12_STATIC_SAMPLER_DESC sampler = {};
+	//	sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+	//	sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	//	sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	//	sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	//	sampler.MipLODBias = 0;
+	//	sampler.MaxAnisotropy = 0;
+	//	sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+	//	sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+	//	sampler.MinLOD = 0.0f;
+	//	sampler.MaxLOD = D3D12_FLOAT32_MAX;
+	//	sampler.ShaderRegister = 0;
+	//	sampler.RegisterSpace = 0;
+	//	sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+	//	// Allow input layout and deny uneccessary access to certain pipeline stages.
+	//	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+	//		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+	//		| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
+	//		| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
+	//		| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+	//	//| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+
+	//	D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+	//	rootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+	//	rootSignatureDesc.Desc_1_1.NumParameters = _countof(rootParameters);
+	//	rootSignatureDesc.Desc_1_1.pParameters = &rootParameters[0];
+	//	rootSignatureDesc.Desc_1_1.NumStaticSamplers = 1;
+	//	rootSignatureDesc.Desc_1_1.pStaticSamplers = &sampler;
+	//	rootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
+
+	//	m_GBufferBasicObjectsRootSignature = D3D12RHI::Get()->CreateRootSignature(rootSignatureDesc);
+	//}
 
 	// Final lighting root signature
 	{
@@ -385,7 +469,9 @@ void AppModeBase::CreatePSOs()
 		{
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 		};
 
 		// shader bytecodes
@@ -400,13 +486,15 @@ void AppModeBase::CreatePSOs()
 		// Describe and create the graphics pipeline state object (PSO).
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = m_GBufferMeshRootSignature.Get();
+		psoDesc.pRootSignature = m_GBufferMainMeshRootSignature;
 		psoDesc.VS = vsByteCode;
 		psoDesc.PS = psByteCode;
+
 		psoDesc.RasterizerState = D3D12Utility::GetRasterizerState(ERasterizerState::BackFaceCull);
 		psoDesc.BlendState = D3D12Utility::GetBlendState(EBlendState::Disabled);
-		psoDesc.DepthStencilState.DepthEnable = FALSE;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.DepthStencilState = D3D12Utility::GetDepthState(EDepthState::WriteEnabled);
+		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+
 		psoDesc.SampleMask = UINT_MAX;
 		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		psoDesc.NumRenderTargets = 2;
@@ -414,8 +502,52 @@ void AppModeBase::CreatePSOs()
 		psoDesc.RTVFormats[1] = DXGI_FORMAT_R32G32B32A32_FLOAT;
 		psoDesc.SampleDesc.Count = 1;
 
-		DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_MainMeshPipelineState)));
+		DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_MainMeshPassPipelineState)));
 	}
+
+	// Basic Shapes PSO
+	//{
+	//	eastl::string fullPath = "BasicShapesMeshPass.hlsl";
+	//	fullPath.insert(0, "../Data/Shaders/D3D12/");
+
+	//	GraphicsCompiledShaderPair meshShaderPair = D3D12RHI::Get()->CompileGraphicsShaderFromFile(fullPath);
+
+	//	// Define the vertex input layout.
+	//	D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+	//	{
+	//		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	//		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	//		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	//	};
+
+	//	// shader bytecodes
+	//	D3D12_SHADER_BYTECODE vsByteCode;
+	//	vsByteCode.pShaderBytecode = meshShaderPair.VSByteCode->GetBufferPointer();
+	//	vsByteCode.BytecodeLength = meshShaderPair.VSByteCode->GetBufferSize();
+
+	//	D3D12_SHADER_BYTECODE psByteCode;
+	//	psByteCode.pShaderBytecode = meshShaderPair.PSByteCode->GetBufferPointer();
+	//	psByteCode.BytecodeLength = meshShaderPair.PSByteCode->GetBufferSize();
+
+	//	// Describe and create the graphics pipeline state object (PSO).
+	//	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+	//	psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+	//	psoDesc.pRootSignature = m_GBufferBasicObjectsRootSignature.Get();
+	//	psoDesc.VS = vsByteCode;
+	//	psoDesc.PS = psByteCode;
+	//	psoDesc.RasterizerState = D3D12Utility::GetRasterizerState(ERasterizerState::BackFaceCull);
+	//	psoDesc.BlendState = D3D12Utility::GetBlendState(EBlendState::Disabled);
+	//	psoDesc.DepthStencilState.DepthEnable = FALSE;
+	//	psoDesc.DepthStencilState.StencilEnable = FALSE;
+	//	psoDesc.SampleMask = UINT_MAX;
+	//	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	//	psoDesc.NumRenderTargets = 2;
+	//	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	//	psoDesc.RTVFormats[1] = DXGI_FORMAT_R32G32B32A32_FLOAT;
+	//	psoDesc.SampleDesc.Count = 1;
+
+	//	DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_BasicObjectsPipelineState)));
+	//}
 
 	// Lighting Quad PSO
 	{
@@ -443,13 +575,12 @@ void AppModeBase::CreatePSOs()
 		// Describe and create the graphics pipeline state object (PSO).
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = m_LightingRootSignature.Get();
+		psoDesc.pRootSignature = m_LightingRootSignature;
 		psoDesc.VS = vsByteCode;
 		psoDesc.PS = psByteCode;
-		psoDesc.RasterizerState = D3D12Utility::GetRasterizerState(ERasterizerState::FrontFaceCull);
+		psoDesc.RasterizerState = D3D12Utility::GetRasterizerState(ERasterizerState::Disabled);
 		psoDesc.BlendState = D3D12Utility::GetBlendState(EBlendState::Disabled);
-		psoDesc.DepthStencilState.DepthEnable = FALSE;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.DepthStencilState = D3D12Utility::GetDepthState(EDepthState::Disabled);
 		psoDesc.SampleMask = UINT_MAX;
 		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		psoDesc.NumRenderTargets = 2;
@@ -462,19 +593,19 @@ void AppModeBase::CreatePSOs()
 
 void AppModeBase::SwapBuffers()
 {
-	D3D12Utility::TransitionResource(m_commandList.Get(), m_BackBuffers[D3D12Globals::CurrentFrameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Globals::CurrentFrameIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 
 	DXAssert(m_commandList->Close());
 
 	bCmdListOpen = false;
 
-	ID3D12CommandList* commandLists[] = { m_commandList.Get() };
+	ID3D12CommandList* commandLists[] = { m_commandList };
 	D3D12Globals::GraphicsCommandQueue->ExecuteCommandLists(1, commandLists);
 
 	if (GEngine->IsImguiEnabled() && ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 	{
 		ImGui::UpdatePlatformWindows();
-		ImGui::RenderPlatformWindowsDefault(nullptr, (void*)m_commandList.Get());
+		ImGui::RenderPlatformWindowsDefault(nullptr, (void*)m_commandList);
 	}
 
 	D3D12Globals::SwapChain->Present(1, 0);
@@ -508,7 +639,7 @@ void AppModeBase::ResetFrameResources()
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
-	DXAssert(m_commandList->Reset(m_commandAllocators[D3D12Globals::CurrentFrameIndex].Get(), m_MainMeshPipelineState.Get()));
+	DXAssert(m_commandList->Reset(m_commandAllocators[D3D12Globals::CurrentFrameIndex], m_MainMeshPassPipelineState));
 }
 
 void AppModeBase::BeginFrame()
@@ -525,17 +656,31 @@ void AppModeBase::BeginFrame()
 	//ImGui::ShowDemoWindow();
 }
 
+uint64_t TestNrMeshesToDraw = uint64_t(-1);
+uint64_t NrMeshesDrawn = 0;
 
 void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes, const Scene& inCurrentScene)
 {
+
 	for (const TransformObjPtr& child : inChildNodes)
 	{
 		const TransformObject* childPtr = child.get();
 
 		DrawMeshNodesRecursively(childPtr->GetChildren(), inCurrentScene);
 
+		if (NrMeshesDrawn >= TestNrMeshesToDraw)
+		{
+			return;
+		}
+
+
 		if (const MeshNode* modelChild = dynamic_cast<const MeshNode*>(childPtr))
 		{
+			if (modelChild->Textures.size() == 0)
+			{
+				continue;
+			}
+
 			const glm::mat4 modelMatrix = modelChild->GetAbsoluteTransform().GetMatrix();
 
 			//LOG_INFO("Translation for object with index %d : %f    %f    %f", i, modelMatrix[3][0], modelMatrix[3][1], modelMatrix[3][2]);
@@ -585,6 +730,8 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 			m_commandList->IASetIndexBuffer(&modelChild->IndexBuffer->IBView());
 
 			m_commandList->DrawIndexedInstanced(modelChild->IndexBuffer->IndexCount, 1, 0, 0, 0);
+
+			++NrMeshesDrawn;
 		}
 	}
 }
@@ -595,8 +742,8 @@ void AppModeBase::Draw()
 
 	// Populate Command List
 
-	m_commandList->SetGraphicsRootSignature(m_GBufferMeshRootSignature.Get());
-	m_commandList->SetPipelineState(m_MainMeshPipelineState.Get());
+	m_commandList->SetGraphicsRootSignature(m_GBufferMainMeshRootSignature);
+	m_commandList->SetPipelineState(m_MainMeshPassPipelineState);
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
@@ -604,6 +751,8 @@ void AppModeBase::Draw()
 	static D3D12_VIEWPORT m_viewport;
 	m_viewport.Width = static_cast<float>(props.Width);
 	m_viewport.Height = static_cast<float>(props.Height);
+	m_viewport.MinDepth = 0.f;
+	m_viewport.MaxDepth = 1.f;
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 
@@ -618,29 +767,32 @@ void AppModeBase::Draw()
 
 	// Handle RTs
 
-	D3D12Utility::TransitionResource(m_commandList.Get(), m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	D3D12Utility::TransitionResource(m_commandList.Get(), m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-	m_commandList->ClearRenderTargetView(m_GBufferAlbedo->RTV, D3D12Utility::ClearColor, 0, nullptr);
-	m_commandList->ClearRenderTargetView(m_GBufferNormal->RTV, D3D12Utility::ClearColor, 0, nullptr);
+	D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[2];
 	renderTargets[0] = m_GBufferAlbedo->RTV;
 	renderTargets[1] = m_GBufferNormal->RTV;
+	m_commandList->OMSetRenderTargets(2, renderTargets, FALSE, &m_MainDepthBuffer->DSV);
 
-	m_commandList->OMSetRenderTargets(2, renderTargets, FALSE, nullptr);
+	m_commandList->ClearRenderTargetView(m_GBufferAlbedo->RTV, D3D12Utility::ClearColor, 0, nullptr);
+	m_commandList->ClearRenderTargetView(m_GBufferNormal->RTV, D3D12Utility::ClearColor, 0, nullptr);
+	m_commandList->ClearDepthStencilView(m_MainDepthBuffer->DSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.f, 0, 0, nullptr);
+
 
 	SceneManager& sManager = SceneManager::Get();
 	const Scene& currentScene = sManager.GetCurrentScene();
 
 	// Draw meshes
+	NrMeshesDrawn = 0;
+
 	const eastl::vector<eastl::shared_ptr<TransformObject>>& objects = currentScene.GetAllObjects();
 
 	for (int32_t i = 0; i < objects.size(); ++i)
 	{
 		// TODO: Possibly replace with RenderCommand self registration because this way it needs to be recursive and casting
 		const eastl::shared_ptr<TransformObject>& currObj = objects[i];
-		const eastl::shared_ptr<Model3D> currModel = eastl::static_shared_pointer_cast<Model3D>(currObj);
+		const eastl::shared_ptr<Model3D> currModel = eastl::dynamic_shared_pointer_cast<Model3D>(currObj);
 
 		if (currModel.get() == nullptr)
 		{
@@ -653,22 +805,26 @@ void AppModeBase::Draw()
 	}
 
 	// Draw screen quad
-	// Backbuffers are the first 2 RTVs in the Global Heap
-	D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Globals::CurrentFrameIndex);
-	D3D12Utility::TransitionResource(m_commandList.Get(), m_BackBuffers[D3D12Globals::CurrentFrameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	m_commandList->ClearRenderTargetView(currentBackbufferRTDescriptor, D3D12Utility::ClearColor, 0, nullptr);
 
 	{
-		m_commandList->SetGraphicsRootSignature(m_LightingRootSignature.Get());
-		m_commandList->SetPipelineState(m_LightingPipelineState.Get());
+		ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heap };
+		m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+		// Backbuffers are the first 2 RTVs in the Global Heap
+		D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Globals::CurrentFrameIndex);
+		D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Globals::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		m_commandList->ClearRenderTargetView(currentBackbufferRTDescriptor, D3D12Utility::ClearColor, 0, nullptr);
+
+		m_commandList->SetGraphicsRootSignature(m_LightingRootSignature);
+		m_commandList->SetPipelineState(m_LightingPipelineState);
 
 		D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[1];
 		renderTargets[0] = currentBackbufferRTDescriptor;
 
 		m_commandList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
 
-		D3D12Utility::TransitionResource(m_commandList.Get(), m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		D3D12Utility::TransitionResource(m_commandList.Get(), m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_GBufferAlbedo->Texture->SRVIndex));
 
@@ -756,11 +912,11 @@ void AppModeBase::MoveToNextFrame()
 		// Wait for one frame
 		m_fence.Wait(CurrentGPUFrame + 1);
 
-		LOG_WARNING("Had to wait for GPU");
+		//LOG_WARNING("Had to wait for GPU");
 	}
 }
 
-static ComPtr<ID3D12DescriptorHeap> m_imguiCbvSrvHeap;
+static ID3D12DescriptorHeap* m_imguiCbvSrvHeap;
 
 void AppModeBase::ImGuiInit()
 {
@@ -793,7 +949,7 @@ void AppModeBase::ImGuiInit()
 
 	DXGI_FORMAT format = DXGI_FORMAT::DXGI_FORMAT_R8G8B8A8_UNORM;
 
-	bool success = ImGui_ImplDX12_Init(D3D12Globals::Device, D3D12Globals::NumFramesInFlight, format, m_imguiCbvSrvHeap.Get(), fontSrvCpuHandle, fontSrvGpuHandle);
+	bool success = ImGui_ImplDX12_Init(D3D12Globals::Device, D3D12Globals::NumFramesInFlight, format, m_imguiCbvSrvHeap, fontSrvCpuHandle, fontSrvGpuHandle);
 
 	ASSERT(success);
 
@@ -802,8 +958,8 @@ void AppModeBase::ImGuiInit()
 void AppModeBase::ImGuiRenderDrawData()
 {
 	// Set the imgui descriptor heap
-	ID3D12DescriptorHeap* imguiHeaps[] = { m_imguiCbvSrvHeap.Get() };
+	ID3D12DescriptorHeap* imguiHeaps[] = { m_imguiCbvSrvHeap };
 	m_commandList->SetDescriptorHeaps(1, imguiHeaps);
 
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_commandList.Get());
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_commandList);
 }

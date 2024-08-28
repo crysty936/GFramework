@@ -11,18 +11,21 @@ public:
 	AssimpModel3D(const eastl::string& inPath, const eastl::string& inName, glm::vec3 inOverrideColor = glm::vec3(1.f, 1.f, 1.f));
 	virtual ~AssimpModel3D();
 
-	void LoadModelToRoot(const eastl::string inPath, TransformObjPtr inParent);
+	void LoadModelToRoot(const eastl::string inPath, TransformObjPtr inParent, struct ID3D12GraphicsCommandList* inCommandList);
+
+
+	void Init(struct ID3D12GraphicsCommandList* inCommandList) override;
 
 protected:
 	virtual eastl::shared_ptr<RHIShader> CreateShaders(const class VertexInputLayout& inLayout) const;
 	virtual eastl::shared_ptr<RenderMaterial> CreateMaterial(const struct aiMesh& inMesh, bool& outMatExists) const;
 	virtual RenderCommand CreateRenderCommand(eastl::shared_ptr<RenderMaterial>& inMaterial, eastl::shared_ptr<MeshNode>& inParent, eastl::shared_ptr<MeshDataContainer>& inDataContainer);
 
-	eastl::shared_ptr<MeshNode> LoadData(OUT eastl::vector<RenderCommand>& outCommands);
-	void ProcessNodesRecursively(const struct aiNode& inNode, const struct aiScene& inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, OUT eastl::vector<RenderCommand>& outCommands);
-	void ProcessMesh(const struct aiMesh& inMesh, const struct aiScene& inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, OUT eastl::vector<RenderCommand>& outCommands);
+	eastl::shared_ptr<MeshNode> LoadData(OUT eastl::vector<RenderCommand>& outCommands, struct ID3D12GraphicsCommandList* inCommandList);
+	void ProcessNodesRecursively(const struct aiNode& inNode, const struct aiScene& inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, struct ID3D12GraphicsCommandList* inCommandList, OUT eastl::vector<RenderCommand>& outCommands);
+	void ProcessMesh(const struct aiMesh& inMesh, const struct aiScene& inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, struct ID3D12GraphicsCommandList* inCommandList, OUT eastl::vector<RenderCommand>& outCommands);
 
-	eastl::vector<eastl::shared_ptr<class D3D12Texture2D>> LoadMaterialTextures(const struct aiMaterial& inMat, const aiTextureType& inAssimpTexType);
+	eastl::vector<eastl::shared_ptr<class D3D12Texture2D>> LoadMaterialTextures(const struct aiMaterial& inMat, const aiTextureType& inAssimpTexType, struct ID3D12GraphicsCommandList* inCommandList);
 	bool IsTextureLoaded(const eastl::string& inTexPath, OUT eastl::shared_ptr<class D3D12Texture2D>& outTex);
 private:
 	eastl::vector<eastl::shared_ptr<class D3D12Texture2D>> LoadedTextures;

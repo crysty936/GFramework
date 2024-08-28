@@ -21,13 +21,11 @@ cbuffer SceneConstantBuffer : register(b0)
     float padding[16];
 };
 
-Texture2D Albedo : register(t0);
-Texture2D Normal : register(t0);
-Texture2D Roughness : register(t0);
+Texture2D g_texture : register(t0);
 SamplerState g_sampler : register(s0);
 
 
-PSInput VSMain(float4 position : POSITION, float3 normal : NORMAL, float2 uv : TEXCOORD, float3 tangent : TANGENT, float3 bitangent : BITANGENT)
+PSInput VSMain(float4 position : POSITION, float3 normal : NORMAL, float2 uv : TEXCOORD)
 {
     PSInput result;
 
@@ -50,7 +48,7 @@ PSOutput PSMain(PSInput input)
     float2 uv = input.uv;
 
     PSOutput output;
-    output.Color = Albedo.Sample(g_sampler, uv);
+    output.Color = g_texture.Sample(g_sampler, uv);
 
     output.Color2 = float4(1.f, 0.f, 0.f, 1.f);
 

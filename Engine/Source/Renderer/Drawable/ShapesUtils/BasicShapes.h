@@ -14,6 +14,16 @@ public:
 
 };
 
+class TBNQuadShape : public Model3D
+{
+public:
+	TBNQuadShape(const eastl::string& inName);
+	virtual ~TBNQuadShape();
+
+	void Init(ID3D12GraphicsCommandList* inCommandList) override;
+
+};
+
 #if 0
 
 

@@ -9,6 +9,7 @@
 
 enum class ERasterizerState : uint8_t
 {
+	Disabled,
 	BackFaceCull,
 	FrontFaceCull,
 	Count
@@ -17,6 +18,13 @@ enum class ERasterizerState : uint8_t
 enum class EBlendState : uint8_t
 {
 	Disabled,
+	Count
+};
+
+enum class EDepthState : uint8_t
+{
+	Disabled,
+	WriteEnabled,
 	Count
 };
 
@@ -33,6 +41,7 @@ namespace D3D12Globals
 	// TODO: Implement non-shader visible descriptor heaps that will be copied over into main heap when drawing
 	extern D3D12DescriptorHeap GlobalRTVHeap;
 	extern D3D12DescriptorHeap GlobalSRVHeap;
+	extern D3D12DescriptorHeap GlobalDSVHeap;
 }
 
 inline bool DXAssert(HRESULT inRez)
@@ -57,6 +66,7 @@ namespace D3D12Utility
 
 	D3D12_RASTERIZER_DESC GetRasterizerState(const ERasterizerState inForState);
 	D3D12_BLEND_DESC GetBlendState(const EBlendState inForState);
+	D3D12_DEPTH_STENCIL_DESC GetDepthState(const EDepthState inForState);
 
 	constexpr float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 }

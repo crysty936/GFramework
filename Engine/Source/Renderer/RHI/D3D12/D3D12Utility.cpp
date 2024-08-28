@@ -6,14 +6,32 @@ ID3D12CommandQueue* D3D12Globals::GraphicsCommandQueue;
 uint64_t D3D12Globals::CurrentFrameIndex = 0;
 D3D12DescriptorHeap D3D12Globals::GlobalRTVHeap;
 D3D12DescriptorHeap D3D12Globals::GlobalSRVHeap;
+D3D12DescriptorHeap D3D12Globals::GlobalDSVHeap;
 
 D3D12_RASTERIZER_DESC RasterizerStates[ERasterizerState::Count];
 D3D12_BLEND_DESC BlendStates[EBlendState::Count];
+D3D12_DEPTH_STENCIL_DESC DepthStates[EDepthState::Count];
 
 void D3D12Utility::Init()
 {
 	// Rasterirez States
 	{
+		{
+			D3D12_RASTERIZER_DESC& cullDisabledDesc = RasterizerStates[uint8_t(ERasterizerState::Disabled)];
+
+			cullDisabledDesc.FillMode = D3D12_FILL_MODE_SOLID;
+			cullDisabledDesc.CullMode = D3D12_CULL_MODE_NONE;
+			cullDisabledDesc.FrontCounterClockwise = false;
+			cullDisabledDesc.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
+			cullDisabledDesc.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+			cullDisabledDesc.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+			cullDisabledDesc.DepthClipEnable = true;
+			cullDisabledDesc.MultisampleEnable = false;
+			cullDisabledDesc.AntialiasedLineEnable = false;
+			cullDisabledDesc.ForcedSampleCount = 0;
+			cullDisabledDesc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+		}
+
 		{
 			D3D12_RASTERIZER_DESC& cullBackFaceDesc = RasterizerStates[uint8_t(ERasterizerState::BackFaceCull)];
 
@@ -73,6 +91,28 @@ void D3D12Utility::Init()
 		{
 			disabledBlendDesc.RenderTarget[i] = defaultRenderTargetBlendDesc;
 		}
+	}
+
+	// Depth States
+	{
+		// Disabled
+		{
+			D3D12_DEPTH_STENCIL_DESC& desc = DepthStates[uint8_t(EDepthState::Disabled)];
+			desc.DepthEnable = false;
+			desc.StencilEnable = false;
+			desc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+			desc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+		}
+
+		// Enabled
+		{
+			D3D12_DEPTH_STENCIL_DESC& desc = DepthStates[uint8_t(EDepthState::WriteEnabled)];
+			desc.DepthEnable = true;
+			desc.StencilEnable = FALSE;
+			desc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+			desc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+		}
+
 	}
 
 }
@@ -152,5 +192,10 @@ D3D12_RASTERIZER_DESC D3D12Utility::GetRasterizerState(const ERasterizerState in
 D3D12_BLEND_DESC D3D12Utility::GetBlendState(const EBlendState inForState)
 {
 	return BlendStates[uint8_t(inForState)];
+}
+
+D3D12_DEPTH_STENCIL_DESC D3D12Utility::GetDepthState(const EDepthState inForState)
+{
+	return DepthStates[uint8_t(inForState)];
 }
 

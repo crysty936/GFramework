@@ -84,7 +84,7 @@ eastl::shared_ptr<class D3D12IndexBuffer> D3D12RHI::CreateIndexBuffer(const uint
 	return newBuffer;
 }
 
-eastl::shared_ptr<class D3D12VertexBuffer> D3D12RHI::CreateVertexBuffer(const class VertexInputLayout& inLayout, const float* inVertices, const int32_t inCount, eastl::shared_ptr<class D3D12IndexBuffer> inIndexBuffer /*= nullptr*/)
+eastl::shared_ptr<class D3D12VertexBuffer> D3D12RHI::CreateVertexBuffer(const VertexInputLayout& inLayout, const float* inVertices, const int32_t inCount, eastl::shared_ptr<class D3D12IndexBuffer> inIndexBuffer /*= nullptr*/)
 {
 	ID3D12Resource* resource = nullptr;
 
@@ -99,7 +99,7 @@ eastl::shared_ptr<class D3D12VertexBuffer> D3D12RHI::CreateVertexBuffer(const cl
 	heapProps.CreationNodeMask = 1;
 	heapProps.VisibleNodeMask = 1;
 
-	const UINT vertexBufferSize = sizeof(float) * inCount;
+	const UINT vertexBufferSize = inLayout.Stride * inCount;
 
 	D3D12_RESOURCE_DESC vertexBufferDesc;
 	vertexBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -499,3 +499,60 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 
 	return newRT;
 }
+
+eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName)
+{
+	eastl::shared_ptr<D3D12DepthBuffer> newDB = eastl::make_shared<D3D12DepthBuffer>();
+	eastl::unique_ptr<D3D12Texture2D> ownedTexture = eastl::make_unique<D3D12Texture2D>();
+
+	// Based on DXGI_FORMAT_D32_FLOAT
+	DXGI_FORMAT texFormat = DXGI_FORMAT_R32_TYPELESS;
+	DXGI_FORMAT srvFormat = DXGI_FORMAT_R32_FLOAT;
+	
+	D3D12_RESOURCE_DESC textureDesc = {};
+	textureDesc.MipLevels = 1;
+	textureDesc.Format = texFormat;
+	textureDesc.Width = uint32_t(inWidth);
+	textureDesc.Height = uint32_t(inHeight);
+	textureDesc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+	textureDesc.DepthOrArraySize = 1;
+	textureDesc.SampleDesc.Count = 1;
+	textureDesc.SampleDesc.Quality = 0;
+	textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	textureDesc.Alignment = 0;
+
+	D3D12_CLEAR_VALUE clearValue = {};
+	clearValue.DepthStencil.Depth = 1.f;
+	clearValue.DepthStencil.Stencil = 0;
+	clearValue.Format = DXGI_FORMAT_D32_FLOAT;
+
+
+	DXAssert(D3D12Globals::Device->CreateCommittedResource(&D3D12Utility::GetDefaultHeapProps(), D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearValue, IID_PPV_ARGS(&ownedTexture->Resource)));
+
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+	dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+
+	// Needs to be changed for MSAA
+	dsvDesc.Texture2D.MipSlice = 0;
+	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+
+	D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalDSVHeap.AllocatePersistent();
+	newDB->DSV = descAllocation.CPUHandle;
+
+	D3D12Globals::Device->CreateDepthStencilView(ownedTexture->Resource, &dsvDesc, descAllocation.CPUHandle);
+
+	// For ReadOnly DSV
+	//D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalDSVHeap.AllocatePersistent();
+	//DXAssert(D3D12Globals::Device->CreateDepthStencilView(ownedTexture->Resource, &dsvDesc, newDB->ReadOnlyDSV));
+
+	ownedTexture->Resource->SetName(inName.c_str());
+
+	ownedTexture->Width = inWidth;
+	ownedTexture->Height = inHeight;
+
+	newDB->Texture = std::move(ownedTexture);
+
+	return newDB;
+}	
