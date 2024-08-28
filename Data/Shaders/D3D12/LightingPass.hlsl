@@ -10,11 +10,11 @@ struct PSOutput
     float4 Color : SV_TARGET0;
 };
 
+Texture2D GBufferAlbedo : register(t0);
+Texture2D GBufferNormal : register(t1);
+Texture2D GBufferRoughness : register(t2);
 
-Texture2D g_texture : register(t0);
-Texture2D g_texture2 : register(t1);
 SamplerState g_sampler : register(s0);
-
 
 PSInput VSMain(float4 position : POSITION, float2 uv : TEXCOORD)
 {
@@ -35,9 +35,7 @@ PSOutput PSMain(PSInput input)
     float2 uv = input.uv;
 
     PSOutput output;
-    output.Color = g_texture.Sample(g_sampler, uv);
-    output.Color += g_texture2.Sample(g_sampler, uv).g;
-
+    output.Color = GBufferAlbedo.Sample(g_sampler, uv);
 
     return output;
 }

@@ -7,8 +7,9 @@ struct PSInput
 
 struct PSOutput
 {
-    float4 Color : SV_TARGET0;
-    float4 Color2 : SV_TARGET1;
+    float4 Albedo : SV_TARGET0;
+    float4 Normal : SV_TARGET1;
+    float4 Roughness : SV_TARGET2;
 };
 
 
@@ -21,9 +22,10 @@ cbuffer SceneConstantBuffer : register(b0)
     float padding[16];
 };
 
-Texture2D Albedo : register(t0);
-Texture2D Normal : register(t0);
-Texture2D Roughness : register(t0);
+Texture2D g_Albedo : register(t0);
+Texture2D g_Normal : register(t1);
+Texture2D g_Roughness : register(t2);
+
 SamplerState g_sampler : register(s0);
 
 
@@ -50,9 +52,9 @@ PSOutput PSMain(PSInput input)
     float2 uv = input.uv;
 
     PSOutput output;
-    output.Color = Albedo.Sample(g_sampler, uv);
-
-    output.Color2 = float4(1.f, 0.f, 0.f, 1.f);
+    output.Albedo = g_Albedo.Sample(g_sampler, uv);
+    output.Normal = g_Normal.Sample(g_sampler, uv);
+    output.Roughness = g_Roughness.Sample(g_sampler, uv);
 
     return output;
 }

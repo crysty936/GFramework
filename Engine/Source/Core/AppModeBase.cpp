@@ -68,6 +68,7 @@ eastl::shared_ptr<D3D12VertexBuffer> ScreenQuadVertexBuffer = nullptr;
 ID3D12Resource* m_BackBuffers[D3D12Globals::NumFramesInFlight];
 eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferAlbedo;
 eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferNormal;
+eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferRoughness;
 eastl::shared_ptr<D3D12DepthBuffer> m_MainDepthBuffer;
 
 ID3D12CommandAllocator* m_commandAllocators[D3D12Globals::NumFramesInFlight];
@@ -179,6 +180,8 @@ void AppModeBase::CreateInitialResources()
 
 	m_GBufferAlbedo = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferAlbedo", ERHITexturePrecision::UnsignedByte,ETextureState::Shader_Resource,  ERHITextureFilter::Nearest);
 	m_GBufferNormal = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferNormal", ERHITexturePrecision::Float32, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
+	m_GBufferRoughness = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferRoughness", ERHITexturePrecision::UnsignedByte, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
+
 	m_MainDepthBuffer = D3D12RHI::Get()->CreateDepthBuffer(props.Width, props.Height, L"Main Depth Buffer");
 
 	CreateRootSignatures();
@@ -366,13 +369,13 @@ void AppModeBase::CreateRootSignatures()
 
 	//	D3D12_STATIC_SAMPLER_DESC sampler = {};
 	//	sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-	//	sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-	//	sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-	//	sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	//sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	//sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	//sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 	//	sampler.MipLODBias = 0;
 	//	sampler.MaxAnisotropy = 0;
 	//	sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-	//	sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+	//	sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
 	//	sampler.MinLOD = 0.0f;
 	//	sampler.MaxLOD = D3D12_FLOAT32_MAX;
 	//	sampler.ShaderRegister = 0;
@@ -407,9 +410,8 @@ void AppModeBase::CreateRootSignatures()
 		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 		rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
 
-		// GBuffer Albedo and GBuffer Normal
-		rangesPS[0].NumDescriptors = 2;
-
+		// GBuffer Albedo, GBuffer Normal and GBuffer Roughness
+		rangesPS[0].NumDescriptors = 3;
 
 		D3D12_ROOT_PARAMETER1 rootParameters[1];
 		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -537,8 +539,8 @@ void AppModeBase::CreatePSOs()
 	//	psoDesc.PS = psByteCode;
 	//	psoDesc.RasterizerState = D3D12Utility::GetRasterizerState(ERasterizerState::BackFaceCull);
 	//	psoDesc.BlendState = D3D12Utility::GetBlendState(EBlendState::Disabled);
-	//	psoDesc.DepthStencilState.DepthEnable = FALSE;
-	//	psoDesc.DepthStencilState.StencilEnable = FALSE;
+	//psoDesc.DepthStencilState = D3D12Utility::GetDepthState(EDepthState::WriteEnabled);
+	//psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 	//	psoDesc.SampleMask = UINT_MAX;
 	//	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	//	psoDesc.NumRenderTargets = 2;
@@ -770,13 +772,15 @@ void AppModeBase::Draw()
 	D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[2];
+	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[3];
 	renderTargets[0] = m_GBufferAlbedo->RTV;
 	renderTargets[1] = m_GBufferNormal->RTV;
-	m_commandList->OMSetRenderTargets(2, renderTargets, FALSE, &m_MainDepthBuffer->DSV);
+	renderTargets[2] = m_GBufferRoughness->RTV;
+	m_commandList->OMSetRenderTargets(3, renderTargets, FALSE, &m_MainDepthBuffer->DSV);
 
 	m_commandList->ClearRenderTargetView(m_GBufferAlbedo->RTV, D3D12Utility::ClearColor, 0, nullptr);
 	m_commandList->ClearRenderTargetView(m_GBufferNormal->RTV, D3D12Utility::ClearColor, 0, nullptr);
+	m_commandList->ClearRenderTargetView(m_GBufferRoughness->RTV, D3D12Utility::ClearColor, 0, nullptr);
 	m_commandList->ClearDepthStencilView(m_MainDepthBuffer->DSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.f, 0, 0, nullptr);
 
 
