@@ -26,6 +26,8 @@ public:
 	void ImGuiRenderDrawData();
 
 private:
+	void DrawGBuffer();
+	void RenderLighting();
 	void CreateInitialResources();
 	void CreateRootSignatures();
 	void CreatePSOs();

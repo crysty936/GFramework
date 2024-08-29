@@ -6,6 +6,24 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include "D3D12GraphicsTypes_Internal.h"
+#include "WinPixEventRuntime/pix3.h"
+
+struct PIXMarker
+{
+	ID3D12GraphicsCommandList* CmdList = nullptr;
+
+	PIXMarker(ID3D12GraphicsCommandList* inCmdList, const char* inMarkerName)
+		:CmdList(inCmdList)
+	{
+		PIXBeginEvent(CmdList, 0, inMarkerName);
+	}
+
+	~PIXMarker()
+	{
+		PIXEndEvent(CmdList);
+	}
+};
+
 
 enum class ERasterizerState : uint8_t
 {

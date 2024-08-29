@@ -738,8 +738,10 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 	}
 }
 
-void AppModeBase::Draw()
+void AppModeBase::DrawGBuffer()
 {
+	PIXMarker Marker(m_commandList, "Draw GBuffer");
+
 	UsedCBMemory[D3D12Globals::CurrentFrameIndex] = 0;
 
 	// Populate Command List
@@ -807,45 +809,50 @@ void AppModeBase::Draw()
 		const eastl::vector<TransformObjPtr>& children = currModel->GetChildren();
 		DrawMeshNodesRecursively(children, currentScene);
 	}
+}
+
+void AppModeBase::RenderLighting()
+{
+	PIXMarker Marker(m_commandList, "Render Deferred Lighting");
 
 	// Draw screen quad
+	ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heap };
+	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-	{
-		ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heap };
-		m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	// Backbuffers are the first 2 RTVs in the Global Heap
+	D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Globals::CurrentFrameIndex);
+	D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Globals::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	m_commandList->ClearRenderTargetView(currentBackbufferRTDescriptor, D3D12Utility::ClearColor, 0, nullptr);
 
-		// Backbuffers are the first 2 RTVs in the Global Heap
-		D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Globals::CurrentFrameIndex);
-		D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Globals::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-		m_commandList->ClearRenderTargetView(currentBackbufferRTDescriptor, D3D12Utility::ClearColor, 0, nullptr);
+	m_commandList->SetGraphicsRootSignature(m_LightingRootSignature);
+	m_commandList->SetPipelineState(m_LightingPipelineState);
 
-		m_commandList->SetGraphicsRootSignature(m_LightingRootSignature);
-		m_commandList->SetPipelineState(m_LightingPipelineState);
+	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[1];
+	renderTargets[0] = currentBackbufferRTDescriptor;
 
-		D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[1];
-		renderTargets[0] = currentBackbufferRTDescriptor;
+	m_commandList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
 
-		m_commandList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
+	D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-		D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_GBufferAlbedo->Texture->SRVIndex));
 
-		m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_GBufferAlbedo->Texture->SRVIndex));
+	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_commandList->IASetVertexBuffers(0, 1, &ScreenQuadVertexBuffer->VBView());
+	m_commandList->IASetIndexBuffer(&ScreenQuadIndexBuffer->IBView());
 
-		m_commandList->IASetVertexBuffers(0, 1, &ScreenQuadVertexBuffer->VBView());
-		m_commandList->IASetIndexBuffer(&ScreenQuadIndexBuffer->IBView());
-
-		m_commandList->DrawIndexedInstanced(ScreenQuadIndexBuffer->IndexCount, 1, 0, 0, 0);
+	m_commandList->DrawIndexedInstanced(ScreenQuadIndexBuffer->IndexCount, 1, 0, 0, 0);
 
 
-	}
+}
 
+void AppModeBase::Draw()
+{
+	DrawGBuffer();
+	RenderLighting();
 
-
-
-
+	// Draw scene hierarchy
 	if (GEngine->IsImguiEnabled())
 	{
 		ImGui::Begin("Scene");
@@ -961,6 +968,8 @@ void AppModeBase::ImGuiInit()
 
 void AppModeBase::ImGuiRenderDrawData()
 {
+	PIXMarker Marker(m_commandList, "Draw ImGui");
+
 	// Set the imgui descriptor heap
 	ID3D12DescriptorHeap* imguiHeaps[] = { m_imguiCbvSrvHeap };
 	m_commandList->SetDescriptorHeaps(1, imguiHeaps);

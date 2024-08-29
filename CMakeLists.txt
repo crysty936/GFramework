@@ -55,6 +55,17 @@ target_link_libraries(GFramework PUBLIC ${extra_libs})
 target_link_libraries(GFramework PRIVATE "d3d12.lib")
 target_link_libraries(GFramework PRIVATE "dxgi.lib")
 
+# Add WinPixEventRuntime
+list(APPEND EXTRA_INCLUDES "${CMAKE_CURRENT_LIST_DIR}/Plugins/WinPixEventRuntime/Include")
+target_link_libraries(GFramework PRIVATE "${CMAKE_CURRENT_LIST_DIR}/Plugins/WinPixEventRuntime/bin/WinPixEventRuntime.lib")
+
+# Copy command for WinPixEventRuntime.dll
+add_custom_command(TARGET GFramework POST_BUILD        # Adds a post-build event to MyTest
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different  # which executes "cmake - E copy_if_different..."
+        "${CMAKE_CURRENT_LIST_DIR}/Plugins/WinPixEventRuntime/bin/WinPixEventRuntime.dll"      # <--this is in-file
+        $<TARGET_FILE_DIR:GFramework>)                 # <--this is out-file path
+
+
 list(APPEND EXTRA_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/Engine/Source)	
 
 target_include_directories(GFramework PUBLIC
