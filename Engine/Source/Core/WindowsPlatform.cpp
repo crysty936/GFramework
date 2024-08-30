@@ -421,6 +421,12 @@ namespace WindowsPlatform
 		InputSystem::MousePosChangedCallback(inNewYaw, inNewPitch);
 	}
 
+	void ForwardMouseScrollInput(float inWheelDelta, const glm::vec<2, int> inCursorPos)
+	{
+
+		InputSystem::MouseScrollCallback(0, inWheelDelta);
+	}
+
 	bool QueryRegKey(const Windows::HKEY InKey, const wchar_t* InSubKey, const wchar_t* InValueName, eastl::wstring& OutData)
 	{
 		bool bSuccess = false;
@@ -1026,8 +1032,21 @@ namespace WindowsPlatform
  
  		case WM_MOUSEWHEEL:
  		{
+			const float SpinFactor = 1 / 120.0f;
+			const SHORT WheelDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+
+			POINT CursorPoint;
+			CursorPoint.x = GET_X_LPARAM(lParam);
+			CursorPoint.y = GET_Y_LPARAM(lParam);
+
+			const glm::vec<2, int> CursorPos(CursorPoint.x, CursorPoint.y);
+			const float Delta = WheelDelta * SpinFactor;
+
+			ForwardMouseScrollInput(Delta, CursorPos);
+
  			LOG_WINMSG(WM_MOUSEWHEEL);
- 			//_glfwInputScroll(window, 0.0, (SHORT) HIWORD(wParam) / (double) WHEEL_DELTA);
+			//ForwardMouseScrollInput(InputSystem::Get().VirtualMousePos.x + dx, InputSystem::Get().VirtualMousePos.y + dy);
+
  			return 0;
  		}
  

@@ -4,7 +4,7 @@
 #include "InputSystem/CursorMode.h"
 #include "InputSystem/InputType.h"
 #include "EASTL/string.h"
-
+#include "glm/glm.hpp"
 
 struct HKEY__;
 
@@ -42,6 +42,7 @@ namespace WindowsPlatform
 
 	void ForwardKeyInput(const EInputKey inKey, const EInputType inAction);
 	void ForwardMouseMoveInput(double inNewYaw, double inNewPitch);
+	void ForwardMouseScrollInput(float inWheelDelta, const glm::vec<2, int> inCursorPos);
 
 	bool QueryRegKey(const Windows::HKEY InKey, const wchar_t* InSubKey, const wchar_t* InValueName, eastl::wstring& OutData);
 	bool DirectoryExistsInternal(const eastl::string& inPath);

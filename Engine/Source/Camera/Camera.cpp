@@ -3,6 +3,7 @@
 #include "glm/gtc/type_ptr.hpp"
 #include "Logger/Logger.h"
 #include "Entity/TransformObject.h"
+#include "Editor/Editor.h"
 
 Camera::Camera()
 	: Entity("Camera") 
@@ -70,7 +71,10 @@ void Camera::SetMovementDelegates(ControllerBase& inController)
 
 void Camera::OnMouseScrollChanged(const float inNewY)
 {
-	MouseMoveSensitivity = glm::max(0.01f, MouseMoveSensitivity + inNewY / 10.f);
+	if (GEditor->IsViewportNavigateModeEnabled())
+	{
+		MouseMoveSensitivity = glm::max(0.01f, MouseMoveSensitivity + inNewY);
+	}
 }
 
 void Camera::OnMousePosChanged(const float inNewYaw, const float inNewPitch)

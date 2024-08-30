@@ -59,5 +59,7 @@ private:
 
 	friend void WindowsPlatform::ForwardKeyInput(const EInputKey inKey, const EInputType inAction);
 	friend void WindowsPlatform::ForwardMouseMoveInput(double inNewYaw, double inNewPitch);
+	friend void WindowsPlatform::ForwardMouseScrollInput(float inWheelDelta, const glm::vec<2, int> inCursorPos);
+
 	friend class Editor;
 };

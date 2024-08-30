@@ -13,6 +13,8 @@
  
 	 class ControllerBase& GetController();
 
+     inline bool IsViewportNavigateModeEnabled() { return InViewportNavigateMode; }
+
  private:
      Editor();
      ~Editor();

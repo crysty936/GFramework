@@ -13,7 +13,7 @@ void InputSystem::KeyCallback(EInputKey inKey, EInputType inAction)
 	InputSystem& instance = InputSystem::Get();
 
 	instance.OnKeyInputDelegate.Invoke(inKey, inAction);
-	LOG_INFO("Key input received for key %d with action: %s", static_cast<int16_t>(inKey), ToString(inAction));
+	//LOG_INFO("Key input received for key %d with action: %s", static_cast<int16_t>(inKey), ToString(inAction));
 }
 
 void InputSystem::MousePosChangedCallback(const double inNewYaw, const double inNewPitch)
@@ -77,5 +77,5 @@ void InputSystem::SetCursorMode(const ECursorMode inMode, void* inWindowHandle)
 
 void InputSystem::OnKeyPressedLog(EInputKey inKeyCode, EInputType inEventType)
 {
-	LOG_INFO("Key input received for key %d with action: %s", static_cast<int32_t>(inKeyCode), ToString(inEventType));
+	//LOG_INFO("Key input received for key %d with action: %s", static_cast<int32_t>(inKeyCode), ToString(inEventType));
 }
