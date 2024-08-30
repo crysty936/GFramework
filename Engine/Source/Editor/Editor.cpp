@@ -104,8 +104,6 @@ void Editor::Internal_Init()
 		OnKeyAction action = { mouseRightPressedDel, mouseRightReleasedDel, key, true };
 		Controller->AddListener(action);
 	}
-
-	InputSystem::Get().SetCursorMode(ECursorMode::Enabled);
 }
 
 float CameraSpeed = 0.1f;
@@ -179,6 +177,7 @@ void Editor::BoostCameraSpeed()
 void Editor::OnMouseRightPressed()
 {
 	InputSystem::Get().SetCursorMode(ECursorMode::Disabled);
+	ImGui::SetWindowFocus(nullptr);
 	InViewportNavigateMode = true;
 	LOG_INFO("Viewport navigate mode ON.");
 }
