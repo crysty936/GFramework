@@ -151,6 +151,11 @@ glm::mat4 Transform::GetMatrix() const
 	return MatrixCache;
 }
 
+glm::mat4 Transform::GetRotationOnlyMatrix() const
+{
+	return glm::mat4_cast(Rotation);
+}
+
 void Transform::Rotate(const float inAmount, const glm::vec3 inAxis)
 {
 	bDirty = true;

@@ -53,13 +53,13 @@ protected:
 	inline void CleanTranfsDirty() const { TransfDirty = false; }
 
 protected:
-	glm::vec3 Location{ 0.f, 0.f, 0.f };
-	glm::vec3 Rotation{ 0.f, 0.f, 0.f };
-	glm::vec3 Scale{ 1.f, 1.f, 1.f };
-	mutable Transform AbsoluteTranfs{};
-	mutable bool TransfDirty{ true };
-	eastl::weak_ptr<TransformObject> Parent{};
-	eastl::vector<TransformObjPtr> Children{};
+	glm::vec3 Location	= { 0.f, 0.f, 0.f };
+	glm::vec3 Rotation	= { 0.f, 0.f, 0.f };
+	glm::vec3 Scale		= { 1.f, 1.f, 1.f };
+	mutable Transform AbsoluteTranfs;
+	mutable bool TransfDirty = true;
+	eastl::weak_ptr<TransformObject> Parent;
+	eastl::vector<TransformObjPtr> Children;
 
 	eastl::string Name;
 

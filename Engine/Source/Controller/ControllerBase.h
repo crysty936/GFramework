@@ -30,7 +30,7 @@ public:
 protected:
 	void OnKeyInputReceived(EInputKey inKeyCode, EInputType inEventType);
 	void OnMouseMoveInputReceived(const float inNewYaw, const float inNewPitch);
-	void OnMouseScrollInputReceived(const float inNewY);
+	void OnMouseScrollInputReceived(const float inNewYOffset);
 
 private:
 	eastl::unordered_map<EInputKey, EInputType> KeyStates{};

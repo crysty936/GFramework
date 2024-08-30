@@ -88,7 +88,7 @@ struct MeshConstantBuffer
 	glm::mat4 Model;
 	glm::mat4 Projection;
 	glm::mat4 View;
-	float padding[16]; // Padding so the constant buffer is 256-byte aligned.
+	glm::mat4 LocalToWorldRotationOnly;
 };
 static_assert((sizeof(MeshConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
@@ -227,15 +227,23 @@ void AppModeBase::CreateInitialResources()
 
 	//currentScene.AddObject(TheCube);
 
-	//eastl::shared_ptr<TBNQuadShape> quad = eastl::make_shared<TBNQuadShape>("TBN Quad");
-	//quad->Init(m_commandList.Get());
-	//currentScene.AddObject(quad);
+	//eastl::shared_ptr<TBNQuadShape> model = eastl::make_shared<TBNQuadShape>("TBN Quad");
+	//model->Init(m_commandList);
+	//currentScene.AddObject(model);
+
 
 	eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza/Sponza.gltf", "Sponza");
-	model->Init(m_commandList);
-
 	model->Rotate(90.f, glm::vec3(0.f, 1.f, 0.f));
 	model->Move(glm::vec3(0.f, -1.f, -5.f));
+	model->Init(m_commandList);
+
+	//eastl::shared_ptr<AssimpModel3D> model = eastl::make_shared<AssimpModel3D>("../Data/Models/Floor/scene.gltf", "Floor Model");
+	//model->SetScale(glm::vec3(0.05f, 0.05f, 0.05f));
+	//model->Move(glm::vec3(0.f, -3.f, 0.f));
+	//model->Init(m_commandList);
+
+	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sphere/scene.gltf", "Sphere");
+	//model->Init(m_commandList);
 
 	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Shiba/scene.gltf", "Shiba");
 	//model->Init(m_commandList);
@@ -683,15 +691,19 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 				continue;
 			}
 
-			const glm::mat4 modelMatrix = modelChild->GetAbsoluteTransform().GetMatrix();
+			const Transform& absTransform = modelChild->GetAbsoluteTransform();
+			const glm::mat4 modelMatrix = absTransform.GetMatrix();
 
 			//LOG_INFO("Translation for object with index %d : %f    %f    %f", i, modelMatrix[3][0], modelMatrix[3][1], modelMatrix[3][2]);
 
-			m_constantBufferData.Model = modelMatrix;
-			m_constantBufferData.Projection = GetMainProjection();
+			// All matrices sent to HLSL need to be converted to row-major from column-major(what glm uses)
+			m_constantBufferData.Model = glm::transpose(modelMatrix);
+			m_constantBufferData.Projection = glm::transpose(GetMainProjection());
 
 			const glm::mat4 view = inCurrentScene.GetMainCameraLookAt();
-			m_constantBufferData.View = view;
+			m_constantBufferData.View = glm::transpose(view);
+
+			m_constantBufferData.LocalToWorldRotationOnly = glm::transpose(absTransform.GetRotationOnlyMatrix());
 
 			// Use temp buffer in main constant buffer
 			{

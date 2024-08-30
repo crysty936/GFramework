@@ -278,6 +278,9 @@ eastl::vector<eastl::shared_ptr<D3D12Texture2D>> AssimpModel3D::LoadMaterialText
 		inMat.GetTexture(inAssimpTexType, i, &Str);
 		eastl::shared_ptr<D3D12Texture2D> tex = nullptr;
 
+		// Currently, textures in descriptor tables are assigned based on the first texture.
+		// This means that there's a possibility for textures with similar albedo but diferences in others to render wrong/affect others down the pipe
+		// TODO: Protect against this
 		if (!IsTextureLoaded(Str.C_Str(), tex))
 		{
 			const eastl::string path = ModelDir + eastl::string("/") + eastl::string(Str.C_Str());

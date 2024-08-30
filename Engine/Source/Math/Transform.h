@@ -17,6 +17,7 @@ struct Transform
 	glm::quat Rotation;
 
 	glm::mat4 GetMatrix() const;
+	glm::mat4 GetRotationOnlyMatrix() const;
 
 	mutable glm::mat4 MatrixCache;
 	mutable bool bDirty = true;

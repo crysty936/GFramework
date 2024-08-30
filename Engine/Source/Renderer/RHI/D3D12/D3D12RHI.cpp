@@ -242,12 +242,14 @@ GraphicsCompiledShaderPair D3D12RHI::CompileGraphicsShaderFromFile(const eastl::
 	D3DCompile2(shaderCode.data(), shaderCode.size(), "MeshVS", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, 0, nullptr, 0, &vertexShader, &vsErrBlob);
 
 
-	if (!ENSURE(!vsErrBlob))
+	if (vsErrBlob)
 	{
 		eastl::string errMessage;
 		errMessage.InitialiseToSize(vsErrBlob->GetBufferSize(), '\0');
 		memcpy(errMessage.data(), vsErrBlob->GetBufferPointer(), vsErrBlob->GetBufferSize());
 		LOG_ERROR("%s", errMessage.c_str());
+
+		ASSERT(false);
 	}
 
 	ID3DBlob* pixelShader = nullptr;
@@ -255,12 +257,14 @@ GraphicsCompiledShaderPair D3D12RHI::CompileGraphicsShaderFromFile(const eastl::
 
 	D3DCompile2(shaderCode.data(), shaderCode.size(), "MeshPS", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, 0, nullptr, 0, &pixelShader, &psErrBlob);
 
-	if (!ENSURE(!psErrBlob))
+	if (psErrBlob)
 	{
 		eastl::string errMessage;
 		errMessage.InitialiseToSize(psErrBlob->GetBufferSize(), '\0');
 		memcpy(errMessage.data(), psErrBlob->GetBufferPointer(), psErrBlob->GetBufferSize());
 		LOG_ERROR("%s", errMessage.c_str());
+
+		ASSERT(false);
 	}
 
 	ASSERT(vertexShader != nullptr && pixelShader != nullptr);

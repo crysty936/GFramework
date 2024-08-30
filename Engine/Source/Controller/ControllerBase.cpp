@@ -102,9 +102,9 @@ void ControllerBase::OnMouseMoveInputReceived(const float inNewYaw, const float 
 	NewPitch = inNewPitch;
 }
 
-void ControllerBase::OnMouseScrollInputReceived(const float inNewY)
+void ControllerBase::OnMouseScrollInputReceived(const float inNewYOffset)
 {
 	bMouseScrolled = true;
-	NewMouseScrollOffset = inNewY;
+	NewMouseScrollOffset = inNewYOffset;
 }
 
