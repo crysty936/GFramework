@@ -47,7 +47,7 @@ eastl::shared_ptr<class D3D12IndexBuffer> D3D12RHI::CreateIndexBuffer(const uint
 		&D3D12Utility::GetDefaultHeapProps(),
 		D3D12_HEAP_FLAG_NONE,
 		&indexBufferDesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_COPY_DEST,
 		nullptr,
 		IID_PPV_ARGS(&resource)));
 
@@ -91,7 +91,7 @@ eastl::shared_ptr<class D3D12VertexBuffer> D3D12RHI::CreateVertexBuffer(const Ve
 		&D3D12Utility::GetDefaultHeapProps(),
 		D3D12_HEAP_FLAG_NONE,
 		&vertexBufferDesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_COPY_DEST,
 		nullptr,
 		IID_PPV_ARGS(&resource)));
 

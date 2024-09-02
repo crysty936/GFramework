@@ -507,9 +507,10 @@ void AppModeBase::CreatePSOs()
 
 		psoDesc.SampleMask = UINT_MAX;
 		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 2;
+		psoDesc.NumRenderTargets = 3;
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 		psoDesc.RTVFormats[1] = DXGI_FORMAT_R32G32B32A32_FLOAT;
+		psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
 		psoDesc.SampleDesc.Count = 1;
 
 		DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_MainMeshPassPipelineState)));
@@ -783,9 +784,6 @@ void AppModeBase::DrawGBuffer()
 
 	// Handle RTs
 
-	D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
 	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[3];
 	renderTargets[0] = m_GBufferAlbedo->RTV;
 	renderTargets[1] = m_GBufferNormal->RTV;
@@ -833,7 +831,6 @@ void AppModeBase::RenderLighting()
 
 	// Backbuffers are the first 2 RTVs in the Global Heap
 	D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Globals::CurrentFrameIndex);
-	D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Globals::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	m_commandList->ClearRenderTargetView(currentBackbufferRTDescriptor, D3D12Utility::ClearColor, 0, nullptr);
 
 	m_commandList->SetGraphicsRootSignature(m_LightingRootSignature);
@@ -844,8 +841,6 @@ void AppModeBase::RenderLighting()
 
 	m_commandList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
 
-	D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_GBufferAlbedo->Texture->SRVIndex));
 
@@ -861,8 +856,22 @@ void AppModeBase::RenderLighting()
 
 void AppModeBase::Draw()
 {
-	DrawGBuffer();
-	RenderLighting();
+	{
+		D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		D3D12Utility::TransitionResource(m_commandList, m_GBufferRoughness->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		DrawGBuffer();
+	}
+
+	{
+		D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Globals::CurrentFrameIndex);
+		D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Globals::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		D3D12Utility::TransitionResource(m_commandList, m_GBufferRoughness->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		RenderLighting();
+	}
 
 	// Draw scene hierarchy
 	if (GEngine->IsImguiEnabled())

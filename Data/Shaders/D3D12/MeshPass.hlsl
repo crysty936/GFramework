@@ -101,7 +101,7 @@ PSOutput PSMain(PSInput input)
     const float3 wsNormal = mul(normalTS, input.TangentToWorld);
 
     output.Normal = float4(wsNormal / 2.0 + 0.5, 1);
-    output.Albedo = float4(wsNormal / 2.0 + 0.5, 1);
+    //output.Albedo = float4(wsNormal / 2.0 + 0.5, 1);
 
     return output;
 }
