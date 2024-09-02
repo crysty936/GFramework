@@ -51,6 +51,11 @@ eastl::shared_ptr<class D3D12IndexBuffer> D3D12RHI::CreateIndexBuffer(const uint
 		nullptr,
 		IID_PPV_ARGS(&resource)));
 
+	static uint64_t IndexBufferIdx = 0;
+	++IndexBufferIdx;
+	eastl::wstring bufferName = L"IndexBuffer_";
+	bufferName.append(eastl::to_wstring(IndexBufferIdx));
+	resource->SetName(bufferName.c_str());
 
 	UploadContext indexUploadContext = D3D12Upload::ResourceUploadBegin(indexBufferSize);
 
@@ -94,6 +99,12 @@ eastl::shared_ptr<class D3D12VertexBuffer> D3D12RHI::CreateVertexBuffer(const Ve
 		D3D12_RESOURCE_STATE_COPY_DEST,
 		nullptr,
 		IID_PPV_ARGS(&resource)));
+
+	static uint64_t VertexBufferIdx = 0;
+	++VertexBufferIdx;
+	eastl::wstring bufferName = L"VertexBuffer_";
+	bufferName.append(eastl::to_wstring(VertexBufferIdx));
+	resource->SetName(bufferName.c_str());
 
 	ASSERT(resource != nullptr);
 
@@ -438,9 +449,6 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 		initState,
 		&clearValue,
 		IID_PPV_ARGS(&ownedTexture->Resource)));
-
-	static int32_t RenderTargetIndex = 0;
-	++RenderTargetIndex;
 
 	eastl::wstring textureName = L"RenderTarget_";
 	textureName.append(inName);

@@ -37,14 +37,14 @@ D3D12DescHeapAllocationDesc D3D12DescriptorHeap::AllocatePersistent()
 	return newAllocation;
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE D3D12DescriptorHeap::GetGPUHandle(uint32_t inIndex)
+D3D12_GPU_DESCRIPTOR_HANDLE D3D12DescriptorHeap::GetGPUHandle(uint64_t inIndex)
 {
 	uint64_t gpuPtr = GPUStart.ptr + (DescriptorSize * inIndex);
 
 	return D3D12_GPU_DESCRIPTOR_HANDLE{ gpuPtr };
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE D3D12DescriptorHeap::GetCPUHandle(uint32_t inIndex)
+D3D12_CPU_DESCRIPTOR_HANDLE D3D12DescriptorHeap::GetCPUHandle(uint64_t inIndex)
 {
 	uint64_t cpuPtr = CPUStart.ptr + (DescriptorSize * inIndex);
 
@@ -98,6 +98,14 @@ void D3D12ConstantBuffer::Init(const uint64_t inSize)
 		IID_PPV_ARGS(&D3D12Resource)));
 
 	GPUAddress = D3D12Resource->GetGPUVirtualAddress();
+
+	static uint64_t ConstantBufferIdx = 0;
+	++ConstantBufferIdx;
+
+	eastl::wstring bufferName = L"ConstantBuffer_";
+	bufferName.append(eastl::to_wstring(ConstantBufferIdx));
+
+	D3D12Resource->SetName(bufferName.c_str());
 
 	// Map and initialize the constant buffer. We don't unmap this until the
 	// app closes. Keeping things mapped for the lifetime of the resource is okay.

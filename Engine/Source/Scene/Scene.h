@@ -25,6 +25,7 @@ public:
 	void ImGuiDisplaySceneTree();
 
 	inline eastl::shared_ptr<Camera>& GetCurrentCamera();
+	inline const eastl::shared_ptr<Camera>& GetCurrentCamera() const;
 	inline glm::mat4 GetMainCameraLookAt() const;
 
 	//inline void AddLight(const eastl::shared_ptr<LightSource>& inLightData);
@@ -49,6 +50,12 @@ eastl::shared_ptr<Camera>& Scene::GetCurrentCamera()
 {
 	return CurrentCamera;
 }
+
+const eastl::shared_ptr<Camera>& Scene::GetCurrentCamera() const
+{
+	return CurrentCamera;
+}
+
 
 glm::mat4 Scene::GetMainCameraLookAt() const
 {

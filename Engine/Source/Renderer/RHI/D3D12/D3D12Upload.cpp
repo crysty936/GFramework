@@ -146,6 +146,7 @@ namespace D3D12Upload
 			resourceDesc.Alignment = 0;
 
 			DXAssert(D3D12Globals::Device->CreateCommittedResource(&D3D12Utility::GetUploadHeapProps(), D3D12_HEAP_FLAG_NONE, &resourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&D3DBuffer)));
+			D3DBuffer->SetName(L"Main Upload Ring Buffer");
 
 			D3D12_RANGE readRange = {};
 

@@ -92,9 +92,13 @@ struct MeshConstantBuffer
 };
 static_assert((sizeof(MeshConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
-float StaticOffset = 0.f;
-
-MeshConstantBuffer m_constantBufferData;
+struct LightingConstantBuffer
+{
+	glm::vec4 ViewPos;
+	glm::vec4 LightDir;
+	float Padding[56];
+};
+static_assert((sizeof(LightingConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
 // One constant buffer view per signature, in the root
 // One table pointing to the global SRV heap where either 
@@ -256,7 +260,6 @@ void AppModeBase::CreateInitialResources()
 	// Create the constant buffer.
 	{
 		m_constantBuffer.Init(2 * 1024 * 1024);
-		memcpy(m_constantBuffer.Map().CPUAddress, &m_constantBufferData, sizeof(m_constantBufferData));
 	}
 
 	DXAssert(m_commandList->Close());
@@ -288,8 +291,20 @@ void AppModeBase::CreateRootSignatures()
 {
 	// GBuffer Main Mesh Pass signature
 	{
-		D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
+		D3D12_ROOT_PARAMETER1 rootParameters[2];
+
+		// Constant Buffer
+		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+		rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[0].Descriptor.RegisterSpace = 0;
+		rootParameters[0].Descriptor.ShaderRegister = 0;
+
 		// Texture
+		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+		D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
 		rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 		rangesPS[0].NumDescriptors = 3;
 		rangesPS[0].BaseShaderRegister = 0;
@@ -297,16 +312,6 @@ void AppModeBase::CreateRootSignatures()
 		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 		rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
 
-		D3D12_ROOT_PARAMETER1 rootParameters[2];
-
-		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-		rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
-		rootParameters[0].Descriptor.RegisterSpace = 0;
-		rootParameters[0].Descriptor.ShaderRegister = 0;
-
-		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 		rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
 		rootParameters[1].DescriptorTable.pDescriptorRanges = &rangesPS[0];
 
@@ -411,7 +416,20 @@ void AppModeBase::CreateRootSignatures()
 
 	// Final lighting root signature
 	{
-		D3D12_DESCRIPTOR_RANGE1 rangesPS[2];
+		D3D12_ROOT_PARAMETER1 rootParameters[2];
+
+		// Constant Buffer
+		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[0].Descriptor.RegisterSpace = 0;
+		rootParameters[0].Descriptor.ShaderRegister = 0;
+
+		// Textures
+		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+		D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
 		rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 		rangesPS[0].BaseShaderRegister = 0;
 		rangesPS[0].RegisterSpace = 0;
@@ -421,11 +439,8 @@ void AppModeBase::CreateRootSignatures()
 		// GBuffer Albedo, GBuffer Normal and GBuffer Roughness
 		rangesPS[0].NumDescriptors = 3;
 
-		D3D12_ROOT_PARAMETER1 rootParameters[1];
-		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-		rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
-		rootParameters[0].DescriptorTable.pDescriptorRanges = &rangesPS[0];
+		rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(rangesPS);
+		rootParameters[1].DescriptorTable.pDescriptorRanges = &rangesPS[0];
 
 		//////////////////////////////////////////////////////////////////////////
 
@@ -697,14 +712,16 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 
 			//LOG_INFO("Translation for object with index %d : %f    %f    %f", i, modelMatrix[3][0], modelMatrix[3][1], modelMatrix[3][2]);
 
+			MeshConstantBuffer constantBufferData;
+
 			// All matrices sent to HLSL need to be converted to row-major from column-major(what glm uses)
-			m_constantBufferData.Model = glm::transpose(modelMatrix);
-			m_constantBufferData.Projection = glm::transpose(GetMainProjection());
+			constantBufferData.Model = glm::transpose(modelMatrix);
+			constantBufferData.Projection = glm::transpose(GetMainProjection());
 
 			const glm::mat4 view = inCurrentScene.GetMainCameraLookAt();
-			m_constantBufferData.View = glm::transpose(view);
+			constantBufferData.View = glm::transpose(view);
 
-			m_constantBufferData.LocalToWorldRotationOnly = glm::transpose(absTransform.GetRotationOnlyMatrix());
+			constantBufferData.LocalToWorldRotationOnly = glm::transpose(absTransform.GetRotationOnlyMatrix());
 
 			// Use temp buffer in main constant buffer
 			{
@@ -712,7 +729,7 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 
 				MapResult cBufferMap = m_constantBuffer.Map();
 
-				const uint64_t cbSize = sizeof(m_constantBufferData);
+				const uint64_t cbSize = sizeof(constantBufferData);
 
 				// Used memory sizes should be aligned
 				const uint64_t offset = UsedCBMemory[D3D12Globals::CurrentFrameIndex];
@@ -729,7 +746,7 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 				uint64_t GPUAddress = cBufferMap.GPUAddress;
 				GPUAddress += offset;
 
-				memcpy(CPUAddress, &m_constantBufferData, sizeof(m_constantBufferData));
+				memcpy(CPUAddress, &constantBufferData, sizeof(constantBufferData));
 
 				m_commandList->SetGraphicsRootConstantBufferView(0, GPUAddress);
 			}
@@ -795,7 +812,6 @@ void AppModeBase::DrawGBuffer()
 	m_commandList->ClearRenderTargetView(m_GBufferRoughness->RTV, D3D12Utility::ClearColor, 0, nullptr);
 	m_commandList->ClearDepthStencilView(m_MainDepthBuffer->DSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.f, 0, 0, nullptr);
 
-
 	SceneManager& sManager = SceneManager::Get();
 	const Scene& currentScene = sManager.GetCurrentScene();
 
@@ -823,6 +839,7 @@ void AppModeBase::DrawGBuffer()
 
 void AppModeBase::RenderLighting()
 {
+	UsedCBMemory[D3D12Globals::CurrentFrameIndex] = 0;
 	PIXMarker Marker(m_commandList, "Render Deferred Lighting");
 
 	// Draw screen quad
@@ -842,7 +859,48 @@ void AppModeBase::RenderLighting()
 	m_commandList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
 
 
-	m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_GBufferAlbedo->Texture->SRVIndex));
+	SceneManager& sManager = SceneManager::Get();
+	const Scene& currentScene = sManager.GetCurrentScene();
+
+	const eastl::shared_ptr<Camera>& currentCamera = currentScene.GetCurrentCamera();
+
+	static glm::vec3 LightDir = glm::vec3(0.f, -1.f, 0.f);
+	ImGui::DragFloat3("Light Direction", &LightDir.x, 0.05f);
+
+	LightingConstantBuffer lightingConstantBufferData;
+
+	lightingConstantBufferData.LightDir = glm::vec4(LightDir, 0.f);
+	lightingConstantBufferData.ViewPos = glm::vec4(currentCamera->GetAbsoluteTransform().Translation, 0.f);
+
+	// Use temp buffer in main constant buffer
+	{
+		// TODO: Abstract this
+
+		MapResult cBufferMap = m_constantBuffer.Map();
+
+		const uint64_t cbSize = sizeof(lightingConstantBufferData);
+
+		// Used memory sizes should be aligned
+		const uint64_t offset = UsedCBMemory[D3D12Globals::CurrentFrameIndex];
+
+		// Align size
+		const uint64_t finalSize = Utils::AlignTo(cbSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+		UsedCBMemory[D3D12Globals::CurrentFrameIndex] += finalSize;
+
+		ASSERT(finalSize < m_constantBuffer.Size);
+
+		uint8_t* CPUAddress = cBufferMap.CPUAddress;
+		CPUAddress += offset;
+
+		uint64_t GPUAddress = cBufferMap.GPUAddress;
+		GPUAddress += offset;
+
+		memcpy(CPUAddress, &lightingConstantBufferData, sizeof(lightingConstantBufferData));
+
+		m_commandList->SetGraphicsRootConstantBufferView(0, GPUAddress);
+	}
+
+	m_commandList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_GBufferAlbedo->Texture->SRVIndex));
 
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 

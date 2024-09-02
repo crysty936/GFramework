@@ -16,8 +16,8 @@ public:
 
 	void Init(bool inShaderVisible, uint32_t inNumPersistent, D3D12_DESCRIPTOR_HEAP_TYPE inHeapType);
 	D3D12DescHeapAllocationDesc AllocatePersistent();
-	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUHandle(uint32_t inIndex);
-	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUHandle(uint32_t inIndex);
+	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUHandle(uint64_t inIndex);
+	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUHandle(uint64_t inIndex);
 
 public:
 	ID3D12DescriptorHeap* Heap = nullptr;
