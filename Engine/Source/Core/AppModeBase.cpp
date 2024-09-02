@@ -94,9 +94,12 @@ static_assert((sizeof(MeshConstantBuffer) % 256) == 0, "Constant Buffer size mus
 
 struct LightingConstantBuffer
 {
+	glm::mat4 ViewInv;
+	glm::mat4 PerspInv;
 	glm::vec4 ViewPos;
 	glm::vec4 LightDir;
-	float Padding[56];
+
+	float Padding[24];
 };
 static_assert((sizeof(LightingConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
@@ -186,7 +189,7 @@ void AppModeBase::CreateInitialResources()
 	m_GBufferNormal = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferNormal", ERHITexturePrecision::Float32, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
 	m_GBufferRoughness = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferRoughness", ERHITexturePrecision::UnsignedByte, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
 
-	m_MainDepthBuffer = D3D12RHI::Get()->CreateDepthBuffer(props.Width, props.Height, L"Main Depth Buffer");
+	m_MainDepthBuffer = D3D12RHI::Get()->CreateDepthBuffer(props.Width, props.Height, L"Main Depth Buffer", ETextureState::Shader_Resource);
 
 	CreateRootSignatures();
 
@@ -416,7 +419,7 @@ void AppModeBase::CreateRootSignatures()
 
 	// Final lighting root signature
 	{
-		D3D12_ROOT_PARAMETER1 rootParameters[2];
+		D3D12_ROOT_PARAMETER1 rootParameters[3];
 
 		// Constant Buffer
 		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -429,18 +432,33 @@ void AppModeBase::CreateRootSignatures()
 		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-		D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
-		rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		rangesPS[0].BaseShaderRegister = 0;
-		rangesPS[0].RegisterSpace = 0;
-		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
-		rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
+		D3D12_DESCRIPTOR_RANGE1 texturesRange[1];
+		texturesRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		texturesRange[0].BaseShaderRegister = 0;
+		texturesRange[0].RegisterSpace = 0;
+		texturesRange[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+		texturesRange[0].OffsetInDescriptorsFromTableStart = 0;
 
 		// GBuffer Albedo, GBuffer Normal and GBuffer Roughness
-		rangesPS[0].NumDescriptors = 3;
+		texturesRange[0].NumDescriptors = 3;
 
-		rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(rangesPS);
-		rootParameters[1].DescriptorTable.pDescriptorRanges = &rangesPS[0];
+		rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(texturesRange);
+		rootParameters[1].DescriptorTable.pDescriptorRanges = &texturesRange[0];
+
+		// Depth Buffer
+		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+		D3D12_DESCRIPTOR_RANGE1 depthBufferRange[1];
+		depthBufferRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		depthBufferRange[0].BaseShaderRegister = 3;
+		depthBufferRange[0].RegisterSpace = 0;
+		depthBufferRange[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+		depthBufferRange[0].OffsetInDescriptorsFromTableStart = 0;
+		depthBufferRange[0].NumDescriptors = 1;
+
+		rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(depthBufferRange);
+		rootParameters[2].DescriptorTable.pDescriptorRanges = &depthBufferRange[0];
 
 		//////////////////////////////////////////////////////////////////////////
 
@@ -843,7 +861,7 @@ void AppModeBase::RenderLighting()
 	PIXMarker Marker(m_commandList, "Render Deferred Lighting");
 
 	// Draw screen quad
-	ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heap };
+	ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heap};
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
 	// Backbuffers are the first 2 RTVs in the Global Heap
@@ -864,12 +882,15 @@ void AppModeBase::RenderLighting()
 
 	const eastl::shared_ptr<Camera>& currentCamera = currentScene.GetCurrentCamera();
 
-	static glm::vec3 LightDir = glm::vec3(0.f, -1.f, 0.f);
-	ImGui::DragFloat3("Light Direction", &LightDir.x, 0.05f);
+	static glm::vec3 LightDir = glm::vec3(1.f, -1.f, 0.f);
+	ImGui::DragFloat3("Light Direction", &LightDir.x, 0.05f, -1.f, 1.f);
 
 	LightingConstantBuffer lightingConstantBufferData;
 
-	lightingConstantBufferData.LightDir = glm::vec4(LightDir, 0.f);
+	lightingConstantBufferData.PerspInv = glm::transpose(glm::inverse(GetMainProjection()));
+	lightingConstantBufferData.ViewInv = glm::transpose(glm::inverse(currentScene.GetMainCameraLookAt()));
+
+	lightingConstantBufferData.LightDir = glm::vec4(glm::normalize(LightDir), 0.f);
 	lightingConstantBufferData.ViewPos = glm::vec4(currentCamera->GetAbsoluteTransform().Translation, 0.f);
 
 	// Use temp buffer in main constant buffer
@@ -902,6 +923,9 @@ void AppModeBase::RenderLighting()
 
 	m_commandList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_GBufferAlbedo->Texture->SRVIndex));
 
+
+	m_commandList->SetGraphicsRootDescriptorTable(2, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_MainDepthBuffer->Texture->SRVIndex));
+
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	m_commandList->IASetVertexBuffers(0, 1, &ScreenQuadVertexBuffer->VBView());
@@ -918,6 +942,8 @@ void AppModeBase::Draw()
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferRoughness->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		D3D12Utility::TransitionResource(m_commandList, m_MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
 		DrawGBuffer();
 	}
 
@@ -927,6 +953,7 @@ void AppModeBase::Draw()
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferRoughness->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		D3D12Utility::TransitionResource(m_commandList, m_MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		RenderLighting();
 	}

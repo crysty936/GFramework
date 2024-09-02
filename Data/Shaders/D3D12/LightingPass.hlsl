@@ -13,14 +13,18 @@ struct PSOutput
 // 256 byte aligned
 cbuffer LightingConstantBuffer : register(b0)
 {
+	float4x4 ViewInv;
+	float4x4 PerspInv;
+
     float4 ViewPos;
     float4 LightDir;
-    float Padding[56];
+    float Padding[24];
 };
 
 Texture2D GBufferAlbedo : register(t0);
 Texture2D GBufferNormal : register(t1);
 Texture2D GBufferRoughness : register(t2);
+Texture2D GBufferDepth : register(t3);
 
 SamplerState g_sampler : register(s0);
 
@@ -108,15 +112,104 @@ PSInput VSMain(float4 position : POSITION, float2 uv : TEXCOORD)
 
 PSOutput PSMain(PSInput input)
 {
-    float2 uv = input.uv;
+    const float2 uv = input.uv;
 
     PSOutput output;
-    //float4 albedo = GBufferAlbedo.Sample(g_sampler, uv);
-    //output.Color = albedo + (0.1f * LightDir);
+    float4 albedo = GBufferAlbedo.Sample(g_sampler, uv);
 
-
-
+	float depth = GBufferDepth.Sample(g_sampler, uv).r;
 	
+	float2 clipCoord = uv * 2.f - 1.f;
+	float4 clipLoc = float4(clipCoord, depth, 1.f);
+	
+	float4 viewSpacePos = mul(clipLoc, PerspInv);
+	viewSpacePos /= viewSpacePos.w;
+	
+	const float4 worldSpacePos = mul(viewSpacePos, ViewInv);
+
+	float3 wsNormal = GBufferNormal.Sample(g_sampler, uv).xyz;
+	wsNormal = wsNormal * 2.f - 1.f;
+
+	const float3 viewToFrag = normalize(worldSpacePos.xyz - ViewPos.xyz);
+	const float3 fragToViewW = -viewToFrag;
+
+	const float metalness = GBufferRoughness.Sample(g_sampler, uv).r;
+	const float roughness = GBufferRoughness.Sample(g_sampler, uv).r;
+	
+	float3 DirLightRadiance = 0;
+
+
+	{
+		float3 albedo = GBufferAlbedo.Sample(g_sampler, uv).xyz;
+		float3 N = wsNormal;
+		float3 V = fragToViewW;
+
+		float3 L = -LightDir.xyz;
+
+		// Halfway vector
+		float3 H = normalize(V + L);
+
+		// Cook-Torrance BRDF
+
+		// For dielectric, use general 0.04 for Surface Reflection F0(How much the surface reflects if looking at it perpendicularly
+		// while for metallics, albedo will give the value
+		float3 F0 = 0.04;
+		F0 = lerp(F0, albedo, metalness);
+
+		// Specular
+
+		// Fresnel
+		float3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+		// Normal Distribution Function( Approcimates the amount of microfacets aligned to the halway vector)
+		float NDF = DistributionGGX(N, H, roughness);
+
+		// Approximates self-shadowing by the microfacets(both by view occlusion and light capture)
+		float G = GeometrySmith(N, V, L, roughness);
+
+		//(D * F * G)
+		float3 numerator = NDF * F * G;
+		float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+		float3 specular = numerator / denominator;
+
+		// Rest of radiance is refracted light(diffuse)
+		float3 kS = F;
+		float3 Kd = float3(1.f, 1.f, 1.f) - kS;
+		Kd *= 1.0 - metalness;
+
+		float3 lightIntenstiy = float3(2.0, 2.0, 2.0);
+
+		float NdotL = max(dot(N, L), 0.0);
+		DirLightRadiance = (Kd * albedo / PI + specular) * lightIntenstiy * NdotL;
+
+		float3 ambient = 0.03 * albedo;
+		DirLightRadiance += ambient;
+
+	}
+
+
+	float3 color = DirLightRadiance;
+
+	// reinhard tone mapping
+	color = color / (color + float3(1.f, 1.f, 1.f));
+
+	const float gamma = 2.2;
+	const float inverseGamma = 1.0 / gamma;
+	// gamma correction 
+	color = pow(color, float3(inverseGamma, inverseGamma, inverseGamma));
+
+	float3 finalColor = color;	
+
+	//const float cameraNear = 0.1f;
+	//const float cameraFar = 10000.f;
+	// Transform depth into view space
+	// Basically inverse of projection, only applied to z
+	//float3 linearizedDepth = (cameraNear * cameraFar) / (cameraFar +  depth * (cameraNear - cameraFar));
+	//linearizedDepth = linearizedDepth / 50;
+	//output.Color = float4(linearizedDepth, 1.0);
+
+	output.Color = float4(finalColor * 1.5, 1);
+	//output.Color = albedo;
 
     return output;
 }

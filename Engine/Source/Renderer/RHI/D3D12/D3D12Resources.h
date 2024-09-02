@@ -56,8 +56,7 @@ class D3D12DepthBuffer
 public:
 	eastl::unique_ptr<D3D12Texture2D> Texture;
 	D3D12_CPU_DESCRIPTOR_HANDLE DSV = {};
-
-	//D3D12_CPU_DESCRIPTOR_HANDLE ReadOnlyDSV = {};
+	//uint64_t ReadOnlyDSVIdx = -1;
 
 	DXGI_FORMAT DSVFormat = DXGI_FORMAT_UNKNOWN;
 };

@@ -285,7 +285,7 @@ eastl::vector<eastl::shared_ptr<D3D12Texture2D>> AssimpModel3D::LoadMaterialText
 		{
 			const eastl::string path = ModelDir + eastl::string("/") + eastl::string(Str.C_Str());
 
-			tex = D3D12RHI::Get()->CreateAndLoadTexture2D(path, inAssimpTexType != aiTextureType_NORMALS, inCommandList);
+			tex = D3D12RHI::Get()->CreateAndLoadTexture2D(path, inAssimpTexType == aiTextureType_DIFFUSE, inCommandList);
 			tex->SourcePath = eastl::string(Str.C_Str());
 			LoadedTextures.push_back(tex);
 		}

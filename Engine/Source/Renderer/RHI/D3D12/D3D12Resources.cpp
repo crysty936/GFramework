@@ -313,7 +313,7 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	// Describe and create the Texture on GPU(Default Heap)
 	D3D12_RESOURCE_DESC textureDesc = {};
 	textureDesc.MipLevels = (uint16_t)res.GetImageCount();
-	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	textureDesc.Format = inSRGB ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
 	textureDesc.Width = (uint32_t)dxMetadata.width;
 	textureDesc.Height = (uint32_t)dxMetadata.height;
 	textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
@@ -418,22 +418,7 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 	textureDesc.Layout = D3D12_TEXTURE_LAYOUT::D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	textureDesc.Alignment = 0;
 
-	D3D12_RESOURCE_STATES initState;
-
-	switch (inInitialState)
-	{
-	case ETextureState::Present:
-		initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_PRESENT;
-		break;
-	case ETextureState::Shader_Resource:
-		initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-		break;
-	case ETextureState::Render_Target:
-		initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
-		break;
-	default:
-		break;
-	}
+	const D3D12_RESOURCE_STATES initState = TexStateToD3D12ResState(inInitialState);
 
 	D3D12_CLEAR_VALUE clearValue;
 	clearValue.Format = texFormat;
@@ -479,7 +464,7 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 	return newRT;
 }
 
-eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName)
+eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName, const ETextureState inInitialState)
 {
 	eastl::shared_ptr<D3D12DepthBuffer> newDB = eastl::make_shared<D3D12DepthBuffer>();
 	eastl::unique_ptr<D3D12Texture2D> ownedTexture = eastl::make_unique<D3D12Texture2D>();
@@ -507,7 +492,8 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 	clearValue.Format = DXGI_FORMAT_D32_FLOAT;
 
 
-	DXAssert(D3D12Globals::Device->CreateCommittedResource(&D3D12Utility::GetDefaultHeapProps(), D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearValue, IID_PPV_ARGS(&ownedTexture->Resource)));
+	const D3D12_RESOURCE_STATES initState = TexStateToD3D12ResState(inInitialState);
+	DXAssert(D3D12Globals::Device->CreateCommittedResource(&D3D12Utility::GetDefaultHeapProps(), D3D12_HEAP_FLAG_NONE, &textureDesc, initState, &clearValue, IID_PPV_ARGS(&ownedTexture->Resource)));
 
 	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
 	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
@@ -517,14 +503,33 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 	dsvDesc.Texture2D.MipSlice = 0;
 	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
 
-	D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalDSVHeap.AllocatePersistent();
-	newDB->DSV = descAllocation.CPUHandle;
+	{
+		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalDSVHeap.AllocatePersistent();
+		newDB->DSV = descAllocation.CPUHandle;
 
-	D3D12Globals::Device->CreateDepthStencilView(ownedTexture->Resource, &dsvDesc, descAllocation.CPUHandle);
+		D3D12Globals::Device->CreateDepthStencilView(ownedTexture->Resource, &dsvDesc, descAllocation.CPUHandle);
+	}
 
-	// For ReadOnly DSV
-	//D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalDSVHeap.AllocatePersistent();
-	//DXAssert(D3D12Globals::Device->CreateDepthStencilView(ownedTexture->Resource, &dsvDesc, newDB->ReadOnlyDSV));
+	//// For ReadOnly DSV
+	//{
+	//	dsvDesc.Flags = D3D12_DSV_FLAG_READ_ONLY_DEPTH;
+	//	D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalDSVHeap.AllocatePersistent();
+	//	newDB->ReadOnlyDSVIdx = descAllocation.Index;
+	//	D3D12Globals::Device->CreateDepthStencilView(ownedTexture->Resource, &dsvDesc, descAllocation.CPUHandle);
+	//}
+
+	// Create SRV
+	{
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Format = srvFormat;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MipLevels = 1;
+
+		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalSRVHeap.AllocatePersistent();
+		ownedTexture->SRVIndex = descAllocation.Index;
+		D3D12Globals::Device->CreateShaderResourceView(ownedTexture->Resource, &srvDesc, descAllocation.CPUHandle);
+	}
 
 	ownedTexture->Resource->SetName(inName.c_str());
 

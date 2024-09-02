@@ -33,7 +33,8 @@ enum class ETextureState
 {
 	Present,
 	Shader_Resource,
-	Render_Target
+	Render_Target,
+	Depth_Write
 };
 
 class RHITexture2D

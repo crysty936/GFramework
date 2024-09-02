@@ -46,6 +46,31 @@ enum class EDepthState : uint8_t
 	Count
 };
 
+inline D3D12_RESOURCE_STATES TexStateToD3D12ResState(const ETextureState inState)
+{
+	D3D12_RESOURCE_STATES initState;
+
+	switch (inState)
+	{
+	case ETextureState::Present:
+		initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_PRESENT;
+		break;
+	case ETextureState::Shader_Resource:
+		initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+		break;
+	case ETextureState::Render_Target:
+		initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
+		break;
+	case ETextureState::Depth_Write:
+		initState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_DEPTH_WRITE;
+		break;
+	default:
+		break;
+	}
+
+	return initState;
+}
+
 namespace D3D12Globals
 {
 	extern ID3D12Device* Device;
