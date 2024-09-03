@@ -224,25 +224,25 @@ void AppModeBase::CreateInitialResources()
 
 	// Cubes creation
 
-	//eastl::shared_ptr<Model3D> TheCube = eastl::make_shared<CubeShape>("TheCube");
-	//TheCube->Init(m_commandList.Get());
+	eastl::shared_ptr<Model3D> TheCube = eastl::make_shared<CubeShape>("TheCube");
+	TheCube->Init(m_commandList);
 
 	//eastl::shared_ptr<CubeShape> theCube2 = eastl::make_shared<CubeShape>("TheCube2");
 	//theCube2->Init(m_commandList.Get());
 	//TheCube->AddChild(theCube2);
 	//theCube2->Move(glm::vec3(-5.f, 0.f, 0.f));
 
-	//currentScene.AddObject(TheCube);
+	currentScene.AddObject(TheCube);
 
 	//eastl::shared_ptr<TBNQuadShape> model = eastl::make_shared<TBNQuadShape>("TBN Quad");
 	//model->Init(m_commandList);
 	//currentScene.AddObject(model);
 
 
-	eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza/Sponza.gltf", "Sponza");
-	model->Rotate(90.f, glm::vec3(0.f, 1.f, 0.f));
-	model->Move(glm::vec3(0.f, -1.f, -5.f));
-	model->Init(m_commandList);
+	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza/Sponza.gltf", "Sponza");
+	//model->Rotate(90.f, glm::vec3(0.f, 1.f, 0.f));
+	//model->Move(glm::vec3(0.f, -1.f, -5.f));
+	//model->Init(m_commandList);
 
 	//eastl::shared_ptr<AssimpModel3D> model = eastl::make_shared<AssimpModel3D>("../Data/Models/Floor/scene.gltf", "Floor Model");
 	//model->SetScale(glm::vec3(0.05f, 0.05f, 0.05f));
@@ -255,7 +255,7 @@ void AppModeBase::CreateInitialResources()
 	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Shiba/scene.gltf", "Shiba");
 	//model->Init(m_commandList);
 	
-	currentScene.AddObject(model);
+	//currentScene.AddObject(model);
 
 	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
 
@@ -357,65 +357,67 @@ void AppModeBase::CreateRootSignatures()
 
 
 	// GBuffer Basic Shapes Pass signature
-	//{
-	//	D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
-	//	// Texture
-	//	rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	//	rangesPS[0].NumDescriptors = 1;
-	//	rangesPS[0].BaseShaderRegister = 0;
-	//	rangesPS[0].RegisterSpace = 0;
-	//	rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
-	//	rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
+	{
+		D3D12_ROOT_PARAMETER1 rootParameters[2];
 
-	//	D3D12_ROOT_PARAMETER1 rootParameters[2];
+		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+		rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[0].Descriptor.RegisterSpace = 0;
+		rootParameters[0].Descriptor.ShaderRegister = 0;
 
-	//	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	//	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-	//	rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
-	//	rootParameters[0].Descriptor.RegisterSpace = 0;
-	//	rootParameters[0].Descriptor.ShaderRegister = 0;
+		// Texture
+		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	//	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	//	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	//	rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
-	//	rootParameters[1].DescriptorTable.pDescriptorRanges = &rangesPS[0];
+		D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
+		rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		rangesPS[0].NumDescriptors = 1;
+		rangesPS[0].BaseShaderRegister = 0;
+		rangesPS[0].RegisterSpace = 0;
+		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+		rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
+
+		rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(rangesPS);
+		rootParameters[1].DescriptorTable.pDescriptorRanges = &rangesPS[0];
 
 
-	//	//////////////////////////////////////////////////////////////////////////
+		//////////////////////////////////////////////////////////////////////////
 
-	//	D3D12_STATIC_SAMPLER_DESC sampler = {};
-	//	sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-	//sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	//sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	//sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	//	sampler.MipLODBias = 0;
-	//	sampler.MaxAnisotropy = 0;
-	//	sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-	//	sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
-	//	sampler.MinLOD = 0.0f;
-	//	sampler.MaxLOD = D3D12_FLOAT32_MAX;
-	//	sampler.ShaderRegister = 0;
-	//	sampler.RegisterSpace = 0;
-	//	sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		D3D12_STATIC_SAMPLER_DESC sampler = {};
+		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.MipLODBias = 0;
+		sampler.MaxAnisotropy = 0;
+		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
+		sampler.MinLOD = 0.0f;
+		sampler.MaxLOD = D3D12_FLOAT32_MAX;
+		sampler.ShaderRegister = 0;
+		sampler.RegisterSpace = 0;
+		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	//	// Allow input layout and deny uneccessary access to certain pipeline stages.
-	//	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-	//		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-	//		| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
-	//		| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
-	//		| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-	//	//| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+		// Allow input layout and deny uneccessary access to certain pipeline stages.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+			| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
+			| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
+			| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+		//| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 
-	//	D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-	//	rootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-	//	rootSignatureDesc.Desc_1_1.NumParameters = _countof(rootParameters);
-	//	rootSignatureDesc.Desc_1_1.pParameters = &rootParameters[0];
-	//	rootSignatureDesc.Desc_1_1.NumStaticSamplers = 1;
-	//	rootSignatureDesc.Desc_1_1.pStaticSamplers = &sampler;
-	//	rootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
+		D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+		rootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+		rootSignatureDesc.Desc_1_1.NumParameters = _countof(rootParameters);
+		rootSignatureDesc.Desc_1_1.pParameters = &rootParameters[0];
+		rootSignatureDesc.Desc_1_1.NumStaticSamplers = 1;
+		rootSignatureDesc.Desc_1_1.pStaticSamplers = &sampler;
+		rootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
 
-	//	m_GBufferBasicObjectsRootSignature = D3D12RHI::Get()->CreateRootSignature(rootSignatureDesc);
-	//}
+		m_GBufferBasicObjectsRootSignature = D3D12RHI::Get()->CreateRootSignature(rootSignatureDesc);
+		m_GBufferBasicObjectsRootSignature->SetName(L"Basic Objects Root Signature");
+	}
 
 	// Final lighting root signature
 	{
@@ -550,48 +552,51 @@ void AppModeBase::CreatePSOs()
 	}
 
 	// Basic Shapes PSO
-	//{
-	//	eastl::string fullPath = "BasicShapesMeshPass.hlsl";
-	//	fullPath.insert(0, "../Data/Shaders/D3D12/");
+	{
+		eastl::string fullPath = "BasicShapesMeshPass.hlsl";
+		fullPath.insert(0, "../Data/Shaders/D3D12/");
 
-	//	GraphicsCompiledShaderPair meshShaderPair = D3D12RHI::Get()->CompileGraphicsShaderFromFile(fullPath);
+		GraphicsCompiledShaderPair meshShaderPair = D3D12RHI::Get()->CompileGraphicsShaderFromFile(fullPath);
 
-	//	// Define the vertex input layout.
-	//	D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
-	//	{
-	//		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	//		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	//		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-	//	};
+		// Define the vertex input layout.
+		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+		{
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+		};
 
-	//	// shader bytecodes
-	//	D3D12_SHADER_BYTECODE vsByteCode;
-	//	vsByteCode.pShaderBytecode = meshShaderPair.VSByteCode->GetBufferPointer();
-	//	vsByteCode.BytecodeLength = meshShaderPair.VSByteCode->GetBufferSize();
+		// shader bytecodes
+		D3D12_SHADER_BYTECODE vsByteCode;
+		vsByteCode.pShaderBytecode = meshShaderPair.VSByteCode->GetBufferPointer();
+		vsByteCode.BytecodeLength = meshShaderPair.VSByteCode->GetBufferSize();
 
-	//	D3D12_SHADER_BYTECODE psByteCode;
-	//	psByteCode.pShaderBytecode = meshShaderPair.PSByteCode->GetBufferPointer();
-	//	psByteCode.BytecodeLength = meshShaderPair.PSByteCode->GetBufferSize();
+		D3D12_SHADER_BYTECODE psByteCode;
+		psByteCode.pShaderBytecode = meshShaderPair.PSByteCode->GetBufferPointer();
+		psByteCode.BytecodeLength = meshShaderPair.PSByteCode->GetBufferSize();
 
-	//	// Describe and create the graphics pipeline state object (PSO).
-	//	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-	//	psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-	//	psoDesc.pRootSignature = m_GBufferBasicObjectsRootSignature.Get();
-	//	psoDesc.VS = vsByteCode;
-	//	psoDesc.PS = psByteCode;
-	//	psoDesc.RasterizerState = D3D12Utility::GetRasterizerState(ERasterizerState::BackFaceCull);
-	//	psoDesc.BlendState = D3D12Utility::GetBlendState(EBlendState::Disabled);
-	//psoDesc.DepthStencilState = D3D12Utility::GetDepthState(EDepthState::WriteEnabled);
-	//psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-	//	psoDesc.SampleMask = UINT_MAX;
-	//	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	//	psoDesc.NumRenderTargets = 2;
-	//	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	//	psoDesc.RTVFormats[1] = DXGI_FORMAT_R32G32B32A32_FLOAT;
-	//	psoDesc.SampleDesc.Count = 1;
+		// Describe and create the graphics pipeline state object (PSO).
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+		psoDesc.pRootSignature = m_GBufferBasicObjectsRootSignature;
+		psoDesc.VS = vsByteCode;
+		psoDesc.PS = psByteCode;
+		psoDesc.RasterizerState = D3D12Utility::GetRasterizerState(ERasterizerState::BackFaceCull);
+		psoDesc.BlendState = D3D12Utility::GetBlendState(EBlendState::Disabled);
+		psoDesc.DepthStencilState = D3D12Utility::GetDepthState(EDepthState::WriteEnabled);
+		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 3;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.RTVFormats[1] = DXGI_FORMAT_R32G32B32A32_FLOAT;
+		psoDesc.RTVFormats[2] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.SampleDesc.Count = 1;
 
-	//	DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_BasicObjectsPipelineState)));
-	//}
+		DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_BasicObjectsPipelineState)));
+		m_BasicObjectsPipelineState->SetName(L"Basic Objects Pipeline State");
+
+	}
 
 	// Lighting Quad PSO
 	{
@@ -683,7 +688,7 @@ void AppModeBase::ResetFrameResources()
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
-	DXAssert(m_commandList->Reset(m_commandAllocators[D3D12Utility::CurrentFrameIndex], m_MainMeshPassPipelineState));
+	DXAssert(m_commandList->Reset(m_commandAllocators[D3D12Utility::CurrentFrameIndex], m_BasicObjectsPipelineState));
 }
 
 void AppModeBase::BeginFrame()
@@ -794,8 +799,8 @@ void AppModeBase::DrawGBuffer()
 
 	// Populate Command List
 
-	m_commandList->SetGraphicsRootSignature(m_GBufferMainMeshRootSignature);
-	m_commandList->SetPipelineState(m_MainMeshPassPipelineState);
+	m_commandList->SetGraphicsRootSignature(m_GBufferBasicObjectsRootSignature);
+	m_commandList->SetPipelineState(m_BasicObjectsPipelineState);
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
@@ -857,7 +862,6 @@ void AppModeBase::DrawGBuffer()
 
 void AppModeBase::RenderLighting()
 {
-	UsedCBMemory[D3D12Utility::CurrentFrameIndex] = 0;
 	PIXMarker Marker(m_commandList, "Render Deferred Lighting");
 
 	// Draw screen quad
