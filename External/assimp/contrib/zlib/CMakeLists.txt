@@ -202,7 +202,7 @@ add_library(zlibstatic STATIC ${ZLIB_SRCS} ${ZLIB_ASMS} ${ZLIB_PUBLIC_HDRS} ${ZL
 # To be removed together with Assimp
 set_target_properties(	zlibstatic
 						PROPERTIES
-						FOLDER "Plugins")	
+						FOLDER "External")	
 
 INSTALL( TARGETS zlibstatic
      EXPORT "${TARGETS_EXPORT_NAME}"

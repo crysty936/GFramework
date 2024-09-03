@@ -16,25 +16,25 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 #set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # EASTL
-add_subdirectory(Plugins/EASTL)
+add_subdirectory(External/EASTL)
 list(APPEND extra_libs EASTL)
 
 # ASSIMP
-add_subdirectory(Plugins/assimp)
+add_subdirectory(External/assimp)
 list(APPEND extra_libs assimp)
 
 # Add stb_image
-list(APPEND EXTRA_INCLUDES "${CMAKE_CURRENT_LIST_DIR}/Plugins/stb_image/")
+list(APPEND EXTRA_INCLUDES "${CMAKE_CURRENT_LIST_DIR}/External/stb_image/")
 
 # Add GLM
-list(APPEND EXTRA_INCLUDES "${CMAKE_CURRENT_LIST_DIR}/Plugins/glm/")
+list(APPEND EXTRA_INCLUDES "${CMAKE_CURRENT_LIST_DIR}/External/glm/")
 
 # Add ImGui
-add_subdirectory(Plugins/imgui)
+add_subdirectory(External/imgui)
 list(APPEND extra_libs imgui)
 
 # Add DirectXTex
-add_subdirectory(Plugins/DirectXTex)
+add_subdirectory(External/DirectXTex)
 list(APPEND extra_libs DirectXTex)
 
 # Rendering API's libs
@@ -56,13 +56,13 @@ target_link_libraries(GFramework PRIVATE "d3d12.lib")
 target_link_libraries(GFramework PRIVATE "dxgi.lib")
 
 # Add WinPixEventRuntime
-list(APPEND EXTRA_INCLUDES "${CMAKE_CURRENT_LIST_DIR}/Plugins/WinPixEventRuntime/Include")
-target_link_libraries(GFramework PRIVATE "${CMAKE_CURRENT_LIST_DIR}/Plugins/WinPixEventRuntime/bin/WinPixEventRuntime.lib")
+list(APPEND EXTRA_INCLUDES "${CMAKE_CURRENT_LIST_DIR}/External/WinPixEventRuntime/Include")
+target_link_libraries(GFramework PRIVATE "${CMAKE_CURRENT_LIST_DIR}/External/WinPixEventRuntime/bin/WinPixEventRuntime.lib")
 
 # Copy command for WinPixEventRuntime.dll
 add_custom_command(TARGET GFramework POST_BUILD        # Adds a post-build event to MyTest
     COMMAND ${CMAKE_COMMAND} -E copy_if_different  # which executes "cmake - E copy_if_different..."
-        "${CMAKE_CURRENT_LIST_DIR}/Plugins/WinPixEventRuntime/bin/WinPixEventRuntime.dll"      # <--this is in-file
+        "${CMAKE_CURRENT_LIST_DIR}/External/WinPixEventRuntime/bin/WinPixEventRuntime.dll"      # <--this is in-file
         $<TARGET_FILE_DIR:GFramework>)                 # <--this is out-file path
 
 
@@ -80,7 +80,7 @@ set(CMAKE_SUPPRESS_REGENERATION true)
 
 set_target_properties(	assimp imgui EASTL EAStdC EAAssert EAThread DirectXTex
 						PROPERTIES
-						FOLDER "Plugins")		  
+						FOLDER "External")		  
 						
 						
 # Set 3DTest as Startup Project
