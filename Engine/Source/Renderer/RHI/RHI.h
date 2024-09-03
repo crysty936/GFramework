@@ -9,6 +9,27 @@
 #include "Renderer/DrawType.h"
 #include "Resources/RHITexture.h"
 
+enum class ERasterizerState : uint8_t
+{
+	Disabled,
+	BackFaceCull,
+	FrontFaceCull,
+	Count
+};
+
+enum class EBlendState : uint8_t
+{
+	Disabled,
+	Count
+};
+
+enum class EDepthState : uint8_t
+{
+	Disabled,
+	WriteEnabled,
+	Count
+};
+
 enum EShaderType : uint8_t
 {
 	Sh_Vertex = 1 << 0,

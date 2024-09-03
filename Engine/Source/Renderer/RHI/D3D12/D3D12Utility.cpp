@@ -1,12 +1,6 @@
 #include "D3D12Utility.h"
 
-ID3D12Device* D3D12Globals::Device;
-IDXGISwapChain3* D3D12Globals::SwapChain;
-ID3D12CommandQueue* D3D12Globals::GraphicsCommandQueue;
-uint64_t D3D12Globals::CurrentFrameIndex = 0;
-D3D12DescriptorHeap D3D12Globals::GlobalRTVHeap;
-D3D12DescriptorHeap D3D12Globals::GlobalSRVHeap;
-D3D12DescriptorHeap D3D12Globals::GlobalDSVHeap;
+uint64_t D3D12Utility::CurrentFrameIndex = 0;
 
 D3D12_RASTERIZER_DESC RasterizerStates[ERasterizerState::Count];
 D3D12_BLEND_DESC BlendStates[EBlendState::Count];

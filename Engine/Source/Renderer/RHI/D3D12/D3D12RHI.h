@@ -2,6 +2,21 @@
 #include "Renderer/RHI/RHI.h"
 #include "EASTL/string.h"
 #include <d3d12.h>
+#include <dxgi1_6.h>
+#include "D3D12GraphicsTypes_Internal.h"
+
+namespace D3D12Globals
+{
+	extern ID3D12Device* Device;
+	extern IDXGISwapChain3* SwapChain;
+	extern ID3D12CommandQueue* GraphicsCommandQueue;
+
+	// Descriptor Heaps
+	// TODO: Implement non-shader visible descriptor heaps that will be copied over into main heap when drawing
+	extern D3D12DescriptorHeap GlobalRTVHeap;
+	extern D3D12DescriptorHeap GlobalSRVHeap;
+	extern D3D12DescriptorHeap GlobalDSVHeap;
+}
 
 struct GraphicsCompiledShaderPair
 {

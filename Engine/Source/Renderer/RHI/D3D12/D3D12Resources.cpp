@@ -341,7 +341,10 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 
 	D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalSRVHeap.AllocatePersistent();
 	newTexture->SRVIndex = descAllocation.Index;
-	D3D12Globals::Device->CreateShaderResourceView(texResource, &srvDesc, descAllocation.CPUHandle);
+	for (uint32_t i = 0; i < D3D12Utility::NumFramesInFlight; ++i)
+	{
+		D3D12Globals::Device->CreateShaderResourceView(texResource, &srvDesc, descAllocation.CPUHandle[i]);
+	}
 
 	// Get required size by device
 	UINT64 uploadBufferSize = 0;
@@ -444,15 +447,18 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 	{
 		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalSRVHeap.AllocatePersistent();
 		ownedTexture->SRVIndex = descAllocation.Index;
-		D3D12Globals::Device->CreateShaderResourceView(ownedTexture->Resource, nullptr, descAllocation.CPUHandle);
+		for (uint32_t i = 0; i < D3D12Globals::GlobalSRVHeap.NumHeaps; ++i)
+		{
+			D3D12Globals::Device->CreateShaderResourceView(ownedTexture->Resource, nullptr, descAllocation.CPUHandle[i]);
+		}
 	}
 
 	// Create RTV
 	{
 		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalRTVHeap.AllocatePersistent();
-		newRT->RTV = descAllocation.CPUHandle;
+		newRT->RTV = descAllocation.CPUHandle[0];
 
-		D3D12Globals::Device->CreateRenderTargetView(ownedTexture->Resource, nullptr, descAllocation.CPUHandle);
+		D3D12Globals::Device->CreateRenderTargetView(ownedTexture->Resource, nullptr, newRT->RTV);
 
 	}
 
@@ -505,9 +511,9 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 
 	{
 		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalDSVHeap.AllocatePersistent();
-		newDB->DSV = descAllocation.CPUHandle;
+		newDB->DSV = descAllocation.CPUHandle[0];
 
-		D3D12Globals::Device->CreateDepthStencilView(ownedTexture->Resource, &dsvDesc, descAllocation.CPUHandle);
+		D3D12Globals::Device->CreateDepthStencilView(ownedTexture->Resource, &dsvDesc, newDB->DSV);
 	}
 
 	//// For ReadOnly DSV
@@ -528,7 +534,10 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 
 		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalSRVHeap.AllocatePersistent();
 		ownedTexture->SRVIndex = descAllocation.Index;
-		D3D12Globals::Device->CreateShaderResourceView(ownedTexture->Resource, &srvDesc, descAllocation.CPUHandle);
+		for (uint32_t i = 0; i < D3D12Globals::GlobalSRVHeap.NumHeaps; ++i)
+		{
+			D3D12Globals::Device->CreateShaderResourceView(ownedTexture->Resource, &srvDesc, descAllocation.CPUHandle[i]);
+		}
 	}
 
 	ownedTexture->Resource->SetName(inName.c_str());

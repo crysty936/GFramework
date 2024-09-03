@@ -1,11 +1,15 @@
 #include "D3D12GraphicsTypes_Internal.h"
 #include "D3D12Utility.h"
 #include <combaseapi.h>
+#include "D3D12RHI.h"
 
 D3D12DescriptorHeap::~D3D12DescriptorHeap()
 {
-	Heap->Release();
-	Heap = nullptr;
+	for (uint32_t i = 0; i < NumHeaps; ++i)
+	{
+		Heaps[i]->Release();
+		Heaps[i] = nullptr;
+	}
 }
 
 void D3D12DescriptorHeap::Init(bool inShaderVisible, uint32_t inNumPersistent, D3D12_DESCRIPTOR_HEAP_TYPE inHeapType)
@@ -14,13 +18,22 @@ void D3D12DescriptorHeap::Init(bool inShaderVisible, uint32_t inNumPersistent, D
 	rtvHeapDesc.NumDescriptors = inNumPersistent;
 	rtvHeapDesc.Type = inHeapType;
 	rtvHeapDesc.Flags = inShaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	DXAssert(D3D12Globals::Device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&Heap)));
+	NumHeaps = inShaderVisible ? D3D12Utility::NumFramesInFlight : 1;
+
+	for (uint32_t i = 0; i < NumHeaps; ++i)
+	{
+		DXAssert(D3D12Globals::Device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&Heaps[i])));
+	}
 
 	NumPersistentDescriptors = inNumPersistent;
 	DescriptorSize = D3D12Globals::Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	
-	CPUStart = Heap->GetCPUDescriptorHandleForHeapStart();
-	GPUStart = Heap->GetGPUDescriptorHandleForHeapStart();
+	for (uint32_t i = 0; i < NumHeaps; ++i)
+	{
+		CPUStart[i] = Heaps[i]->GetCPUDescriptorHandleForHeapStart();
+		GPUStart[i] = Heaps[i]->GetGPUDescriptorHandleForHeapStart();
+	}
+
 }
 
 D3D12DescHeapAllocationDesc D3D12DescriptorHeap::AllocatePersistent()
@@ -29,24 +42,30 @@ D3D12DescHeapAllocationDesc D3D12DescriptorHeap::AllocatePersistent()
 
 	D3D12DescHeapAllocationDesc newAllocation;
 	newAllocation.Index = Allocated;
-	newAllocation.CPUHandle = CPUStart;
-	newAllocation.CPUHandle.ptr += newAllocation.Index * DescriptorSize;
+
+	for (uint32_t i = 0; i < NumHeaps; ++i)
+	{
+		newAllocation.CPUHandle[i] = CPUStart[i];
+		newAllocation.CPUHandle[i].ptr += newAllocation.Index * DescriptorSize;
+	}
 
 	++Allocated;
 
 	return newAllocation;
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE D3D12DescriptorHeap::GetGPUHandle(uint64_t inIndex)
+D3D12_GPU_DESCRIPTOR_HANDLE D3D12DescriptorHeap::GetGPUHandle(uint64_t inIndex, const uint64_t inHeapIdx)
 {
-	uint64_t gpuPtr = GPUStart.ptr + (DescriptorSize * inIndex);
+	ASSERT(inHeapIdx != uint64_t(-1));
+
+	uint64_t gpuPtr = GPUStart[inHeapIdx].ptr + (DescriptorSize * inIndex);
 
 	return D3D12_GPU_DESCRIPTOR_HANDLE{ gpuPtr };
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE D3D12DescriptorHeap::GetCPUHandle(uint64_t inIndex)
+D3D12_CPU_DESCRIPTOR_HANDLE D3D12DescriptorHeap::GetCPUHandle(uint64_t inIndex, const uint64_t inHeapIdx)
 {
-	uint64_t cpuPtr = CPUStart.ptr + (DescriptorSize * inIndex);
+	uint64_t cpuPtr = CPUStart[inHeapIdx].ptr + (DescriptorSize * inIndex);
 
 	return D3D12_CPU_DESCRIPTOR_HANDLE{ cpuPtr };
 }
@@ -79,7 +98,7 @@ void D3D12ConstantBuffer::Init(const uint64_t inSize)
 	D3D12_RESOURCE_DESC constantBufferDesc;
 	constantBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	constantBufferDesc.Alignment = 0;
-	constantBufferDesc.Width = inSize * D3D12Globals::NumFramesInFlight;
+	constantBufferDesc.Width = inSize * D3D12Utility::NumFramesInFlight;
 	constantBufferDesc.Height = 1;
 	constantBufferDesc.DepthOrArraySize = 1;
 	constantBufferDesc.MipLevels = 1;
@@ -120,7 +139,7 @@ MapResult D3D12ConstantBuffer::Map()
 {
 	MapResult res = {};
 
-	const uint64_t offset = (D3D12Globals::CurrentFrameIndex % D3D12Globals::NumFramesInFlight) * Size;
+	const uint64_t offset = (D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight) * Size;
 	res.CPUAddress = CPUAddress + offset;
 	res.GPUAddress = GPUAddress + offset;
 

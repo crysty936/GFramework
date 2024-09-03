@@ -65,13 +65,13 @@ AppModeBase::~AppModeBase()
 eastl::shared_ptr<D3D12IndexBuffer> ScreenQuadIndexBuffer = nullptr;
 eastl::shared_ptr<D3D12VertexBuffer> ScreenQuadVertexBuffer = nullptr;
 
-ID3D12Resource* m_BackBuffers[D3D12Globals::NumFramesInFlight];
+ID3D12Resource* m_BackBuffers[D3D12Utility::NumFramesInFlight];
 eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferAlbedo;
 eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferNormal;
 eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferRoughness;
 eastl::shared_ptr<D3D12DepthBuffer> m_MainDepthBuffer;
 
-ID3D12CommandAllocator* m_commandAllocators[D3D12Globals::NumFramesInFlight];
+ID3D12CommandAllocator* m_commandAllocators[D3D12Utility::NumFramesInFlight];
 
 ID3D12RootSignature* m_GBufferMainMeshRootSignature;
 ID3D12RootSignature* m_GBufferBasicObjectsRootSignature;
@@ -111,7 +111,7 @@ static_assert((sizeof(LightingConstantBuffer) % 256) == 0, "Constant Buffer size
 // Constant Buffer is double buffered to allow modifying it each frame
 // Descriptors should also be double buffered
 D3D12ConstantBuffer m_constantBuffer;
-uint64_t UsedCBMemory[D3D12Globals::NumFramesInFlight] = { 0 };
+uint64_t UsedCBMemory[D3D12Utility::NumFramesInFlight] = { 0 };
 
 
 void AppModeBase::Init()
@@ -160,16 +160,16 @@ void AppModeBase::CreateInitialResources()
 	// Create frame resources.
 	{
 		// Create a RTV for each frame.
-		for (UINT i = 0; i < D3D12Globals::NumFramesInFlight; i++)
+		for (UINT i = 0; i < D3D12Utility::NumFramesInFlight; i++)
 		{
 			// Allocate descriptor space
-			D3D12DescHeapAllocationDesc newAllocation = D3D12Globals::GlobalRTVHeap.AllocatePersistent();
+			D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = D3D12Globals::GlobalRTVHeap.AllocatePersistent().CPUHandle[0];
 
 			// Get a reference to the swapchain buffer
 			DXAssert(D3D12Globals::SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_BackBuffers[i])));
 
 			// Create the descriptor at the target location in the heap
-			D3D12Globals::Device->CreateRenderTargetView(m_BackBuffers[i], nullptr, newAllocation.CPUHandle);
+			D3D12Globals::Device->CreateRenderTargetView(m_BackBuffers[i], nullptr, cpuHandle);
 			eastl::wstring rtName = L"BackBuffer RenderTarget ";
 			rtName += eastl::to_wstring(i);
 
@@ -198,7 +198,7 @@ void AppModeBase::CreateInitialResources()
 	CreatePSOs();
 	
 	// Create the command list.
-	DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Globals::CurrentFrameIndex], m_BasicObjectsPipelineState, IID_PPV_ARGS(&m_commandList)));
+	DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Utility::CurrentFrameIndex], m_BasicObjectsPipelineState, IID_PPV_ARGS(&m_commandList)));
 	m_commandList->SetName(L"Main GFX Cmd List");
 
 	// Memory upload test
@@ -637,7 +637,7 @@ void AppModeBase::CreatePSOs()
 
 void AppModeBase::SwapBuffers()
 {
-	D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Globals::CurrentFrameIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 
 	DXAssert(m_commandList->Close());
 
@@ -654,7 +654,7 @@ void AppModeBase::SwapBuffers()
 
 	D3D12Globals::SwapChain->Present(1, 0);
 
-	D3D12Globals::CurrentFrameIndex = D3D12Globals::SwapChain->GetCurrentBackBufferIndex();
+	D3D12Utility::CurrentFrameIndex = D3D12Globals::SwapChain->GetCurrentBackBufferIndex();
 
 	++CurrentCPUFrame;
 
@@ -678,12 +678,12 @@ void AppModeBase::ResetFrameResources()
 	// Command list allocators can only be reset when the associated 
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
-	DXAssert(m_commandAllocators[D3D12Globals::CurrentFrameIndex]->Reset());
+	DXAssert(m_commandAllocators[D3D12Utility::CurrentFrameIndex]->Reset());
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
-	DXAssert(m_commandList->Reset(m_commandAllocators[D3D12Globals::CurrentFrameIndex], m_MainMeshPassPipelineState));
+	DXAssert(m_commandList->Reset(m_commandAllocators[D3D12Utility::CurrentFrameIndex], m_MainMeshPassPipelineState));
 }
 
 void AppModeBase::BeginFrame()
@@ -750,11 +750,11 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 				const uint64_t cbSize = sizeof(constantBufferData);
 
 				// Used memory sizes should be aligned
-				const uint64_t offset = UsedCBMemory[D3D12Globals::CurrentFrameIndex];
+				const uint64_t offset = UsedCBMemory[D3D12Utility::CurrentFrameIndex];
 
 				// Align size
 				const uint64_t finalSize = Utils::AlignTo(cbSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-				UsedCBMemory[D3D12Globals::CurrentFrameIndex] += finalSize;
+				UsedCBMemory[D3D12Utility::CurrentFrameIndex] += finalSize;
 
 				ASSERT(finalSize < m_constantBuffer.Size);
 
@@ -769,11 +769,11 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 				m_commandList->SetGraphicsRootConstantBufferView(0, GPUAddress);
 			}
 
-			ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heap };
+			ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heaps[D3D12Utility::CurrentFrameIndex]};
 			m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
 			// Set root to index of first texture
-			m_commandList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(modelChild->Textures[0]->SRVIndex));
+			m_commandList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(modelChild->Textures[0]->SRVIndex, D3D12Utility::CurrentFrameIndex));
 
 			m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			m_commandList->IASetVertexBuffers(0, 1, &modelChild->VertexBuffer->VBView());
@@ -790,7 +790,7 @@ void AppModeBase::DrawGBuffer()
 {
 	PIXMarker Marker(m_commandList, "Draw GBuffer");
 
-	UsedCBMemory[D3D12Globals::CurrentFrameIndex] = 0;
+	UsedCBMemory[D3D12Utility::CurrentFrameIndex] = 0;
 
 	// Populate Command List
 
@@ -857,15 +857,15 @@ void AppModeBase::DrawGBuffer()
 
 void AppModeBase::RenderLighting()
 {
-	UsedCBMemory[D3D12Globals::CurrentFrameIndex] = 0;
+	UsedCBMemory[D3D12Utility::CurrentFrameIndex] = 0;
 	PIXMarker Marker(m_commandList, "Render Deferred Lighting");
 
 	// Draw screen quad
-	ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heap};
+	ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heaps[D3D12Utility::CurrentFrameIndex]};
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
 	// Backbuffers are the first 2 RTVs in the Global Heap
-	D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Globals::CurrentFrameIndex);
+	D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Utility::CurrentFrameIndex, 0);
 	m_commandList->ClearRenderTargetView(currentBackbufferRTDescriptor, D3D12Utility::ClearColor, 0, nullptr);
 
 	m_commandList->SetGraphicsRootSignature(m_LightingRootSignature);
@@ -902,11 +902,11 @@ void AppModeBase::RenderLighting()
 		const uint64_t cbSize = sizeof(lightingConstantBufferData);
 
 		// Used memory sizes should be aligned
-		const uint64_t offset = UsedCBMemory[D3D12Globals::CurrentFrameIndex];
+		const uint64_t offset = UsedCBMemory[D3D12Utility::CurrentFrameIndex];
 
 		// Align size
 		const uint64_t finalSize = Utils::AlignTo(cbSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-		UsedCBMemory[D3D12Globals::CurrentFrameIndex] += finalSize;
+		UsedCBMemory[D3D12Utility::CurrentFrameIndex] += finalSize;
 
 		ASSERT(finalSize < m_constantBuffer.Size);
 
@@ -921,10 +921,10 @@ void AppModeBase::RenderLighting()
 		m_commandList->SetGraphicsRootConstantBufferView(0, GPUAddress);
 	}
 
-	m_commandList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_GBufferAlbedo->Texture->SRVIndex));
+	m_commandList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_GBufferAlbedo->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
 
 
-	m_commandList->SetGraphicsRootDescriptorTable(2, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_MainDepthBuffer->Texture->SRVIndex));
+	m_commandList->SetGraphicsRootDescriptorTable(2, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
 
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -948,8 +948,8 @@ void AppModeBase::Draw()
 	}
 
 	{
-		D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Globals::CurrentFrameIndex);
-		D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Globals::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Utility::CurrentFrameIndex, 0);
+		D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferRoughness->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -1024,7 +1024,7 @@ void AppModeBase::MoveToNextFrame()
 	CurrentGPUFrame = m_fence.GetValue();
 
 	const uint64_t gpuLag = CurrentCPUFrame - CurrentGPUFrame;
-	if (gpuLag >= D3D12Globals::NumFramesInFlight)
+	if (gpuLag >= D3D12Utility::NumFramesInFlight)
 	{
 		// Wait for one frame
 		m_fence.Wait(CurrentGPUFrame + 1);
@@ -1066,7 +1066,7 @@ void AppModeBase::ImGuiInit()
 
 	DXGI_FORMAT format = DXGI_FORMAT::DXGI_FORMAT_R8G8B8A8_UNORM;
 
-	bool success = ImGui_ImplDX12_Init(D3D12Globals::Device, D3D12Globals::NumFramesInFlight, format, m_imguiCbvSrvHeap, fontSrvCpuHandle, fontSrvGpuHandle);
+	bool success = ImGui_ImplDX12_Init(D3D12Globals::Device, D3D12Utility::NumFramesInFlight, format, m_imguiCbvSrvHeap, fontSrvCpuHandle, fontSrvGpuHandle);
 
 	ASSERT(success);
 

@@ -3,6 +3,7 @@
 #include "D3D12GraphicsTypes_Internal.h"
 #include "D3D12Utility.h"
 #include "Utils/Utils.h"
+#include "D3D12RHI.h"
 
 namespace D3D12Upload
 {

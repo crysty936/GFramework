@@ -35,6 +35,13 @@
 #include "D3D12Upload.h"
 
 
+ID3D12Device* D3D12Globals::Device;
+IDXGISwapChain3* D3D12Globals::SwapChain;
+ID3D12CommandQueue* D3D12Globals::GraphicsCommandQueue;
+D3D12DescriptorHeap D3D12Globals::GlobalRTVHeap;
+D3D12DescriptorHeap D3D12Globals::GlobalSRVHeap;
+D3D12DescriptorHeap D3D12Globals::GlobalDSVHeap;
+
 // D3D12 RHI stuff to do:
 // Fix the default memory allocation to use a ring buffer instead of the hack that is present right now
 // Modify the constant buffers to allow a single buffer to be used for all draws
@@ -167,7 +174,7 @@ void D3D12RHI::InitPipeline()
 
 	// Describe and create the swap chain.
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-	swapChainDesc.BufferCount = D3D12Globals::NumFramesInFlight;
+	swapChainDesc.BufferCount = D3D12Utility::NumFramesInFlight;
 	swapChainDesc.Width = props.Width;
 	swapChainDesc.Height = props.Height;
 	swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;

@@ -2,10 +2,11 @@
 #include <d3d12.h>
 #include <stdint.h>
 #include "D3D12Resources.h"
+#include "D3D12Utility.h"
 
 struct D3D12DescHeapAllocationDesc
 {
-	D3D12_CPU_DESCRIPTOR_HANDLE CPUHandle = {};
+	D3D12_CPU_DESCRIPTOR_HANDLE CPUHandle[D3D12Utility::NumFramesInFlight] = {};
 	uint32_t Index = -1;
 };
 
@@ -16,17 +17,18 @@ public:
 
 	void Init(bool inShaderVisible, uint32_t inNumPersistent, D3D12_DESCRIPTOR_HEAP_TYPE inHeapType);
 	D3D12DescHeapAllocationDesc AllocatePersistent();
-	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUHandle(uint64_t inIndex);
-	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUHandle(uint64_t inIndex);
+	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUHandle(uint64_t inIndex, const uint64_t inHeapIdx);
+	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUHandle(uint64_t inIndex, const uint64_t inHeapIdx);
 
 public:
-	ID3D12DescriptorHeap* Heap = nullptr;
+	ID3D12DescriptorHeap* Heaps[D3D12Utility::NumFramesInFlight] = {};
 	uint32_t NumPersistentDescriptors = 0;
+	uint32_t NumHeaps = 0;
 
 	uint32_t DescriptorSize = 0;
 	D3D12_DESCRIPTOR_HEAP_TYPE HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	D3D12_CPU_DESCRIPTOR_HANDLE CPUStart = {};
-	D3D12_GPU_DESCRIPTOR_HANDLE GPUStart = {};
+	D3D12_CPU_DESCRIPTOR_HANDLE CPUStart[D3D12Utility::NumFramesInFlight] = {};
+	D3D12_GPU_DESCRIPTOR_HANDLE GPUStart[D3D12Utility::NumFramesInFlight] = {};
 
 private:
 	uint32_t Allocated = 0;
@@ -77,27 +79,6 @@ struct D3D12Fence
 
 
 };
-
-//struct D3D12IRenderTargetTexture
-//{
-//public:
-//	//D3D12IRenderTargetTexture();
-//	//~D3D12IRenderTargetTexture();
-//
-//	//void Init(const uint32_t inWidth, const uint32_t inHeight);
-//
-//public:
-//	//D3D12Texture2D Texture;
-//
-//	D3D12_CPU_DESCRIPTOR_HANDLE RTV = {};
-//
-//
-//
-//
-//};
-//
-//
-//
 
 
 

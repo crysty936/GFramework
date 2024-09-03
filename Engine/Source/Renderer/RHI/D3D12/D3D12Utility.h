@@ -5,8 +5,8 @@
 #include "Core/EngineUtils.h"
 #include <d3d12.h>
 #include <dxgi1_6.h>
-#include "D3D12GraphicsTypes_Internal.h"
 #include "WinPixEventRuntime/pix3.h"
+#include "Renderer/RHI/Resources/RHITexture.h"
 
 struct PIXMarker
 {
@@ -24,31 +24,9 @@ struct PIXMarker
 	}
 };
 
-
-enum class ERasterizerState : uint8_t
-{
-	Disabled,
-	BackFaceCull,
-	FrontFaceCull,
-	Count
-};
-
-enum class EBlendState : uint8_t
-{
-	Disabled,
-	Count
-};
-
-enum class EDepthState : uint8_t
-{
-	Disabled,
-	WriteEnabled,
-	Count
-};
-
 inline D3D12_RESOURCE_STATES TexStateToD3D12ResState(const ETextureState inState)
 {
-	D3D12_RESOURCE_STATES initState;
+	D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATE_COMMON;
 
 	switch (inState)
 	{
@@ -71,22 +49,6 @@ inline D3D12_RESOURCE_STATES TexStateToD3D12ResState(const ETextureState inState
 	return initState;
 }
 
-namespace D3D12Globals
-{
-	extern ID3D12Device* Device;
-	extern IDXGISwapChain3* SwapChain;
-	extern ID3D12CommandQueue* GraphicsCommandQueue;
-
-	extern uint64_t CurrentFrameIndex;
-	constexpr uint32_t NumFramesInFlight = 2;
-
-	// Descriptor Heaps
-	// TODO: Implement non-shader visible descriptor heaps that will be copied over into main heap when drawing
-	extern D3D12DescriptorHeap GlobalRTVHeap;
-	extern D3D12DescriptorHeap GlobalSRVHeap;
-	extern D3D12DescriptorHeap GlobalDSVHeap;
-}
-
 inline bool DXAssert(HRESULT inRez)
 {
 	const bool success = SUCCEEDED(inRez);
@@ -98,6 +60,9 @@ inline bool DXAssert(HRESULT inRez)
 namespace D3D12Utility
 {
 	void Init();
+
+	extern uint64_t CurrentFrameIndex;
+	constexpr uint32_t NumFramesInFlight = 2;
 
 	D3D12_HEAP_PROPERTIES& GetDefaultHeapProps();
 	D3D12_HEAP_PROPERTIES& GetUploadHeapProps();
