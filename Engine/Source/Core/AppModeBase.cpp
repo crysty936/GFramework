@@ -358,28 +358,35 @@ void AppModeBase::CreateRootSignatures()
 
 	// GBuffer Basic Shapes Pass signature
 	{
-		D3D12_ROOT_PARAMETER1 rootParameters[2];
-
-		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-		rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
-		rootParameters[0].Descriptor.RegisterSpace = 0;
-		rootParameters[0].Descriptor.ShaderRegister = 0;
+		D3D12_ROOT_PARAMETER1 rootParameters[3];
 
 		// Texture
-		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
 		D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
 		rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		rangesPS[0].NumDescriptors = 1;
+		rangesPS[0].NumDescriptors = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 		rangesPS[0].BaseShaderRegister = 0;
 		rangesPS[0].RegisterSpace = 0;
-		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
 		rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
 
-		rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(rangesPS);
-		rootParameters[1].DescriptorTable.pDescriptorRanges = &rangesPS[0];
+		rootParameters[0].DescriptorTable.pDescriptorRanges = &rangesPS[0];
+		rootParameters[0].DescriptorTable.NumDescriptorRanges = _countof(rangesPS);
+
+		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+		rootParameters[1].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[1].Descriptor.RegisterSpace = 0;
+		rootParameters[1].Descriptor.ShaderRegister = 0;
+
+		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		rootParameters[2].Constants.RegisterSpace = 0;
+		rootParameters[2].Constants.ShaderRegister = 0;
+		rootParameters[2].Constants.Num32BitValues = 1;
+
 
 
 		//////////////////////////////////////////////////////////////////////////
@@ -401,21 +408,24 @@ void AppModeBase::CreateRootSignatures()
 
 		// Allow input layout and deny uneccessary access to certain pipeline stages.
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+			//| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
+			//| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
+			//| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 		//| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 
-		D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-		rootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-		rootSignatureDesc.Desc_1_1.NumParameters = _countof(rootParameters);
-		rootSignatureDesc.Desc_1_1.pParameters = &rootParameters[0];
-		rootSignatureDesc.Desc_1_1.NumStaticSamplers = 1;
-		rootSignatureDesc.Desc_1_1.pStaticSamplers = &sampler;
-		rootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.NumParameters = _countof(rootParameters);
+		rootSignatureDesc.pParameters = &rootParameters[0];
+		rootSignatureDesc.NumStaticSamplers = 1;
+		rootSignatureDesc.pStaticSamplers = &sampler;
+		rootSignatureDesc.Flags = rootSignatureFlags;
 
-		m_GBufferBasicObjectsRootSignature = D3D12RHI::Get()->CreateRootSignature(rootSignatureDesc);
+		D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedRootSignatureDesc = {};
+		versionedRootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+		versionedRootSignatureDesc.Desc_1_1 = rootSignatureDesc;
+
+		m_GBufferBasicObjectsRootSignature = D3D12RHI::Get()->CreateRootSignature(versionedRootSignatureDesc);
 		m_GBufferBasicObjectsRootSignature->SetName(L"Basic Objects Root Signature");
 	}
 
@@ -771,14 +781,19 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 
 				memcpy(CPUAddress, &constantBufferData, sizeof(constantBufferData));
 
-				m_commandList->SetGraphicsRootConstantBufferView(0, GPUAddress);
+				m_commandList->SetGraphicsRootConstantBufferView(1, GPUAddress);
 			}
 
 			ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heaps[D3D12Utility::CurrentFrameIndex]};
 			m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
+			m_commandList->SetGraphicsRoot32BitConstant(2, modelChild->Textures[0]->SRVIndex, 0);
+
+
+			m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GetGPUHandle(0, D3D12Utility::CurrentFrameIndex));
+
 			// Set root to index of first texture
-			m_commandList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(modelChild->Textures[0]->SRVIndex, D3D12Utility::CurrentFrameIndex));
+			//m_commandList->SetGraphicsRootDescriptorTable(2, D3D12Globals::GlobalSRVHeap.GetGPUHandle(modelChild->Textures[0]->SRVIndex, D3D12Utility::CurrentFrameIndex));
 
 			m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			m_commandList->IASetVertexBuffers(0, 1, &modelChild->VertexBuffer->VBView());

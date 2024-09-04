@@ -61,6 +61,22 @@ namespace WindowsPlatform
 		return message;
 	}
 
+	eastl::string GetExePathAnsi() {
+		char buffer[MAX_PATH] = { 0 };
+		GetModuleFileNameA(NULL, buffer, MAX_PATH);
+		eastl::string stringBuffer = eastl::string(buffer);
+		eastl::string::size_type pos = stringBuffer.find_last_of("\\");
+		return eastl::string(buffer).substr(0, pos);
+	}
+
+	eastl::wstring GetExePath() {
+		wchar_t buffer[MAX_PATH] = { 0 };
+		GetModuleFileNameW(NULL, buffer, MAX_PATH);
+		eastl::wstring stringBuffer = eastl::wstring(buffer);
+		eastl::wstring::size_type pos = stringBuffer.find_last_of(L"\\");
+		return eastl::wstring(buffer).substr(0, pos);
+	}
+
 	void InitCycles()
 	{
 		// Set the main thread to work only on one core to avoid timing synchrionization problems between multiple cores

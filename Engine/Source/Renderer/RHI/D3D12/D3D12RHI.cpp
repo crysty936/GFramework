@@ -248,15 +248,23 @@ bool DXCCompile(const eastl::string& inFilePath, const eastl::wstring& inEntryPo
 
 	ComPtr<IDxcOperationResult> operationResult;
 
+	eastl::wstring relativeShadersPath = WindowsPlatform::GetExePath();
+	relativeShadersPath += L"\\..\\..\\Data\\Shaders\\D3D12";
+	
+	wchar_t fullShadersPath[1024] = {};
+	GetFullPathNameW(relativeShadersPath.c_str(), _countof(fullShadersPath), fullShadersPath, nullptr);
+
 	const wchar_t* arguments[]
 	{
 #ifdef _DEBUG
 		L"-Zi",
 		L"-O0",
-		L"Qembed_debug",
+		L"-Qembed_debug",
 #else
 		L"-O3",
 #endif
+		L"-I",
+		fullShadersPath,
 		L"-WX",
 		// Implement dir to be full path to shader dir if includes are needed
 		//L"-I",
@@ -264,8 +272,11 @@ bool DXCCompile(const eastl::string& inFilePath, const eastl::wstring& inEntryPo
 
 	};
 
+	ComPtr<IDxcIncludeHandler> includeHandler;
+	DXAssert(utils->CreateDefaultIncludeHandler(&includeHandler));
+
 	// Compile to DXIL
-	DXAssert(compiler->Compile(source.Get(), AnsiToWString(inFilePath.c_str()).c_str(), inEntryPoint.c_str(), inTarget, arguments, _countof(arguments), nullptr, 0, nullptr, &operationResult));
+	DXAssert(compiler->Compile(source.Get(), AnsiToWString(inFilePath.c_str()).c_str(), inEntryPoint.c_str(), inTarget, arguments, _countof(arguments), nullptr, 0, includeHandler.Get(), &operationResult));
 
 	HRESULT hr = S_OK;
 	operationResult->GetStatus(&hr);

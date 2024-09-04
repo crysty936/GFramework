@@ -1,3 +1,4 @@
+#include "DescriptorTables.hlsl"
 
 struct PSInput
 {
@@ -23,10 +24,15 @@ struct SceneConstantBuffer
     float4x4 LocalToWorldRotationOnly;
 };
 
+struct MatIndexBuffer
+{
+    uint Index;
+};
+
 // 256 byte aligned
 ConstantBuffer<SceneConstantBuffer> SceneBuffer : register(b0);
+ConstantBuffer<MatIndexBuffer> MatIndex : register(b0);
 
-Texture2D g_texture : register(t0);
 SamplerState g_sampler : register(s0);
 
 inline float3x3 tofloat3x3(float4x4 m) {
@@ -58,7 +64,11 @@ PSOutput PSMain(PSInput input)
     float2 uv = input.uv;
 
     PSOutput output;
-    output.Albedo = g_texture.Sample(g_sampler, uv);
+    //output.Albedo = g_texture.Sample(g_sampler, uv);
+
+    Texture2D AlbedoMap = Tex2DTable[MatIndex.Index];
+    output.Albedo = AlbedoMap.Sample(g_sampler, uv);
+
     output.Normal = float4(input.VertexNormalWS / 2.f + 0.5f, 1.0);
     output.Roughness = float4(1.f, 0.f, 0.f, 0.f);
 

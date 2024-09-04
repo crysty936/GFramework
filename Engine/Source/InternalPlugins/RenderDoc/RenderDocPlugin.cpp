@@ -9,14 +9,6 @@
 
 static const AddPluginHelper<RenderDocPlugin> AddPlugin("RenderDocPlugin");
 
-eastl::string ExePath() {
-	char buffer[MAX_PATH] = { 0 };
-	GetModuleFileNameA(NULL, buffer, MAX_PATH);
-	eastl::string stringBuffer = eastl::string(buffer);
-	eastl::string::size_type pos = stringBuffer.find_last_of("\\");
-	return eastl::string(buffer).substr(0, pos);
-}
-
 eastl::string GetTimeString()
 {
 	time_t rawtime;
@@ -76,7 +68,7 @@ void RenderDocPlugin::Init()
 	RenderDocAPI->SetFocusToggleKeys(nullptr, 0);
 	RenderDocAPI->SetCaptureKeys(nullptr, 0);
 
-	eastl::string directoryOutputPath = ExePath();
+	eastl::string directoryOutputPath = WindowsPlatform::GetExePathAnsi();
 	directoryOutputPath += "\\RenderDocCaptures" ;
 	eastl::string::const_iterator newEnd = eastl::remove_if(directoryOutputPath.begin(), directoryOutputPath.end(), isspace);
 

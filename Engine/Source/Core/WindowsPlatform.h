@@ -28,6 +28,8 @@ namespace WindowsPlatform
 {
 	eastl::string GetWin32ErrorStringAnsi(uint32_t inErrorCode);
 	eastl::wstring GetWin32ErrorString(uint32_t inErrorCode);
+	eastl::string GetExePathAnsi();
+	eastl::wstring GetExePath();
 
 	void InitCycles();
 	double GetTime();
@@ -48,6 +50,7 @@ namespace WindowsPlatform
 	bool DirectoryExistsInternal(const eastl::string& inPath);
 	bool CreateDirectoryTree(const eastl::string& Directory);
 	bool CreateDirectoryInternal(const eastl::string& Directory);
+
 }
 
 
