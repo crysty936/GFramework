@@ -66,6 +66,22 @@ add_custom_command(TARGET GFramework POST_BUILD        # Adds a post-build event
         $<TARGET_FILE_DIR:GFramework>)                 # <--this is out-file path
 
 
+# Add DXC
+list(APPEND EXTRA_INCLUDES "${CMAKE_CURRENT_LIST_DIR}/External/DXCompiler/Include")
+target_link_libraries(GFramework PRIVATE "${CMAKE_CURRENT_LIST_DIR}/External/DXCompiler/Lib/dxcompiler.lib")
+
+# Copy commands for DXC
+add_custom_command(TARGET GFramework POST_BUILD 
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_LIST_DIR}/External/DXCompiler/Bin/dxcompiler.dll" 
+        $<TARGET_FILE_DIR:GFramework>) 
+		
+add_custom_command(TARGET GFramework POST_BUILD 
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_LIST_DIR}/External/DXCompiler/Bin/dxil.dll" 
+        $<TARGET_FILE_DIR:GFramework>) 
+
+
 list(APPEND EXTRA_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/Engine/Source)	
 
 target_include_directories(GFramework PUBLIC

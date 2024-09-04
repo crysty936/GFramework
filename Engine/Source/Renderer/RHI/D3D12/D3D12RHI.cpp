@@ -33,6 +33,7 @@
 #include "D3D12Resources.h"
 #include "Core/WindowsPlatform.h"
 #include "D3D12Upload.h"
+#include "dxcapi.h"
 
 
 ID3D12Device* D3D12Globals::Device;
@@ -229,54 +230,97 @@ struct ID3D12RootSignature* D3D12RHI::CreateRootSignature(D3D12_VERSIONED_ROOT_S
 	return newSignature;
 }
 
-GraphicsCompiledShaderPair D3D12RHI::CompileGraphicsShaderFromFile(const eastl::string& inFilePath)
+
+bool DXCCompile(const eastl::string& inFilePath, const eastl::wstring& inEntryPoint, const wchar_t* inTarget, IDxcBlob*& outCompiledShaderBlob, eastl::string& outErrors)
 {
-
-#if defined(_DEBUG)
-	// Enable better shader debugging with the graphics debugging tools.
-	UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_DEBUG_NAME_FOR_SOURCE;
-#else																						  
-	UINT compileFlags = 0;
-#endif
-
 	eastl::string shaderCode;
 
 	const bool readSuccess = IOUtils::TryFastReadFile(inFilePath, shaderCode);
 
-	ID3DBlob* vertexShader = nullptr;
-	ID3DBlob* vsErrBlob = nullptr;
+	ComPtr<IDxcUtils> utils;
+	DXAssert(DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&utils)));
 
-	D3DCompile2(shaderCode.data(), shaderCode.size(), "MeshVS", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, 0, nullptr, 0, &vertexShader, &vsErrBlob);
+	ComPtr<IDxcBlobEncoding> source;
+	DXAssert(utils->CreateBlob(shaderCode.data(), shaderCode.size(), CP_UTF8, &source));
 
+	ComPtr<IDxcCompiler> compiler;
+	DXAssert(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler)));
 
-	if (vsErrBlob)
+	ComPtr<IDxcOperationResult> operationResult;
+
+	const wchar_t* arguments[]
 	{
-		eastl::string errMessage;
-		errMessage.InitialiseToSize(vsErrBlob->GetBufferSize(), '\0');
-		memcpy(errMessage.data(), vsErrBlob->GetBufferPointer(), vsErrBlob->GetBufferSize());
-		LOG_ERROR("%s", errMessage.c_str());
+#ifdef _DEBUG
+		L"-Zi",
+		L"-O0",
+		L"Qembed_debug",
+#else
+		L"-O3",
+#endif
+		L"-WX",
+		// Implement dir to be full path to shader dir if includes are needed
+		//L"-I",
+		//dir,
 
-		ASSERT(false);
+	};
+
+	// Compile to DXIL
+	DXAssert(compiler->Compile(source.Get(), AnsiToWString(inFilePath.c_str()).c_str(), inEntryPoint.c_str(), inTarget, arguments, _countof(arguments), nullptr, 0, nullptr, &operationResult));
+
+	HRESULT hr = S_OK;
+	operationResult->GetStatus(&hr);
+	if (SUCCEEDED(hr))
+	{
+		operationResult->GetResult(&outCompiledShaderBlob);
+
+		return true;
+	}
+	else
+	{
+		ComPtr<IDxcBlobEncoding> vsErrorBlob;
+		operationResult->GetErrorBuffer(&vsErrorBlob);
+		outErrors.InitialiseToSize(vsErrorBlob->GetBufferSize(), '\0');
+		memcpy(outErrors.data(), vsErrorBlob->GetBufferPointer(), vsErrorBlob->GetBufferSize());
+		LOG_ERROR("%s", outErrors.c_str());
 	}
 
-	ID3DBlob* pixelShader = nullptr;
-	ID3DBlob* psErrBlob = nullptr;
+	return false;
+}
 
-	D3DCompile2(shaderCode.data(), shaderCode.size(), "MeshPS", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, 0, nullptr, 0, &pixelShader, &psErrBlob);
-
-	if (psErrBlob)
+IDxcBlob* CompileWithRetry(const eastl::string& inFilePath, const eastl::string& inEntryPoint, const wchar_t* inTarget)
+{
+	IDxcBlob* compiledShaderBlob = nullptr;
+	while (true)
 	{
-		eastl::string errMessage;
-		errMessage.InitialiseToSize(psErrBlob->GetBufferSize(), '\0');
-		memcpy(errMessage.data(), psErrBlob->GetBufferPointer(), psErrBlob->GetBufferSize());
-		LOG_ERROR("%s", errMessage.c_str());
+		eastl::string errors;
+		const bool success = DXCCompile(inFilePath, AnsiToWString(inEntryPoint.c_str()), inTarget, compiledShaderBlob, errors);
 
-		ASSERT(false);
+		if (!success)
+		{
+			eastl::string fullMessage;
+			fullMessage.sprintf("Error compiling shader %s with EntryPoint %s. \n %s", inFilePath.c_str(), inEntryPoint.c_str(), errors.c_str());
+			const int32_t retVal = MessageBoxA(nullptr, fullMessage.c_str(), "Shader Compilation Error", MB_RETRYCANCEL);
+			if (retVal != IDRETRY)
+			{
+				exit(1);
+			}
+		}
+		else
+		{
+			break;
+		}
+
 	}
+	return compiledShaderBlob;
+}
 
-	ASSERT(vertexShader != nullptr && pixelShader != nullptr);
+GraphicsCompiledShaderPair D3D12RHI::CompileGraphicsShaderFromFile(const eastl::string& inFilePath)
+{
+	IDxcBlob* vsBlob = CompileWithRetry(inFilePath, "VSMain", L"vs_6_5");
+	IDxcBlob* psBlob = CompileWithRetry(inFilePath, "PSMain", L"ps_6_5");
 
-	return { vertexShader, pixelShader };
+
+	return { vsBlob, psBlob };
 }
 
 void D3D12RHI::ProcessDeferredReleases()

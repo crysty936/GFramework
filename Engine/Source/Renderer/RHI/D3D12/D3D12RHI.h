@@ -4,6 +4,7 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include "D3D12GraphicsTypes_Internal.h"
+#include "dxcapi.h"
 
 namespace D3D12Globals
 {
@@ -20,10 +21,10 @@ namespace D3D12Globals
 
 struct GraphicsCompiledShaderPair
 {
-	ID3DBlob* VSByteCode = nullptr;
-	ID3DBlob* PSByteCode = nullptr;
+	IDxcBlob* VSByteCode = nullptr;
+	IDxcBlob* PSByteCode = nullptr;
 
-	GraphicsCompiledShaderPair(ID3DBlob* inVSByteCode, ID3DBlob* inPSByteCode)
+	GraphicsCompiledShaderPair(IDxcBlob* inVSByteCode, IDxcBlob* inPSByteCode)
 		: VSByteCode(inVSByteCode), PSByteCode(inPSByteCode) {}
 
 	~GraphicsCompiledShaderPair()

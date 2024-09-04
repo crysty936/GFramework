@@ -15,13 +15,16 @@ struct PSOutput
 
 
 // 256 byte aligned
-cbuffer SceneConstantBuffer : register(b0)
+struct SceneConstantBuffer
 {
     float4x4 Model;
     float4x4 Projection;
     float4x4 View;
     float4x4 LocalToWorldRotationOnly;
 };
+
+// 256 byte aligned
+ConstantBuffer<SceneConstantBuffer> SceneBuffer : register(b0);
 
 Texture2D g_texture : register(t0);
 SamplerState g_sampler : register(s0);
@@ -34,10 +37,10 @@ PSInput VSMain(float4 position : POSITION, float3 normal : NORMAL, float2 uv : T
 {
     PSInput result;
 
-    const float4 worldPos = mul(position, Model);
-    const float4 clipPos = mul(mul(worldPos, View), Projection);
+    const float4 worldPos = mul(position, SceneBuffer.Model);
+    const float4 clipPos = mul(mul(worldPos, SceneBuffer.View), SceneBuffer.Projection);
 
-     const float3x3 LocalToWorldRotationOnly3x3 = tofloat3x3(LocalToWorldRotationOnly);
+     const float3x3 LocalToWorldRotationOnly3x3 = tofloat3x3(SceneBuffer.LocalToWorldRotationOnly);
      float3 vertexNormalWS = normalize(mul(normal, LocalToWorldRotationOnly3x3)); 
 
     result.uv = uv;

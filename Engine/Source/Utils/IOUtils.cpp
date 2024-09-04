@@ -20,7 +20,7 @@ namespace IOUtils
 		}
 
 		const uintmax_t size = std::filesystem::file_size(inFilePath.data());
-		outData.resize(size + 1);
+		outData.resize(size + 1, ' ');
 
 		fileStream.read(outData.data(), size);
 		fileStream.close();
