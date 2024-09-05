@@ -549,3 +549,12 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 
 	return newDB;
 }	
+
+eastl::shared_ptr<D3D12StructuredBuffer> D3D12RHI::CreateStructuredBuffer(const uint32_t inNumElements, const uint32_t inStride)
+{
+
+
+	return nullptr;
+}
+
+

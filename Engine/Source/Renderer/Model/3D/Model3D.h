@@ -1,6 +1,5 @@
 #pragma once
 #include "EASTL/shared_ptr.h"
-#include "Renderer/Material/RenderMaterial.h"
 #include "Entity/TransformObject.h"
 #include "Renderer/Drawable/Drawable.h"
 #include "Renderer/RHI/D3D12/D3D12Resources.h"

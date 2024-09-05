@@ -1,6 +1,4 @@
 #include "AssimpModel3DPBRSphere.h"
-#include "Renderer/Material/MaterialsManager.h"
-#include "Renderer/Material/EngineMaterials/RenderMaterial_PBRSphere.h"
 #include "assimp/mesh.h"
 
 AssimpModel3DPBRSphere::AssimpModel3DPBRSphere(const eastl::string& inPath, const eastl::string& inName)

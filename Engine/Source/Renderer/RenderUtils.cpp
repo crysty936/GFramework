@@ -3,9 +3,6 @@
 #include "RHI/Resources/VertexInputLayout.h"
 #include "Drawable/ShapesUtils/BasicShapesData.h"
 #include "RHI/RHI.h"
-#include "Material/MaterialsManager.h"
-#include "Material/RenderMaterial.h"
-#include "Material/EngineMaterials/RenderMaterial_VisualizeDepth.h"
 #include "Scene/SceneManager.h"
 #include "Scene/Scene.h"
 

@@ -740,7 +740,6 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 			return;
 		}
 
-
 		if (const MeshNode* modelChild = dynamic_cast<const MeshNode*>(childPtr))
 		{
 			if (modelChild->MatIndex == uint32_t(-1))
@@ -755,7 +754,7 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 
 			MeshConstantBuffer constantBufferData;
 
-			// All matrices sent to HLSL need to be converted to row-major from column-major(what glm uses)
+			// All matrices sent to HLSL need to be converted to row-major(what D3D uses) from column-major(what glm uses)
 			constantBufferData.Model = glm::transpose(modelMatrix);
 			constantBufferData.Projection = glm::transpose(GetMainProjection());
 

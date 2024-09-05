@@ -3,7 +3,6 @@
 #include "EASTL/string.h"
 #include "Core/EngineUtils.h"
 #include "assimp/material.h"
-#include "Renderer/RenderCommand.h"
 
 class AssimpModel3D : public Model3D
 {

@@ -2,10 +2,7 @@
 #include "Utils/InlineVector.h"
 #include "RenderUtils.h"
 #include "RHI/RHI.h"
-#include "Material/MaterialsManager.h"
-#include "Material/EngineMaterials/RenderMaterial_Debug.h"
 #include "Drawable/ShapesUtils/BasicShapesData.h"
-#include "Material/EngineMaterials/RenderMaterial_Billboard.h"
 
 eastl::shared_ptr<RHIVertexBuffer> DebugPointsBuffer = nullptr;
 eastl::shared_ptr<RHIVertexBuffer> DebugPointsInstanceBuffer = nullptr;

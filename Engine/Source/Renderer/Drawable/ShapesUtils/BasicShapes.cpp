@@ -1,7 +1,5 @@
 #include "BasicShapes.h"
 #include "Renderer/Drawable/ShapesUtils/BasicShapesData.h"
-#include "Renderer/RHI/Resources/MeshDataContainer.h"
-#include "Renderer/Material/MaterialsManager.h"
 #include "Renderer/RHI/D3D12/D3D12RHI.h"
 
 CubeShape::CubeShape(const eastl::string& inName)

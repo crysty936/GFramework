@@ -3,7 +3,6 @@
 #include "EASTL/string.h"
 #include "Core/EngineUtils.h"
 #include "assimp/material.h"
-#include "Renderer/RenderCommand.h"
 #include "AssimpModel3D.h"
 
 class AssimpModel3DPBRSphere : public AssimpModel3D

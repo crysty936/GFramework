@@ -2,10 +2,8 @@
 #include "EASTL/array.h"
 #include "glm/detail/type_vec3.hpp"
 #include "glm/ext/matrix_float4x4.hpp"
-#include "RenderCommand.h"
 #include "Drawable/Drawable.h"
 #include "Model/3D/Model3D.h"
-#include "LightTypes.h"
 
 namespace RenderUtils
 {

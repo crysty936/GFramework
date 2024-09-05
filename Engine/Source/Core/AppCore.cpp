@@ -7,7 +7,6 @@
 #include "Entity/Entity.h"
 #include "Core/AppModeBase.h"
 #include "Timer/TimersManager.h"
-#include "Renderer/Material/MaterialsManager.h"
 #include "Window/WindowsWindow.h"
 #include "Editor/Editor.h"
 #include "InternalPlugins/IInternalPlugin.h"
@@ -55,8 +54,6 @@ void AppCore::Init()
 
 	SceneManager::Init();
 
-	MaterialsManager::Init();
-
 	 //Initialize plugins before renderer to make sure that RenderDoc works
  	for (PluginAndName& container : GetInternalPluginsList())
  	{
@@ -94,7 +91,6 @@ void AppCore::Terminate()
 	GEngine->CurrentApp->Terminate();
 
 	InputSystem::Terminate();
-	MaterialsManager::Terminate();
 
 	SceneManager::Terminate();
 

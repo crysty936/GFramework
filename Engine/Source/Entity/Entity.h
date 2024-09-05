@@ -7,7 +7,6 @@
 using EntityPtr = eastl::shared_ptr<class Entity>;
 using EntityIterator = eastl::vector<eastl::shared_ptr<class Entity>>::iterator;
 
-// TODO: Have a CreateEntity function that initializes it and does everything necessary instead of exposing the raw constructor
 /**
  * Main Game Entity with Transform and Init and Tick functions
  */
