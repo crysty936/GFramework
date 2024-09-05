@@ -2,6 +2,7 @@
 #include "D3D12Utility.h"
 #include <combaseapi.h>
 #include "D3D12RHI.h"
+#include "Utils/Utils.h"
 
 D3D12DescriptorHeap::~D3D12DescriptorHeap()
 {
@@ -85,7 +86,7 @@ void D3D12ConstantBuffer::Init(const uint64_t inSize)
 	//cbvDesc.SizeInBytes = constantBufferSize;
 	//D3D12Globals::Device->CreateConstantBufferView(&cbvDesc, descAlloc.CPUHandle); // Create a descriptor for the Constant Buffer at the given place in the heap
 
-	Size = inSize;
+	Size = Utils::AlignTo(inSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 
 	D3D12_HEAP_PROPERTIES heapProps;
 	heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -97,7 +98,7 @@ void D3D12ConstantBuffer::Init(const uint64_t inSize)
 	D3D12_RESOURCE_DESC constantBufferDesc;
 	constantBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	constantBufferDesc.Alignment = 0;
-	constantBufferDesc.Width = inSize * D3D12Utility::NumFramesInFlight;
+	constantBufferDesc.Width = Size * D3D12Utility::NumFramesInFlight;
 	constantBufferDesc.Height = 1;
 	constantBufferDesc.DepthOrArraySize = 1;
 	constantBufferDesc.MipLevels = 1;
@@ -145,79 +146,46 @@ MapResult D3D12ConstantBuffer::Map()
 	return res;
 }
 
-//D3D12IRenderTargetTexture::D3D12IRenderTargetTexture()
-//{
-//
-//}
-//
-//D3D12IRenderTargetTexture::~D3D12IRenderTargetTexture()
-//{
-//	if (Texture.Resource)
-//	{
-//		Texture.Resource->Release();
-//	}
-//}
+MapResult D3D12ConstantBuffer::ReserveTempBufferMemory(const uint64_t inSize)
+{
+	const uint64_t alignedSize = Utils::AlignTo(inSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+	uint64_t& currentMemoryCounter = UsedMemory[D3D12Utility::CurrentFrameIndex];
+
+	ASSERT_MSG(alignedSize < (Size - currentMemoryCounter), "More memory required than available, increase buffer size.");
+
+	// Use current memory counter position as offset from current buffer start
+	const uint64_t offset = currentMemoryCounter;
+
+	MapResult currentBufferStartMap = Map();
+	uint8_t* CPUAddress = currentBufferStartMap.CPUAddress;
+	CPUAddress += offset;
+
+	uint64_t GPUAddress = currentBufferStartMap.GPUAddress;
+	GPUAddress += offset;
+
+	// Add this to the used memory
+	currentMemoryCounter += alignedSize;
+
+	return { CPUAddress, GPUAddress };
+}
+
+void D3D12ConstantBuffer::ClearUsedMemory()
+{
+	UsedMemory[D3D12Utility::CurrentFrameIndex] = 0;
+}
+
+D3D12StructuredBuffer::~D3D12StructuredBuffer()
+{
+
+}
+
+void D3D12StructuredBuffer::Init(const uint64_t inNumElements, const uint64_t inStride)
+{
+
+}
 
 
-// 
-// void D3D12IRenderTargetTexture::Init(const uint32_t inWidth, const uint32_t inHeight)
-// {
-// 	D3D12_RESOURCE_DESC textureDesc = {};
-// 
-// 	textureDesc.Width = inWidth;
-// 	textureDesc.Height = inHeight;
-// 	textureDesc.MipLevels = 1;
-// 	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-// 	textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-// 	textureDesc.DepthOrArraySize = 1;
-// 	textureDesc.SampleDesc.Count = 1;
-// 	textureDesc.SampleDesc.Quality = 0;
-// 	textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-// 	textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-// 	textureDesc.Alignment = 0;
-// 
-// 	const D3D12_RESOURCE_STATES initState = D3D12_RESOURCE_STATE_RENDER_TARGET;
-// 
-// 	DXAssert(D3D12Globals::Device->CreateCommittedResource(
-// 		&D3D12Utility::GetDefaultHeapProps(),
-// 		D3D12_HEAP_FLAG_NONE,
-// 		&textureDesc,
-// 		initState,
-// 		nullptr,
-// 		IID_PPV_ARGS(&Texture.Resource)));
-// 
-// 	static int32_t RenderTargetIndex = 0;
-// 	++RenderTargetIndex;
-// 
-// 	eastl::wstring textureName = L"RenderTarget ";
-// 	const eastl::wstring textureIndex = eastl::to_wstring(RenderTargetIndex);
-// 	textureName += textureIndex;
-// 
-// 	Texture.Resource->SetName(textureName.c_str());
-// 
-// 	// Create SRV
-// 	{
-// 		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalSRVHeap.AllocatePersistent();
-// 		Texture.SRVIndex = descAllocation.Index;
-// 		D3D12Globals::Device->CreateShaderResourceView(Texture.Resource, nullptr, descAllocation.CPUHandle);
-// 	}
-// 
-// 	// Create RTV
-// 	{
-// 		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalRTVHeap.AllocatePersistent();
-// 		RTV = descAllocation.CPUHandle;
-// 
-// 		D3D12Globals::Device->CreateRenderTargetView(Texture.Resource, nullptr, descAllocation.CPUHandle);
-// 
-// 	}
-// 
-// 	Texture.Width = inWidth;
-// 	Texture.Height = inHeight;
-// 
-// 
-// 
-// 
-// }
 
 D3D12Fence::~D3D12Fence()
 {
@@ -267,3 +235,4 @@ uint64_t D3D12Fence::GetValue() const
 
 	return fenceValue;
 }
+

@@ -108,8 +108,7 @@ static_assert((sizeof(LightingConstantBuffer) % 256) == 0, "Constant Buffer size
 // A: all descriptors are stored and just the root for the table is modified per drawcall or
 // B: Just the necessary descriptors are stored and they are copied over before the drawcall from non shader-visible heaps
 
-// Constant Buffer is double buffered to allow modifying it each frame
-// Descriptors should also be double buffered
+// Constant Buffer is double buffered to allow modifying it each frame, same as descriptor heaps
 D3D12ConstantBuffer m_constantBuffer;
 uint64_t UsedCBMemory[D3D12Utility::NumFramesInFlight] = { 0 };
 
@@ -328,12 +327,12 @@ void AppModeBase::CreateRootSignatures()
 		//////////////////////////////////////////////////////////////////////////
 
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		sampler.Filter = D3D12_FILTER_ANISOTROPIC;
 		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		sampler.MipLODBias = 0;
-		sampler.MaxAnisotropy = 0;
+		sampler.MaxAnisotropy = 16;
 		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
 		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
 		sampler.MinLOD = 0.0f;
@@ -523,8 +522,8 @@ void AppModeBase::CreatePSOs()
 {
 	// Mesh Pass PSO
 	{
-		eastl::string fullPath = "MeshPass.hlsl";
-		fullPath.insert(0, "../Data/Shaders/D3D12/");
+		eastl::string fullPath = "../Data/Shaders/D3D12/"; ;
+		fullPath += "MeshPass.hlsl";
 
 		GraphicsCompiledShaderPair meshShaderPair = D3D12RHI::Get()->CompileGraphicsShaderFromFile(fullPath);
 
@@ -572,8 +571,8 @@ void AppModeBase::CreatePSOs()
 
 	// Basic Shapes PSO
 	{
-		eastl::string fullPath = "BasicShapesMeshPass.hlsl";
-		fullPath.insert(0, "../Data/Shaders/D3D12/");
+		eastl::string fullPath = "../Data/Shaders/D3D12/"; ;
+		fullPath += "BasicShapesMeshPass.hlsl";
 
 		GraphicsCompiledShaderPair meshShaderPair = D3D12RHI::Get()->CompileGraphicsShaderFromFile(fullPath);
 
@@ -619,8 +618,8 @@ void AppModeBase::CreatePSOs()
 
 	// Lighting Quad PSO
 	{
-		eastl::string fullPath = "LightingPass.hlsl";
-		fullPath.insert(0, "../Data/Shaders/D3D12/");
+		eastl::string fullPath = "../Data/Shaders/D3D12/"; ;
+		fullPath += "LightingPass.hlsl";
 
 		GraphicsCompiledShaderPair meshShaderPair = D3D12RHI::Get()->CompileGraphicsShaderFromFile(fullPath);
 
@@ -752,43 +751,21 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 
 			//LOG_INFO("Translation for object with index %d : %f    %f    %f", i, modelMatrix[3][0], modelMatrix[3][1], modelMatrix[3][2]);
 
-			MeshConstantBuffer constantBufferData;
-
-			// All matrices sent to HLSL need to be converted to row-major(what D3D uses) from column-major(what glm uses)
-			constantBufferData.Model = glm::transpose(modelMatrix);
-			constantBufferData.Projection = glm::transpose(GetMainProjection());
-
-			const glm::mat4 view = inCurrentScene.GetMainCameraLookAt();
-			constantBufferData.View = glm::transpose(view);
-
-			constantBufferData.LocalToWorldRotationOnly = glm::transpose(absTransform.GetRotationOnlyMatrix());
-
-			// Use temp buffer in main constant buffer
 			{
-				// TODO: Abstract this
+				MeshConstantBuffer constantBufferData;
 
-				MapResult cBufferMap = m_constantBuffer.Map();
+				// All matrices sent to HLSL need to be converted to row-major(what D3D uses) from column-major(what glm uses)
+				constantBufferData.Model = glm::transpose(modelMatrix);
+				constantBufferData.Projection = glm::transpose(GetMainProjection());
 
-				const uint64_t cbSize = sizeof(constantBufferData);
+				const glm::mat4 view = inCurrentScene.GetMainCameraLookAt();
+				constantBufferData.View = glm::transpose(view);
 
-				// Used memory sizes should be aligned
-				const uint64_t offset = UsedCBMemory[D3D12Utility::CurrentFrameIndex];
+				constantBufferData.LocalToWorldRotationOnly = glm::transpose(absTransform.GetRotationOnlyMatrix());
 
-				// Align size
-				const uint64_t finalSize = Utils::AlignTo(cbSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-				UsedCBMemory[D3D12Utility::CurrentFrameIndex] += finalSize;
-
-				ASSERT(finalSize < m_constantBuffer.Size);
-
-				uint8_t* CPUAddress = cBufferMap.CPUAddress;
-				CPUAddress += offset;
-
-				uint64_t GPUAddress = cBufferMap.GPUAddress;
-				GPUAddress += offset;
-
-				memcpy(CPUAddress, &constantBufferData, sizeof(constantBufferData));
-
-				m_commandList->SetGraphicsRootConstantBufferView(1, GPUAddress);
+				MapResult cBufferMap = m_constantBuffer.ReserveTempBufferMemory(sizeof(constantBufferData));
+				memcpy(cBufferMap.CPUAddress, &constantBufferData, sizeof(constantBufferData));
+				m_commandList->SetGraphicsRootConstantBufferView(1, cBufferMap.GPUAddress);
 			}
 
 			// Only one CBV SRV UAV heap and one Samplers heap can be bound at the same time
@@ -817,6 +794,7 @@ void AppModeBase::DrawGBuffer()
 {
 	PIXMarker Marker(m_commandList, "Draw GBuffer");
 
+	m_constantBuffer.ClearUsedMemory();
 	UsedCBMemory[D3D12Utility::CurrentFrameIndex] = 0;
 
 	// Populate Command List
@@ -911,40 +889,19 @@ void AppModeBase::RenderLighting()
 	static glm::vec3 LightDir = glm::vec3(1.f, -1.f, 0.f);
 	ImGui::DragFloat3("Light Direction", &LightDir.x, 0.05f, -1.f, 1.f);
 
-	LightingConstantBuffer lightingConstantBufferData;
-
-	lightingConstantBufferData.PerspInv = glm::transpose(glm::inverse(GetMainProjection()));
-	lightingConstantBufferData.ViewInv = glm::transpose(glm::inverse(currentScene.GetMainCameraLookAt()));
-
-	lightingConstantBufferData.LightDir = glm::vec4(glm::normalize(LightDir), 0.f);
-	lightingConstantBufferData.ViewPos = glm::vec4(currentCamera->GetAbsoluteTransform().Translation, 0.f);
-
-	// Use temp buffer in main constant buffer
 	{
-		// TODO: Abstract this
+		LightingConstantBuffer lightingConstantBufferData;
 
-		MapResult cBufferMap = m_constantBuffer.Map();
+		lightingConstantBufferData.PerspInv = glm::transpose(glm::inverse(GetMainProjection()));
+		lightingConstantBufferData.ViewInv = glm::transpose(glm::inverse(currentScene.GetMainCameraLookAt()));
 
-		const uint64_t cbSize = sizeof(lightingConstantBufferData);
+		lightingConstantBufferData.LightDir = glm::vec4(glm::normalize(LightDir), 0.f);
+		lightingConstantBufferData.ViewPos = glm::vec4(currentCamera->GetAbsoluteTransform().Translation, 0.f);
 
-		// Used memory sizes should be aligned
-		const uint64_t offset = UsedCBMemory[D3D12Utility::CurrentFrameIndex];
-
-		// Align size
-		const uint64_t finalSize = Utils::AlignTo(cbSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-		UsedCBMemory[D3D12Utility::CurrentFrameIndex] += finalSize;
-
-		ASSERT(finalSize < m_constantBuffer.Size);
-
-		uint8_t* CPUAddress = cBufferMap.CPUAddress;
-		CPUAddress += offset;
-
-		uint64_t GPUAddress = cBufferMap.GPUAddress;
-		GPUAddress += offset;
-
-		memcpy(CPUAddress, &lightingConstantBufferData, sizeof(lightingConstantBufferData));
-
-		m_commandList->SetGraphicsRootConstantBufferView(0, GPUAddress);
+		// Use temp buffer in main constant buffer
+		MapResult cBufferMap = m_constantBuffer.ReserveTempBufferMemory(sizeof(lightingConstantBufferData));
+		memcpy(cBufferMap.CPUAddress, &lightingConstantBufferData, sizeof(lightingConstantBufferData));
+		m_commandList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
 	}
 
 	m_commandList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_GBufferAlbedo->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));

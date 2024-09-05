@@ -52,15 +52,32 @@ public:
 
 	inline D3D12_GPU_DESCRIPTOR_HANDLE GetGPUHandle() { return D3D12_GPU_DESCRIPTOR_HANDLE{ GPUAddress }; }
 
+	MapResult ReserveTempBufferMemory(const uint64_t inSize);
+
+	// Should be called at the start of each frime
+	void ClearUsedMemory();
+
 public:
 
 	ID3D12Resource* D3D12Resource = nullptr;
 	uint8_t* CPUAddress = nullptr;
 	uint64_t GPUAddress = 0;
 	uint64_t Size = 0;
+	uint64_t UsedMemory[D3D12Utility::NumFramesInFlight] = {0, 0};
+};
 
+class D3D12StructuredBuffer
+{
+public:
+	~D3D12StructuredBuffer();
+
+	void Init(const uint64_t inNumElements, const uint64_t inStride);
+
+public:
+	struct ID3D12Resource* Resource = nullptr;
 
 };
+
 
 struct D3D12Fence
 {
@@ -79,6 +96,5 @@ struct D3D12Fence
 
 
 };
-
 
 

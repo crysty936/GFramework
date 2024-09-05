@@ -61,14 +61,4 @@ public:
 	DXGI_FORMAT DSVFormat = DXGI_FORMAT_UNKNOWN;
 };
 
-class D3D12StructuredBuffer
-{
-public:
-	D3D12StructuredBuffer() = default;
-
-
-public:
-	struct ID3D12Resource* Resource = nullptr;
-
-};
 
