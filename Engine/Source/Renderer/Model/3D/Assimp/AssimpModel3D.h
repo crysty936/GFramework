@@ -17,11 +17,12 @@ public:
 	void Init(struct ID3D12GraphicsCommandList* inCommandList) override;
 
 protected:
-	eastl::shared_ptr<MeshNode> LoadData(OUT eastl::vector<RenderCommand>& outCommands, struct ID3D12GraphicsCommandList* inCommandList);
-	void ProcessNodesRecursively(const struct aiNode& inNode, const struct aiScene& inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, struct ID3D12GraphicsCommandList* inCommandList, OUT eastl::vector<RenderCommand>& outCommands);
-	void ProcessMesh(const struct aiMesh& inMesh, const struct aiScene& inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, struct ID3D12GraphicsCommandList* inCommandList, OUT eastl::vector<RenderCommand>& outCommands);
+	eastl::shared_ptr<MeshNode> LoadData(struct ID3D12GraphicsCommandList* inCommandList);
+	void ProcessMaterials(const struct aiScene& inScene, struct ID3D12GraphicsCommandList* inCommandList);
+	void ProcessNodesRecursively(const struct aiNode& inNode, const struct aiScene& inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, struct ID3D12GraphicsCommandList* inCommandList);
+	void ProcessMesh(const struct aiMesh& inMesh, const struct aiScene& inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, struct ID3D12GraphicsCommandList* inCommandList);
 
-	eastl::vector<eastl::shared_ptr<class D3D12Texture2D>> LoadMaterialTextures(const struct aiMaterial& inMat, const aiTextureType& inAssimpTexType, struct ID3D12GraphicsCommandList* inCommandList);
+	eastl::shared_ptr<class D3D12Texture2D> LoadMaterialTexture(const struct aiMaterial& inMat, const aiTextureType& inAssimpTexType, struct ID3D12GraphicsCommandList* inCommandList);
 	bool IsTextureLoaded(const eastl::string& inTexPath, OUT eastl::shared_ptr<class D3D12Texture2D>& outTex);
 private:
 	eastl::vector<eastl::shared_ptr<class D3D12Texture2D>> LoadedTextures;

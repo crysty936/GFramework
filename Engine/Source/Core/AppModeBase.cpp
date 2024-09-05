@@ -401,12 +401,12 @@ void AppModeBase::CreateRootSignatures()
 		//////////////////////////////////////////////////////////////////////////
 
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		sampler.Filter = D3D12_FILTER_ANISOTROPIC;
 		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		sampler.MipLODBias = 0;
-		sampler.MaxAnisotropy = 0;
+		sampler.MaxAnisotropy = 16;
 		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
 		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
 		sampler.MinLOD = 0.0f;
@@ -727,14 +727,13 @@ void AppModeBase::BeginFrame()
 uint64_t TestNrMeshesToDraw = uint64_t(-1);
 uint64_t NrMeshesDrawn = 0;
 
-void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes, const Scene& inCurrentScene)
+void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes, const Scene& inCurrentScene, const eastl::vector<MeshMaterial>& inMaterials)
 {
-
 	for (const TransformObjPtr& child : inChildNodes)
 	{
 		const TransformObject* childPtr = child.get();
 
-		DrawMeshNodesRecursively(childPtr->GetChildren(), inCurrentScene);
+		DrawMeshNodesRecursively(childPtr->GetChildren(), inCurrentScene, inMaterials);
 
 		if (NrMeshesDrawn >= TestNrMeshesToDraw)
 		{
@@ -744,7 +743,7 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 
 		if (const MeshNode* modelChild = dynamic_cast<const MeshNode*>(childPtr))
 		{
-			if (modelChild->Textures.size() == 0)
+			if (modelChild->MatIndex == uint32_t(-1))
 			{
 				continue;
 			}
@@ -797,9 +796,10 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 			ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heaps[D3D12Utility::CurrentFrameIndex]};
 			m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-			m_commandList->SetGraphicsRoot32BitConstant(2, modelChild->Textures[0]->SRVIndex, 0);
-			//uint32_t constants[2] = { modelChild->Textures[0]->SRVIndex, uint32_t(modelChild->hasTB) };
-			//m_commandList->SetGraphicsRoot32BitConstants(2, 2, &constants[0], 0);
+
+			const MeshMaterial& currMeshMaterial = inMaterials[modelChild->MatIndex];
+			m_commandList->SetGraphicsRoot32BitConstant(2, currMeshMaterial.Textures[0]->SRVIndex, 0);
+
 
 			m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
 
@@ -879,7 +879,7 @@ void AppModeBase::DrawGBuffer()
 
 		// Record commands
 		const eastl::vector<TransformObjPtr>& children = currModel->GetChildren();
-		DrawMeshNodesRecursively(children, currentScene);
+		DrawMeshNodesRecursively(children, currentScene, currModel->Materials);
 	}
 }
 

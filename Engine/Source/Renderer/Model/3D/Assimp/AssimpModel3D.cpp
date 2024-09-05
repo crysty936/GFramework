@@ -39,8 +39,7 @@ AssimpModel3D::~AssimpModel3D() = default;
 
 void AssimpModel3D::LoadModelToRoot(const eastl::string inPath, TransformObjPtr inParent, ID3D12GraphicsCommandList* inCommandList)
 {
-	eastl::vector<RenderCommand> resultingCommands;
-	eastl::shared_ptr<MeshNode> mesh = LoadData(resultingCommands, inCommandList);
+	eastl::shared_ptr<MeshNode> mesh = LoadData(inCommandList);
 
 	if (ENSURE(mesh))
 	{
@@ -53,7 +52,7 @@ void AssimpModel3D::Init(ID3D12GraphicsCommandList* inCommandList)
 	LoadModelToRoot(ModelPath, shared_from_this(), inCommandList);
 }
 
-eastl::shared_ptr<MeshNode> AssimpModel3D::LoadData(OUT eastl::vector<RenderCommand>& outCommands, ID3D12GraphicsCommandList* inCommandList)
+eastl::shared_ptr<MeshNode> AssimpModel3D::LoadData(ID3D12GraphicsCommandList* inCommandList)
 {
 	Assimp::Importer modelImporter;
 
@@ -68,21 +67,45 @@ eastl::shared_ptr<MeshNode> AssimpModel3D::LoadData(OUT eastl::vector<RenderComm
 
 	ModelDir = ModelPath.substr(0, ModelPath.find_last_of('/'));
 
+	ProcessMaterials(*scene, inCommandList);
+
 	eastl::shared_ptr<MeshNode> newNode = eastl::make_shared<MeshNode>("RootNode");
 	newNode->SetRelTransform(aiMatrixToTransform(scene->mRootNode->mTransformation));
-	ProcessNodesRecursively(*scene->mRootNode, *scene, newNode, inCommandList, outCommands);
+	ProcessNodesRecursively(*scene->mRootNode, *scene, newNode, inCommandList);
 
 	return newNode;
 }
 
-void AssimpModel3D::ProcessNodesRecursively(const aiNode & inNode, const aiScene & inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, struct ID3D12GraphicsCommandList* inCommandList, OUT eastl::vector<RenderCommand>& outCommands)
+void AssimpModel3D::ProcessMaterials(const aiScene& inScene, ID3D12GraphicsCommandList* inCommandList)
+{
+	const uint32_t numMaterials = inScene.mNumMaterials;
+
+	Materials.resize(numMaterials);
+
+	for (uint32_t i = 0; i < numMaterials; ++i)
+	{
+		MeshMaterial& currMaterial = Materials[i];
+		aiMaterial* currAsimpMat = inScene.mMaterials[i];
+
+		eastl::shared_ptr<D3D12Texture2D> diffuseMap = LoadMaterialTexture(*currAsimpMat, aiTextureType_DIFFUSE, inCommandList);
+		currMaterial.Textures.push_back(diffuseMap);
+
+		eastl::shared_ptr<D3D12Texture2D> normalMap = LoadMaterialTexture(*currAsimpMat, aiTextureType_NORMALS, inCommandList);
+		currMaterial.Textures.push_back(normalMap);
+
+		eastl::shared_ptr<D3D12Texture2D> metallicRoughnessMap = LoadMaterialTexture(*currAsimpMat, aiTextureType_UNKNOWN, inCommandList); //AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE
+		currMaterial.Textures.push_back(metallicRoughnessMap);
+	}
+}
+
+void AssimpModel3D::ProcessNodesRecursively(const aiNode & inNode, const aiScene & inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, struct ID3D12GraphicsCommandList* inCommandList)
 {
 	for (uint32_t i = 0; i < inNode.mNumMeshes; ++i)
 	{
 		const uint32_t meshIndex = inNode.mMeshes[i];
 		const aiMesh* assimpMesh = inScene.mMeshes[meshIndex];
 
-		ProcessMesh(*assimpMesh, inScene, inCurrentNode, inCommandList, outCommands);
+		ProcessMesh(*assimpMesh, inScene, inCurrentNode, inCommandList);
 	}
 
 	for (uint32_t i = 0; i < inNode.mNumChildren; ++i)
@@ -91,12 +114,12 @@ void AssimpModel3D::ProcessNodesRecursively(const aiNode & inNode, const aiScene
 		eastl::shared_ptr<MeshNode> newNode = eastl::make_shared<MeshNode>(nextAiNode.mName.C_Str());
 		newNode->SetRelTransform(aiMatrixToTransform(nextAiNode.mTransformation));
 
-		ProcessNodesRecursively(nextAiNode, inScene, newNode, inCommandList, outCommands);
+		ProcessNodesRecursively(nextAiNode, inScene, newNode, inCommandList);
 		inCurrentNode->AddChild((newNode));
 	}
 }
 
-void AssimpModel3D::ProcessMesh(const aiMesh& inMesh, const aiScene& inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, ID3D12GraphicsCommandList* inCommandList, OUT eastl::vector<RenderCommand>& outCommands)
+void AssimpModel3D::ProcessMesh(const aiMesh& inMesh, const aiScene& inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, ID3D12GraphicsCommandList* inCommandList)
 {
 	VertexInputLayout inputLayout;
 	// Vertex points
@@ -110,22 +133,6 @@ void AssimpModel3D::ProcessMesh(const aiMesh& inMesh, const aiScene& inScene, ea
 	// Bitangent
 	inputLayout.Push<float>(3, VertexInputType::Bitangent);
 
-	eastl::vector<eastl::shared_ptr<D3D12Texture2D>> textures;
-
-	if (inMesh.mMaterialIndex >= 0)
-	{
-		aiMaterial* Material = inScene.mMaterials[inMesh.mMaterialIndex];
-
-		eastl::vector<eastl::shared_ptr<D3D12Texture2D>> diffuseMaps = LoadMaterialTextures(*Material, aiTextureType_DIFFUSE, inCommandList);
-		textures.insert(textures.end(), eastl::make_move_iterator(diffuseMaps.begin()), eastl::make_move_iterator(diffuseMaps.end()));
-
-		eastl::vector<eastl::shared_ptr<D3D12Texture2D>> normalMaps = LoadMaterialTextures(*Material, aiTextureType_NORMALS, inCommandList);
-		textures.insert(textures.end(), eastl::make_move_iterator(normalMaps.begin()), eastl::make_move_iterator(normalMaps.end()));
-
-  		eastl::vector<eastl::shared_ptr<D3D12Texture2D>> metRoughness = LoadMaterialTextures(*Material, aiTextureType_UNKNOWN, inCommandList);//AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE
-		textures.insert(textures.end(), eastl::make_move_iterator(metRoughness.begin()), eastl::make_move_iterator(metRoughness.end()));
-	}
- 
 	eastl::shared_ptr<D3D12IndexBuffer> indexBuffer;
 	eastl::shared_ptr<D3D12VertexBuffer> vertexBuffer;
 
@@ -189,38 +196,29 @@ void AssimpModel3D::ProcessMesh(const aiMesh& inMesh, const aiScene& inScene, ea
 	eastl::shared_ptr<MeshNode> newMesh = eastl::make_shared<MeshNode>(inMesh.mName.C_Str());
 	newMesh->IndexBuffer = indexBuffer;
 	newMesh->VertexBuffer = vertexBuffer;
-	newMesh->Textures = textures;
+	newMesh->MatIndex = inMesh.mMaterialIndex;
+	//newMesh->Textures = textures;
 
 	inCurrentNode->AddChild(newMesh);
 }
 
-eastl::vector<eastl::shared_ptr<D3D12Texture2D>> AssimpModel3D::LoadMaterialTextures(const aiMaterial& inMat, const aiTextureType& inAssimpTexType, ID3D12GraphicsCommandList* inCommandList)
+eastl::shared_ptr<D3D12Texture2D> AssimpModel3D::LoadMaterialTexture(const aiMaterial& inMat, const aiTextureType& inAssimpTexType, ID3D12GraphicsCommandList* inCommandList)
 {
-	eastl::vector<eastl::shared_ptr<D3D12Texture2D>> textures;
-	const uint32_t texturesCount = inMat.GetTextureCount(inAssimpTexType);
+	aiString Str;
+	inMat.GetTexture(inAssimpTexType, 0, &Str);
+	eastl::shared_ptr<D3D12Texture2D> newTex = nullptr;
 
-	for (uint32_t i = 0; i < texturesCount; ++i)
+	if (Str.length != 0 && !IsTextureLoaded(Str.C_Str(), newTex))
 	{
-		aiString Str;
-		inMat.GetTexture(inAssimpTexType, i, &Str);
-		eastl::shared_ptr<D3D12Texture2D> tex = nullptr;
+		const eastl::string path = ModelDir + eastl::string("/") + eastl::string(Str.C_Str());
 
-		// Currently, textures in descriptor tables are assigned based on the first texture.
-		// This means that there's a possibility for textures with similar albedo but diferences in others to render wrong/affect others down the pipe
-		// TODO: Protect against this
-		if (!IsTextureLoaded(Str.C_Str(), tex))
-		{
-			const eastl::string path = ModelDir + eastl::string("/") + eastl::string(Str.C_Str());
-
-			tex = D3D12RHI::Get()->CreateAndLoadTexture2D(path, inAssimpTexType == aiTextureType_DIFFUSE, inCommandList);
-			tex->SourcePath = eastl::string(Str.C_Str());
-			LoadedTextures.push_back(tex);
-		}
-
-		textures.push_back(tex);
+		const bool srgb = inAssimpTexType == aiTextureType_DIFFUSE;
+		newTex = D3D12RHI::Get()->CreateAndLoadTexture2D(path, srgb, inCommandList);
+		newTex->SourcePath = eastl::string(Str.C_Str());
+		LoadedTextures.push_back(newTex);
 	}
 
-	return textures;
+	return newTex;
 }
 
 bool AssimpModel3D::IsTextureLoaded(const eastl::string& inTexPath, OUT eastl::shared_ptr<D3D12Texture2D>& outTex)

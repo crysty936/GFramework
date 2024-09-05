@@ -5,6 +5,12 @@
 #include "Renderer/Drawable/Drawable.h"
 #include "Renderer/RHI/D3D12/D3D12Resources.h"
 
+struct MeshMaterial
+{
+
+	eastl::vector<eastl::shared_ptr<D3D12Texture2D>> Textures;
+};
+
 // MeshNodes are stored as TransformObject children to the main Model3D
 
 struct MeshNode : public DrawableObject
@@ -14,7 +20,8 @@ struct MeshNode : public DrawableObject
 
 	eastl::shared_ptr<D3D12VertexBuffer> VertexBuffer;
 	eastl::shared_ptr<D3D12IndexBuffer> IndexBuffer;
-	eastl::vector<eastl::shared_ptr<D3D12Texture2D>> Textures;
+	//eastl::vector<eastl::shared_ptr<D3D12Texture2D>> Textures;
+	uint32_t MatIndex = uint32_t(-1);
 };
 
 class Model3D : public TransformObject
@@ -25,4 +32,6 @@ public:
 
 
 	virtual void Init(struct ID3D12GraphicsCommandList* inCommandList) = 0;
+
+	eastl::vector<MeshMaterial> Materials;
 };
