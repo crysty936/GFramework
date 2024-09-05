@@ -52,14 +52,18 @@ PSInput VSMain(float4 position : POSITION, float3 VertexNormal : NORMAL, float2 
     const float4 clipPos = mul(mul(worldPos, SceneBuffer.View), SceneBuffer.Projection);
 
      const float3x3 LocalToWorldRotationOnly3x3 = tofloat3x3(SceneBuffer.LocalToWorldRotationOnly);
-     float3 vertexNormalWS = normalize(mul(VertexNormal, LocalToWorldRotationOnly3x3)).xyz; 
-     float3 tangentWS = normalize(mul(tangent, LocalToWorldRotationOnly3x3)).xyz;
-     float3 bitangentWS = normalize(mul(bitangent, LocalToWorldRotationOnly3x3)).xyz;
 
     float3 n = normalize(VertexNormal);
-    float3 t = normalize(tangent);
-    float3 b = normalize(cross(n, t));
-    t = normalize(cross(b, n));
+    float3 b = normalize(bitangent);
+
+    // Fix tangents from gltf model being broken
+    float3 t = normalize(cross(b, n));
+
+    b = normalize(cross(n, t));
+
+     float3 vertexNormalWS = normalize(mul(n, LocalToWorldRotationOnly3x3)).xyz; 
+     float3 tangentWS = normalize(mul(t, LocalToWorldRotationOnly3x3)).xyz;
+     float3 bitangentWS = normalize(mul(b, LocalToWorldRotationOnly3x3)).xyz;
 
     float3x3 tangentToLocal = 0;
     tangentToLocal[0] = t;
@@ -97,7 +101,7 @@ PSOutput PSMain(PSInput input)
 {
     float2 uv = input.uv;
 
-    float3 normalWS = normalize(input.VertexNormalWS);
+    float3 vertexNormalWS = normalize(input.VertexNormalWS);
     float3 tangentWS = normalize(input.VertexTangentWS);
     float3 bitangentWS = normalize(input.VertexBitangentWS);
 
@@ -115,7 +119,8 @@ PSOutput PSMain(PSInput input)
     const float3 wsNormal = mul(normalTS, input.TangentToWorld);
 
     output.Normal = float4(wsNormal / 2.0 + 0.5, 1);
-    //output.Albedo = float4(wsNormal / 2.0 + 0.5, 1);
+
+    //output.Albedo = float4(tangentWS / 2.0 + 0.5, 1);
 
     return output;
 }

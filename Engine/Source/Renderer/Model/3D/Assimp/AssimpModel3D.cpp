@@ -44,8 +44,6 @@ void AssimpModel3D::LoadModelToRoot(const eastl::string inPath, TransformObjPtr 
 
 	if (ENSURE(mesh))
 	{
-		// @GFramework: TODO
-		//Renderer::Get().AddCommands(resultingCommands);
 		inParent->AddChild(mesh);
 	}
 }
@@ -98,55 +96,6 @@ void AssimpModel3D::ProcessNodesRecursively(const aiNode & inNode, const aiScene
 	}
 }
 
-eastl::shared_ptr<RHIShader> AssimpModel3D::CreateShaders(const VertexInputLayout& inLayout) const
-{
-	eastl::vector<ShaderSourceInput> shaders = {
-		{ "GenericAssimpModel/VS_Pos-UV-Normal-Tangent-Bitangent_Model_WorldPosition_WithShadow", EShaderType::Sh_Vertex },
-		{ "GenericAssimpModel/PS_TexNormalMapped_WithShadow", EShaderType::Sh_Fragment } };
-
-	ASSERT(0);
-
-	//return RHI::Get()->CreateShaderFromPath(shaders, inLayout);
-
-	return nullptr;
-}
-
-eastl::shared_ptr<RenderMaterial> AssimpModel3D::CreateMaterial(const aiMesh& inMesh, bool& outMatExists) const
-{
-	static eastl::set<eastl::string> potentiallyCreatedMaterials;
-	auto iterator = potentiallyCreatedMaterials.find(eastl::string("Assimp_Material_") + inMesh.mName.data);
-	//auto iterator = potentiallyCreatedMaterials.find_as(eastl::string("Assimp_Material_") + inMesh.mName.data, eastl::less_2<eastl::string, const char*>());
-	const bool alreadyExists = iterator != potentiallyCreatedMaterials.end();
-
-	if (alreadyExists)
-	{
-		ASSERT(false);
-	}
-
-	if (!alreadyExists)
-	{
-		potentiallyCreatedMaterials.insert(eastl::string("Assimp_Material_") + inMesh.mName.data);
-	}
-
-	//MaterialsManager& matManager = MaterialsManager::Get();
-	//eastl::shared_ptr<RenderMaterial> thisMaterial = matManager.GetOrAddMaterial<RenderMaterial_WithShadow>(eastl::string("Assimp_Material_") + inMesh.mName.data, outMatExists);
-
-	return nullptr;
-}
-
-RenderCommand AssimpModel3D::CreateRenderCommand(eastl::shared_ptr<RenderMaterial>& inMaterial, eastl::shared_ptr<MeshNode>& inParent, eastl::shared_ptr<MeshDataContainer>& inDataContainer)
-{
-	RenderCommand newCommand;
-	newCommand.Material = inMaterial;
-	newCommand.Parent = inParent;
-	newCommand.DataContainer = inDataContainer;
-	newCommand.DrawType = EDrawType::DrawElements;
-	newCommand.DrawPasses = static_cast<EDrawMode::Type>(EDrawMode::Default /*| EDrawMode::NORMAL_VISUALIZE*/);
-	newCommand.OverrideColor = OverrideColor;
-
-	return newCommand;
-}
-
 void AssimpModel3D::ProcessMesh(const aiMesh& inMesh, const aiScene& inScene, eastl::shared_ptr<MeshNode>& inCurrentNode, ID3D12GraphicsCommandList* inCommandList, OUT eastl::vector<RenderCommand>& outCommands)
 {
 	VertexInputLayout inputLayout;
@@ -161,42 +110,28 @@ void AssimpModel3D::ProcessMesh(const aiMesh& inMesh, const aiScene& inScene, ea
 	// Bitangent
 	inputLayout.Push<float>(3, VertexInputType::Bitangent);
 
- 	bool materialExists = false;
-	eastl::shared_ptr<RenderMaterial> thisMaterial = CreateMaterial(inMesh, materialExists);
 	eastl::vector<eastl::shared_ptr<D3D12Texture2D>> textures;
 
- 	//if (!materialExists)
- 	{
-		//eastl::vector<D3D12Texture2D> textures;
-		if (inMesh.mMaterialIndex >= 0)
-		{
-			aiMaterial* Material = inScene.mMaterials[inMesh.mMaterialIndex];
+	if (inMesh.mMaterialIndex >= 0)
+	{
+		aiMaterial* Material = inScene.mMaterials[inMesh.mMaterialIndex];
 
-			eastl::vector<eastl::shared_ptr<D3D12Texture2D>> diffuseMaps = LoadMaterialTextures(*Material, aiTextureType_DIFFUSE, inCommandList);
-			textures.insert(textures.end(), eastl::make_move_iterator(diffuseMaps.begin()), eastl::make_move_iterator(diffuseMaps.end()));
+		eastl::vector<eastl::shared_ptr<D3D12Texture2D>> diffuseMaps = LoadMaterialTextures(*Material, aiTextureType_DIFFUSE, inCommandList);
+		textures.insert(textures.end(), eastl::make_move_iterator(diffuseMaps.begin()), eastl::make_move_iterator(diffuseMaps.end()));
 
-			eastl::vector<eastl::shared_ptr<D3D12Texture2D>> normalMaps = LoadMaterialTextures(*Material, aiTextureType_NORMALS, inCommandList);
-			textures.insert(textures.end(), eastl::make_move_iterator(normalMaps.begin()), eastl::make_move_iterator(normalMaps.end()));
+		eastl::vector<eastl::shared_ptr<D3D12Texture2D>> normalMaps = LoadMaterialTextures(*Material, aiTextureType_NORMALS, inCommandList);
+		textures.insert(textures.end(), eastl::make_move_iterator(normalMaps.begin()), eastl::make_move_iterator(normalMaps.end()));
 
-  			eastl::vector<eastl::shared_ptr<D3D12Texture2D>> metRoughness = LoadMaterialTextures(*Material, aiTextureType_UNKNOWN, inCommandList);//AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE
-			textures.insert(textures.end(), eastl::make_move_iterator(metRoughness.begin()), eastl::make_move_iterator(metRoughness.end()));
-		}
-
-		//thisMaterial->Shader = CreateShaders(inputLayout);
- 	}
+  		eastl::vector<eastl::shared_ptr<D3D12Texture2D>> metRoughness = LoadMaterialTextures(*Material, aiTextureType_UNKNOWN, inCommandList);//AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE
+		textures.insert(textures.end(), eastl::make_move_iterator(metRoughness.begin()), eastl::make_move_iterator(metRoughness.end()));
+	}
  
 	eastl::shared_ptr<D3D12IndexBuffer> indexBuffer;
 	eastl::shared_ptr<D3D12VertexBuffer> vertexBuffer;
 
-	//const eastl::string renderDataContainerName = inMesh.mName.C_Str();
-	//const bool existingContainer = Renderer::Get().GetOrCreateContainer(renderDataContainerName, dataContainer);
-
-	eastl::vector<Vertex> vertices;
-	eastl::vector<uint32_t> indices;
-
-	// @GFramework: TODO
-	//if (!existingContainer)
 	{
+		eastl::vector<Vertex> vertices;
+		eastl::vector<uint32_t> indices;
 
 		for (uint32_t i = 0; i < inMesh.mNumVertices; i++)
 		{
@@ -206,23 +141,18 @@ void AssimpModel3D::ProcessMesh(const aiMesh& inMesh, const aiScene& inScene, ea
 
 			vert.Position = glm::vec3(aiVertex.x, aiVertex.y, aiVertex.z);
 			vert.Normal = glm::vec3(aiNormal.x, aiNormal.y, aiNormal.z);
-			if (inMesh.mTangents)
+
+			if (inMesh.HasTangentsAndBitangents())
 			{
 				const aiVector3D& aiTangent = inMesh.mTangents[i];
 				vert.Tangent = glm::vec3(aiTangent.x, aiTangent.y, aiTangent.z);
-			}
-			else
-			{
-				vert.Tangent = glm::vec3(1.f, 0.f, 0.f);
-			}
 
-			if (inMesh.mBitangents)
-			{
 				const aiVector3D& aiBitangent = inMesh.mBitangents[i];
 				vert.Bitangent = glm::vec3(aiBitangent.x, aiBitangent.y, aiBitangent.z);
 			}
 			else
 			{
+				vert.Tangent = glm::vec3(1.f, 0.f, 0.f);
 				vert.Bitangent = glm::vec3(0.f, 1.f, 0.f);
 			}
 
@@ -262,9 +192,6 @@ void AssimpModel3D::ProcessMesh(const aiMesh& inMesh, const aiScene& inScene, ea
 	newMesh->Textures = textures;
 
 	inCurrentNode->AddChild(newMesh);
-
-	//RenderCommand newCommand = CreateRenderCommand(thisMaterial, inCurrentNode, dataContainer);
-	//outCommands.push_back(newCommand);
 }
 
 eastl::vector<eastl::shared_ptr<D3D12Texture2D>> AssimpModel3D::LoadMaterialTextures(const aiMaterial& inMat, const aiTextureType& inAssimpTexType, ID3D12GraphicsCommandList* inCommandList)

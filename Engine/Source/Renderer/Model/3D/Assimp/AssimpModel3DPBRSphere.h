@@ -13,7 +13,7 @@ public:
 	virtual ~AssimpModel3DPBRSphere();
 
 protected:
-	eastl::shared_ptr<RHIShader> CreateShaders(const class VertexInputLayout& inLayout) const override;
-	eastl::shared_ptr<RenderMaterial> CreateMaterial(const struct aiMesh& inMesh, bool& outMatExists) const override;
+	//eastl::shared_ptr<RHIShader> CreateShaders(const class VertexInputLayout& inLayout) const override;
+	//eastl::shared_ptr<RenderMaterial> CreateMaterial(const struct aiMesh& inMesh, bool& outMatExists) const override;
 
 };

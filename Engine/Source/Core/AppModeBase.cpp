@@ -239,6 +239,7 @@ void AppModeBase::CreateInitialResources()
 	//currentScene.AddObject(model);
 
 
+	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza2/Sponza.fbx", "Sponza");
 	eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza/Sponza.gltf", "Sponza");
 	model->Rotate(90.f, glm::vec3(0.f, 1.f, 0.f));
 	model->Move(glm::vec3(0.f, -1.f, -5.f));
@@ -797,6 +798,8 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 			m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
 			m_commandList->SetGraphicsRoot32BitConstant(2, modelChild->Textures[0]->SRVIndex, 0);
+			//uint32_t constants[2] = { modelChild->Textures[0]->SRVIndex, uint32_t(modelChild->hasTB) };
+			//m_commandList->SetGraphicsRoot32BitConstants(2, 2, &constants[0], 0);
 
 			m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
 

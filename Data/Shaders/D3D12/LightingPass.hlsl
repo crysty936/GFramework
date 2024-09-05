@@ -127,8 +127,8 @@ PSOutput PSMain(PSInput input)
 	
 	const float4 worldSpacePos = mul(viewSpacePos, ViewInv);
 
-	float3 wsNormal = GBufferNormal.Sample(g_sampler, uv).xyz;
-	wsNormal = wsNormal * 2.f - 1.f;
+	float3 wsNormal0to1 = GBufferNormal.Sample(g_sampler, uv).xyz;
+	float3 wsNormal = wsNormal0to1 * 2.f - 1.f;
 
 	const float3 viewToFrag = normalize(worldSpacePos.xyz - ViewPos.xyz);
 	const float3 fragToViewW = -viewToFrag;
@@ -209,7 +209,9 @@ PSOutput PSMain(PSInput input)
 	//output.Color = float4(linearizedDepth, 1.0);
 
 	output.Color = float4(finalColor * 1.5, 1);
+
 	//output.Color = albedo;
+	//output.Color = float4(wsNormal0to1, 1.f);
 
     return output;
 }
