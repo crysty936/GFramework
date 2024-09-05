@@ -2,7 +2,6 @@
 #include "EASTL/vector.h"
 #include "EASTL/shared_ptr.h"
 #include "Entity/TransformObject.h"
-#include "Renderer/LightTypes.h"
 #include "Renderer/Drawable/ShapesUtils/BasicShapes.h"
 #include "Renderer/RenderUtils.h"
 #include "Camera/Camera.h"

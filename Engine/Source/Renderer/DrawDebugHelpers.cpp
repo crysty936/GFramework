@@ -1,7 +1,7 @@
 #include "DrawDebugHelpers.h"
 #include "Utils/InlineVector.h"
 #include "RenderUtils.h"
-#include "RHI/RHI.h"
+#include "RHI/RHITypes.h"
 #include "Drawable/ShapesUtils/BasicShapesData.h"
 
 eastl::shared_ptr<RHIVertexBuffer> DebugPointsBuffer = nullptr;

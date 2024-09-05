@@ -5,7 +5,7 @@
 #include "assimp/postprocess.h"
 #include "Renderer/RenderingPrimitives.h"
 #include "Renderer/RHI/Resources/RHITexture.h"
-#include "Renderer/RHI/RHI.h"
+#include "Renderer/RHI/RHITypes.h"
 #include "assimp/GltfMaterial.h"
 #include "Renderer/RHI/D3D12/D3D12RHI.h"
 #include "Renderer/RHI/D3D12/D3D12Resources.h"

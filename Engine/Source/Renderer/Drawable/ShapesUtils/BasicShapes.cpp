@@ -82,7 +82,7 @@ void TBNQuadShape::Init(ID3D12GraphicsCommandList* inCommandList)
 #include "Core/SceneHelper.h"
 #include "Renderer/Material/EngineMaterials/SkyboxMaterial.h"
 #include "Renderer/RHI/Resources/RHIBuffers.h"
-#include "Renderer/RHI/RHI.h"
+#include "Renderer/RHI/RHITypes.h"
 #include "Renderer/RHI/Resources/RHIBuffers.h"
 #include "Renderer/Material/EngineMaterials/BallTestMaterial.h"
 #include "Renderer/Material/EngineMaterials/RenderMaterial_WithShadow.h"

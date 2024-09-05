@@ -1,7 +1,6 @@
 #pragma once
 #include "EASTL/shared_ptr.h"
 #include "Renderer/Model/3D/Model3D.h"
-#include "Renderer/LightTypes.h"
 
 class CubeShape : public Model3D
 {

@@ -1,5 +1,5 @@
 #pragma once
-#include "Renderer/RHI/RHI.h"
+#include "Renderer/RHI/RHITypes.h"
 #include "EASTL/string.h"
 #include <winerror.h>
 #include "Core/EngineUtils.h"

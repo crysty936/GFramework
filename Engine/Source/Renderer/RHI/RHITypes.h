@@ -6,7 +6,6 @@
 #include "glm/ext/vector_float3.hpp"
 #include "glm/ext/vector_float4.hpp"
 #include "glm/ext/matrix_float4x4.hpp"
-#include "Renderer/DrawType.h"
 #include "Resources/RHITexture.h"
 
 enum class ERasterizerState : uint8_t
@@ -151,6 +150,31 @@ struct DepthStencilState
 
 	SideStencilOp FrontStencilOp;
 	SideStencilOp BackStencilOp;
+};
+
+enum class EFaceCullMode
+{
+	Front,
+	Back
+};
+
+enum class EDrawType
+{
+	DrawElements,
+	DrawArrays,
+	DrawInstanced
+};
+
+struct PointLightData
+{
+	float Linear;
+	float Quadratic;
+};
+
+enum class ELightType
+{
+	Directional,
+	Point
 };
 
 

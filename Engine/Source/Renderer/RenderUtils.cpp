@@ -2,7 +2,7 @@
 #include "EASTL/string.h"
 #include "RHI/Resources/VertexInputLayout.h"
 #include "Drawable/ShapesUtils/BasicShapesData.h"
-#include "RHI/RHI.h"
+#include "RHI/RHITypes.h"
 #include "Scene/SceneManager.h"
 #include "Scene/Scene.h"
 

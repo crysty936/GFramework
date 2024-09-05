@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-#include "Renderer/RHI/RHI.h"
+#include "Renderer/RHI/RHITypes.h"
 #include "VertexInputLayout.h"
 
 enum class RHIBufferType
