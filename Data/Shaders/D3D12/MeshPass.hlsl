@@ -1,3 +1,4 @@
+#include "DescriptorTables.hlsl"
 
 struct PSInput
 {
@@ -25,8 +26,14 @@ struct SceneConstantBuffer
     float4x4 LocalToWorldRotationOnly;
 };
 
+struct MatIndexBuffer
+{
+    uint Index;
+};
+
 // 256 byte aligned
 ConstantBuffer<SceneConstantBuffer> SceneBuffer : register(b0);
+ConstantBuffer<MatIndexBuffer> MatIndex : register(b0);
 
 Texture2D g_Albedo : register(t0);
 Texture2D g_Normal : register(t1);
@@ -96,11 +103,15 @@ PSOutput PSMain(PSInput input)
 
     //float3x3 perPixelTangentToWorld = float3x3(tangentWS, bitangentWS, normalWS);
 
-    PSOutput output;
-    output.Albedo = g_Albedo.Sample(g_sampler, uv);
-    output.Roughness = g_Roughness.Sample(g_sampler, uv);
+    Texture2D AlbedoMap = Tex2DTable[MatIndex.Index];
+    Texture2D NormalMap = Tex2DTable[MatIndex.Index + 1];
+    Texture2D MetallicRoughnessMap = Tex2DTable[MatIndex.Index + 2];
 
-    const float3 normalTS = g_Normal.Sample(g_sampler, uv).xyz * 2.f - 1.f;
+    PSOutput output;
+    output.Albedo = AlbedoMap.Sample(g_sampler, uv);
+    output.Roughness = MetallicRoughnessMap.Sample(g_sampler, uv);
+
+    const float3 normalTS = NormalMap.Sample(g_sampler, uv).xyz * 2.f - 1.f;
     const float3 wsNormal = mul(normalTS, input.TangentToWorld);
 
     output.Normal = float4(wsNormal / 2.0 + 0.5, 1);
