@@ -83,14 +83,9 @@ void AssimpModel3D::ProcessMaterials(const aiScene& inScene, ID3D12GraphicsComma
 		MeshMaterial& currMaterial = Materials[i];
 		aiMaterial* currAsimpMat = inScene.mMaterials[i];
 
-		eastl::shared_ptr<D3D12Texture2D> diffuseMap = LoadMaterialTexture(*currAsimpMat, aiTextureType_DIFFUSE, inCommandList);
-		currMaterial.Textures.push_back(diffuseMap);
-
-		eastl::shared_ptr<D3D12Texture2D> normalMap = LoadMaterialTexture(*currAsimpMat, aiTextureType_NORMALS, inCommandList);
-		currMaterial.Textures.push_back(normalMap);
-
-		eastl::shared_ptr<D3D12Texture2D> metallicRoughnessMap = LoadMaterialTexture(*currAsimpMat, aiTextureType_UNKNOWN, inCommandList); //AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE
-		currMaterial.Textures.push_back(metallicRoughnessMap);
+		currMaterial.AlbedoMap = LoadMaterialTexture(*currAsimpMat, aiTextureType_DIFFUSE, inCommandList);
+		currMaterial.NormalMap = LoadMaterialTexture(*currAsimpMat, aiTextureType_NORMALS, inCommandList);
+		currMaterial.MRMap = LoadMaterialTexture(*currAsimpMat, aiTextureType_UNKNOWN, inCommandList); //AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE
 	}
 }
 

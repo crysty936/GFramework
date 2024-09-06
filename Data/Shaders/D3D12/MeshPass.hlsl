@@ -28,19 +28,23 @@ struct SceneConstantBuffer
 
 struct MatIndexBuffer
 {
-    uint Index;
+    uint ShaderMaterialIdx;
 };
 
 // 256 byte aligned
 ConstantBuffer<SceneConstantBuffer> SceneBuffer : register(b0);
 ConstantBuffer<MatIndexBuffer> MatIndex : register(b0);
 
-Texture2D g_Albedo : register(t0);
-Texture2D g_Normal : register(t1);
-Texture2D g_Roughness : register(t2);
-
 SamplerState g_sampler : register(s0);
 
+struct ShaderMaterial
+{
+	uint AlbedoMapIndex;
+	uint NormalMapIndex;
+	uint MRMapIndex;
+};
+
+StructuredBuffer<ShaderMaterial> MaterialsBuffer : register(t0, space100);
 
 inline float3x3 tofloat3x3(float4x4 m) {
     return float3x3(m[0].xyz, m[1].xyz, m[2].xyz);
@@ -107,9 +111,13 @@ PSOutput PSMain(PSInput input)
 
     //float3x3 perPixelTangentToWorld = float3x3(tangentWS, bitangentWS, normalWS);
 
-    Texture2D AlbedoMap = Tex2DTable[MatIndex.Index];
-    Texture2D NormalMap = Tex2DTable[MatIndex.Index + 1];
-    Texture2D MetallicRoughnessMap = Tex2DTable[MatIndex.Index + 2];
+    ShaderMaterial mat = MaterialsBuffer[MatIndex.ShaderMaterialIdx];
+
+    //Texture2D AlbedoMap = Tex2DTable[NonUniformResourceIndex(mat.AlbedoMapIndex)];
+
+    Texture2D AlbedoMap = Tex2DTable[mat.AlbedoMapIndex];
+    Texture2D NormalMap = Tex2DTable[mat.NormalMapIndex];
+    Texture2D MetallicRoughnessMap = Tex2DTable[mat.MRMapIndex];
 
     PSOutput output;
     output.Albedo = AlbedoMap.Sample(g_sampler, uv);

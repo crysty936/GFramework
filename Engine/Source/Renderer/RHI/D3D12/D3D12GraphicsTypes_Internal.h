@@ -59,7 +59,7 @@ public:
 
 public:
 
-	ID3D12Resource* D3D12Resource = nullptr;
+	ID3D12Resource* Resource = nullptr;
 	uint8_t* CPUAddress = nullptr;
 	uint64_t GPUAddress = 0;
 	uint64_t Size = 0;
@@ -72,10 +72,16 @@ public:
 	~D3D12StructuredBuffer();
 
 	void Init(const uint64_t inNumElements, const uint64_t inStride);
+	MapResult Map();
 
 public:
 	struct ID3D12Resource* Resource = nullptr;
+	uint64_t NumElements = 0;
+	uint64_t Stride = 0;
+	uint64_t Size = 0;
 
+	uint8_t* CPUAddress = nullptr;
+	uint64_t GPUAddress = 0;
 };
 
 

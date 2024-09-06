@@ -72,8 +72,8 @@ D3D12_CPU_DESCRIPTOR_HANDLE D3D12DescriptorHeap::GetCPUHandle(uint64_t inIndex, 
 
 D3D12ConstantBuffer::~D3D12ConstantBuffer()
 {
-	D3D12Resource->Release();
-	D3D12Resource = nullptr;
+	Resource->Release();
+	Resource = nullptr;
 }
 
 void D3D12ConstantBuffer::Init(const uint64_t inSize)
@@ -114,9 +114,9 @@ void D3D12ConstantBuffer::Init(const uint64_t inSize)
 		&constantBufferDesc,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
-		IID_PPV_ARGS(&D3D12Resource)));
+		IID_PPV_ARGS(&Resource)));
 
-	GPUAddress = D3D12Resource->GetGPUVirtualAddress();
+	GPUAddress = Resource->GetGPUVirtualAddress();
 
 	static uint64_t ConstantBufferIdx = 0;
 	++ConstantBufferIdx;
@@ -124,7 +124,7 @@ void D3D12ConstantBuffer::Init(const uint64_t inSize)
 	eastl::wstring bufferName = L"ConstantBuffer_";
 	bufferName.append(eastl::to_wstring(ConstantBufferIdx));
 
-	D3D12Resource->SetName(bufferName.c_str());
+	Resource->SetName(bufferName.c_str());
 
 	// Map and initialize the constant buffer. We don't unmap this until the
 	// app closes. Keeping things mapped for the lifetime of the resource is okay.
@@ -132,7 +132,7 @@ void D3D12ConstantBuffer::Init(const uint64_t inSize)
 	//readRange.Begin = 0;
 	//readRange.End = 0;      // We do not intend to read from this resource on the CPU.
 
-	DXAssert(D3D12Resource->Map(0, &readRange, reinterpret_cast<void**>(&CPUAddress)));
+	DXAssert(Resource->Map(0, &readRange, reinterpret_cast<void**>(&CPUAddress)));
 }
 
 MapResult D3D12ConstantBuffer::Map()
@@ -148,20 +148,19 @@ MapResult D3D12ConstantBuffer::Map()
 
 MapResult D3D12ConstantBuffer::ReserveTempBufferMemory(const uint64_t inSize)
 {
-	const uint64_t alignedSize = Utils::AlignTo(inSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-
 	uint64_t& currentMemoryCounter = UsedMemory[D3D12Utility::CurrentFrameIndex];
-
+	const uint64_t alignedSize = Utils::AlignTo(inSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 	ASSERT_MSG(alignedSize < (Size - currentMemoryCounter), "More memory required than available, increase buffer size.");
+
 
 	// Use current memory counter position as offset from current buffer start
 	const uint64_t offset = currentMemoryCounter;
 
 	MapResult currentBufferStartMap = Map();
 	uint8_t* CPUAddress = currentBufferStartMap.CPUAddress;
-	CPUAddress += offset;
-
 	uint64_t GPUAddress = currentBufferStartMap.GPUAddress;
+
+	CPUAddress += offset;
 	GPUAddress += offset;
 
 	// Add this to the used memory
@@ -177,15 +176,73 @@ void D3D12ConstantBuffer::ClearUsedMemory()
 
 D3D12StructuredBuffer::~D3D12StructuredBuffer()
 {
-
+	Resource->Release();
+	Resource = nullptr;
 }
 
 void D3D12StructuredBuffer::Init(const uint64_t inNumElements, const uint64_t inStride)
 {
+	NumElements = inNumElements;
+	Stride = inStride;
+
+	const uint64_t totalSize = inNumElements * inStride;
+	Size = Utils::AlignTo(totalSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+	D3D12_HEAP_PROPERTIES heapProps = D3D12Utility::GetUploadHeapProps();
+
+	D3D12_RESOURCE_DESC constantBufferDesc;
+	constantBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	constantBufferDesc.Alignment = 0;
+	constantBufferDesc.Width = Size * D3D12Utility::NumFramesInFlight;
+	constantBufferDesc.Height = 1;
+	constantBufferDesc.DepthOrArraySize = 1;
+	constantBufferDesc.MipLevels = 1;
+	constantBufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+	constantBufferDesc.SampleDesc.Count = 1;
+	constantBufferDesc.SampleDesc.Quality = 0;
+	constantBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+	// TODO: D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS should be added for Compute
+	constantBufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	DXAssert(D3D12Globals::Device->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&constantBufferDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&Resource)));
+
+	GPUAddress = Resource->GetGPUVirtualAddress();
+
+	static uint64_t StructuredBufferIdx = 0;
+	eastl::wstring bufferName = L"StructuredBuffer_";
+	bufferName.append(eastl::to_wstring(StructuredBufferIdx));
+	++StructuredBufferIdx;
+
+	Resource->SetName(bufferName.c_str());
+
+	D3D12_RANGE readRange = {};
+	DXAssert(Resource->Map(0, &readRange, reinterpret_cast<void**>(&CPUAddress)));
+
+
+
+
+
+
 
 }
 
+MapResult D3D12StructuredBuffer::Map()
+{
+	MapResult res = {};
 
+	const uint64_t offset = (D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight) * Size;
+	res.CPUAddress = CPUAddress + offset;
+	res.GPUAddress = GPUAddress + offset;
+
+	return res;
+}
 
 D3D12Fence::~D3D12Fence()
 {

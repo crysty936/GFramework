@@ -82,6 +82,13 @@ ID3D12PipelineState* m_MainMeshPassPipelineState;
 ID3D12PipelineState* m_BasicObjectsPipelineState;
 ID3D12PipelineState* m_LightingPipelineState;
 
+struct ShaderMaterial
+{
+	uint32_t AlbedoMapIndex;
+	uint32_t NormalMapIndex;
+	uint32_t MRMapIndex;
+};
+
 // Constant Buffer
 struct MeshConstantBuffer
 {
@@ -110,11 +117,15 @@ static_assert((sizeof(LightingConstantBuffer) % 256) == 0, "Constant Buffer size
 
 // Constant Buffer is double buffered to allow modifying it each frame, same as descriptor heaps
 D3D12ConstantBuffer m_constantBuffer;
+D3D12StructuredBuffer m_materialsBuffer;
 uint64_t UsedCBMemory[D3D12Utility::NumFramesInFlight] = { 0 };
 
 
 void AppModeBase::Init()
 {
+	BENCH_SCOPE("App Mode Init");
+
+
 	D3D12RHI::Init();
 
 	ImGuiInit();
@@ -265,6 +276,10 @@ void AppModeBase::CreateInitialResources()
 		m_constantBuffer.Init(2 * 1024 * 1024);
 	}
 
+	{
+		m_materialsBuffer.Init(1024, sizeof(ShaderMaterial));
+	}
+
 	DXAssert(m_commandList->Close());
 	ID3D12CommandList* ppCommandLists[] = { m_commandList };
 	D3D12Globals::GraphicsCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
@@ -294,7 +309,7 @@ void AppModeBase::CreateRootSignatures()
 {
 	// GBuffer Main Mesh Pass signature
 	{
-		D3D12_ROOT_PARAMETER1 rootParameters[3];
+		D3D12_ROOT_PARAMETER1 rootParameters[4];
 
 		// Main CBV_SRV_UAV heap
 		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -311,17 +326,24 @@ void AppModeBase::CreateRootSignatures()
 		rootParameters[0].DescriptorTable.pDescriptorRanges = &rangesPS[0];
 		rootParameters[0].DescriptorTable.NumDescriptorRanges = _countof(rangesPS);
 
-		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-		rootParameters[1].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
-		rootParameters[1].Descriptor.RegisterSpace = 0;
+		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		rootParameters[1].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
+		rootParameters[1].Descriptor.RegisterSpace = 100;
 		rootParameters[1].Descriptor.ShaderRegister = 0;
 
-		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-		rootParameters[2].Constants.RegisterSpace = 0;
-		rootParameters[2].Constants.ShaderRegister = 0;
-		rootParameters[2].Constants.Num32BitValues = 1;
+
+		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+		rootParameters[2].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[2].Descriptor.RegisterSpace = 0;
+		rootParameters[2].Descriptor.ShaderRegister = 0;
+
+		rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+		rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		rootParameters[3].Constants.RegisterSpace = 0;
+		rootParameters[3].Constants.ShaderRegister = 0;
+		rootParameters[3].Constants.Num32BitValues = 1;
 
 
 		//////////////////////////////////////////////////////////////////////////
@@ -726,6 +748,8 @@ void AppModeBase::BeginFrame()
 uint64_t TestNrMeshesToDraw = uint64_t(-1);
 uint64_t NrMeshesDrawn = 0;
 
+
+
 void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes, const Scene& inCurrentScene, const eastl::vector<MeshMaterial>& inMaterials)
 {
 	for (const TransformObjPtr& child : inChildNodes)
@@ -741,7 +765,7 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 
 		if (const MeshNode* modelChild = dynamic_cast<const MeshNode*>(childPtr))
 		{
-			if (modelChild->MatIndex == uint32_t(-1))
+			if (modelChild->MatIndex == uint32_t(-1) || inMaterials.size() == 0)
 			{
 				continue;
 			}
@@ -757,25 +781,43 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 				// All matrices sent to HLSL need to be converted to row-major(what D3D uses) from column-major(what glm uses)
 				constantBufferData.Model = glm::transpose(modelMatrix);
 				constantBufferData.Projection = glm::transpose(GetMainProjection());
-
-				const glm::mat4 view = inCurrentScene.GetMainCameraLookAt();
-				constantBufferData.View = glm::transpose(view);
-
+				constantBufferData.View = glm::transpose(inCurrentScene.GetMainCameraLookAt());
 				constantBufferData.LocalToWorldRotationOnly = glm::transpose(absTransform.GetRotationOnlyMatrix());
 
 				MapResult cBufferMap = m_constantBuffer.ReserveTempBufferMemory(sizeof(constantBufferData));
 				memcpy(cBufferMap.CPUAddress, &constantBufferData, sizeof(constantBufferData));
-				m_commandList->SetGraphicsRootConstantBufferView(1, cBufferMap.GPUAddress);
+
+				m_commandList->SetGraphicsRootConstantBufferView(2, cBufferMap.GPUAddress);
+			}
+
+			{
+				// Temp, should not be upload buffer
+				eastl::vector<ShaderMaterial> shaderMats;
+				for (const MeshMaterial& mat : inMaterials)
+				{
+					ShaderMaterial newShaderMat;
+					newShaderMat.AlbedoMapIndex = mat.AlbedoMap != nullptr ? mat.AlbedoMap->SRVIndex : -1;
+					newShaderMat.NormalMapIndex = mat.NormalMap != nullptr ? mat.NormalMap->SRVIndex : -1;
+					newShaderMat.MRMapIndex = mat.MRMap != nullptr? mat.MRMap->SRVIndex : -1;
+
+					shaderMats.push_back(newShaderMat);
+				}
+
+				MapResult matBufferMap = m_materialsBuffer.Map();
+				memcpy(matBufferMap.CPUAddress, &shaderMats[0], sizeof(ShaderMaterial) * shaderMats.size());
+
+				m_commandList->SetGraphicsRootShaderResourceView(1, matBufferMap.GPUAddress);
 			}
 
 			// Only one CBV SRV UAV heap and one Samplers heap can be bound at the same time
 			ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heaps[D3D12Utility::CurrentFrameIndex]};
 			m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
+			m_commandList->SetGraphicsRoot32BitConstant(3, modelChild->MatIndex, 0);
 
-			const MeshMaterial& currMeshMaterial = inMaterials[modelChild->MatIndex];
-			m_commandList->SetGraphicsRoot32BitConstant(2, currMeshMaterial.Textures[0]->SRVIndex, 0);
-
+			//const MeshMaterial& currMeshMaterial = inMaterials[modelChild->MatIndex];
+			//uint32_t constants[2] = { currMeshMaterial.AlbedoMap->SRVIndex, modelChild->MatIndex };
+			//m_commandList->SetGraphicsRoot32BitConstants(3, 2, &constants[0], 0);
 
 			m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
 

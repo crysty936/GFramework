@@ -11,6 +11,7 @@
 #include "Editor/Editor.h"
 #include "InternalPlugins/IInternalPlugin.h"
 #include "imgui_internal.h"
+#include "Utils/PerfUtils.h"
 
 constexpr float IdealFrameRate = 60.f;
 constexpr float IdealFrameTime = 1.0f / IdealFrameRate;
@@ -45,6 +46,8 @@ AppCore::~AppCore() = default;
 // Init all engine subsystems
 void AppCore::Init()
 {
+	BENCH_SCOPE("Engine Init");
+
 	GEngine = new AppCore{};
 
 	InputSystem::Init();

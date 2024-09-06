@@ -30,7 +30,7 @@ void CubeShape::Init(ID3D12GraphicsCommandList* inCommandList)
 	eastl::shared_ptr<D3D12Texture2D> newTex = D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, inCommandList);
 
 	MeshMaterial newMat;
-	newMat.Textures.push_back(newTex);
+	newMat.AlbedoMap = newTex;
 
 	Materials.push_back(newMat);
 	cubeNode->MatIndex = 0;
@@ -68,7 +68,7 @@ void TBNQuadShape::Init(ID3D12GraphicsCommandList* inCommandList)
 	eastl::shared_ptr<D3D12Texture2D> newTex = D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, inCommandList);
 
 	MeshMaterial newMat;
-	newMat.Textures.push_back(newTex);
+	newMat.AlbedoMap = newTex;
 
 	Materials.push_back(newMat);
 	quadNode->MatIndex = 0;

@@ -6,8 +6,9 @@
 
 struct MeshMaterial
 {
-
-	eastl::vector<eastl::shared_ptr<D3D12Texture2D>> Textures;
+	eastl::shared_ptr<D3D12Texture2D> AlbedoMap;
+	eastl::shared_ptr<D3D12Texture2D> NormalMap;
+	eastl::shared_ptr<D3D12Texture2D> MRMap;
 };
 
 // MeshNodes are stored as TransformObject children to the main Model3D
