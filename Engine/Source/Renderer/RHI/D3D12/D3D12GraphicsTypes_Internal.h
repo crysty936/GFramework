@@ -72,7 +72,8 @@ public:
 	~D3D12StructuredBuffer();
 
 	void Init(const uint64_t inNumElements, const uint64_t inStride);
-	MapResult Map();
+	void UploadDataWhole(void* inData, uint64_t inSize);
+	uint64_t GetCurrentGPUAddress();
 
 public:
 	struct ID3D12Resource* Resource = nullptr;

@@ -3,6 +3,7 @@
 #include <combaseapi.h>
 #include "D3D12RHI.h"
 #include "Utils/Utils.h"
+#include "D3D12Upload.h"
 
 D3D12DescriptorHeap::~D3D12DescriptorHeap()
 {
@@ -188,7 +189,7 @@ void D3D12StructuredBuffer::Init(const uint64_t inNumElements, const uint64_t in
 	const uint64_t totalSize = inNumElements * inStride;
 	Size = Utils::AlignTo(totalSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 
-	D3D12_HEAP_PROPERTIES heapProps = D3D12Utility::GetUploadHeapProps();
+	D3D12_HEAP_PROPERTIES heapProps = D3D12Utility::GetDefaultHeapProps();
 
 	D3D12_RESOURCE_DESC constantBufferDesc;
 	constantBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -209,7 +210,7 @@ void D3D12StructuredBuffer::Init(const uint64_t inNumElements, const uint64_t in
 		&heapProps,
 		D3D12_HEAP_FLAG_NONE,
 		&constantBufferDesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_COPY_DEST,
 		nullptr,
 		IID_PPV_ARGS(&Resource)));
 
@@ -222,26 +223,25 @@ void D3D12StructuredBuffer::Init(const uint64_t inNumElements, const uint64_t in
 
 	Resource->SetName(bufferName.c_str());
 
-	D3D12_RANGE readRange = {};
-	DXAssert(Resource->Map(0, &readRange, reinterpret_cast<void**>(&CPUAddress)));
-
-
-
-
-
-
-
 }
 
-MapResult D3D12StructuredBuffer::Map()
+void D3D12StructuredBuffer::UploadDataWhole(void* inData, uint64_t inSize)
 {
-	MapResult res = {};
+	for (uint32_t i = 0; i < D3D12Utility::NumFramesInFlight; ++i)
+	{
+		const uint64_t offset = (i % D3D12Utility::NumFramesInFlight) * Size;
+		UploadContext bufferUploadContext = D3D12Upload::ResourceUploadBegin(inSize);
 
-	const uint64_t offset = (D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight) * Size;
-	res.CPUAddress = CPUAddress + offset;
-	res.GPUAddress = GPUAddress + offset;
+		memcpy(bufferUploadContext.CPUAddress, inData, inSize);
+		bufferUploadContext.CmdList->CopyBufferRegion(Resource, offset, bufferUploadContext.Resource, bufferUploadContext.ResourceOffset, inSize);
 
-	return res;
+		D3D12Upload::ResourceUploadEnd(bufferUploadContext);
+	}
+}
+
+uint64_t D3D12StructuredBuffer::GetCurrentGPUAddress()
+{
+	return GPUAddress + ((D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight) * Size);
 }
 
 D3D12Fence::~D3D12Fence()

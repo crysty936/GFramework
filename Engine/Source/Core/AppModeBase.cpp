@@ -229,6 +229,9 @@ void AppModeBase::CreateInitialResources()
 		ScreenQuadVertexBuffer = D3D12RHI::Get()->CreateVertexBuffer(vbLayout, BasicShapesData::GetQuadVertices(), BasicShapesData::GetQuadVerticesCount(), ScreenQuadIndexBuffer);
 	}
 
+	m_constantBuffer.Init(2 * 1024 * 1024);
+	m_materialsBuffer.Init(1024, sizeof(ShaderMaterial));
+
 	SceneManager& sManager = SceneManager::Get();
 	Scene& currentScene = sManager.GetCurrentScene();
 
@@ -268,17 +271,22 @@ void AppModeBase::CreateInitialResources()
 	
 	currentScene.AddObject(model);
 
+	{
+		eastl::vector<ShaderMaterial> shaderMats;
+		for (const MeshMaterial& mat : model->Materials)
+		{
+			ShaderMaterial newShaderMat;
+			newShaderMat.AlbedoMapIndex = mat.AlbedoMap != nullptr ? mat.AlbedoMap->SRVIndex : -1;
+			newShaderMat.NormalMapIndex = mat.NormalMap != nullptr ? mat.NormalMap->SRVIndex : -1;
+			newShaderMat.MRMapIndex = mat.MRMap != nullptr ? mat.MRMap->SRVIndex : -1;
+
+			shaderMats.push_back(newShaderMat);
+		}
+
+		m_materialsBuffer.UploadDataWhole(&shaderMats[0], sizeof(ShaderMaterial) * shaderMats.size());
+	}
+
 	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
-
-
-	// Create the constant buffer.
-	{
-		m_constantBuffer.Init(2 * 1024 * 1024);
-	}
-
-	{
-		m_materialsBuffer.Init(1024, sizeof(ShaderMaterial));
-	}
 
 	DXAssert(m_commandList->Close());
 	ID3D12CommandList* ppCommandLists[] = { m_commandList };
@@ -790,34 +798,13 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 				m_commandList->SetGraphicsRootConstantBufferView(2, cBufferMap.GPUAddress);
 			}
 
-			{
-				// Temp, should not be upload buffer
-				eastl::vector<ShaderMaterial> shaderMats;
-				for (const MeshMaterial& mat : inMaterials)
-				{
-					ShaderMaterial newShaderMat;
-					newShaderMat.AlbedoMapIndex = mat.AlbedoMap != nullptr ? mat.AlbedoMap->SRVIndex : -1;
-					newShaderMat.NormalMapIndex = mat.NormalMap != nullptr ? mat.NormalMap->SRVIndex : -1;
-					newShaderMat.MRMapIndex = mat.MRMap != nullptr? mat.MRMap->SRVIndex : -1;
-
-					shaderMats.push_back(newShaderMat);
-				}
-
-				MapResult matBufferMap = m_materialsBuffer.Map();
-				memcpy(matBufferMap.CPUAddress, &shaderMats[0], sizeof(ShaderMaterial) * shaderMats.size());
-
-				m_commandList->SetGraphicsRootShaderResourceView(1, matBufferMap.GPUAddress);
-			}
+			m_commandList->SetGraphicsRootShaderResourceView(1, m_materialsBuffer.GetCurrentGPUAddress());
 
 			// Only one CBV SRV UAV heap and one Samplers heap can be bound at the same time
 			ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heaps[D3D12Utility::CurrentFrameIndex]};
 			m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
 			m_commandList->SetGraphicsRoot32BitConstant(3, modelChild->MatIndex, 0);
-
-			//const MeshMaterial& currMeshMaterial = inMaterials[modelChild->MatIndex];
-			//uint32_t constants[2] = { currMeshMaterial.AlbedoMap->SRVIndex, modelChild->MatIndex };
-			//m_commandList->SetGraphicsRoot32BitConstants(3, 2, &constants[0], 0);
 
 			m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
 
@@ -963,6 +950,13 @@ void AppModeBase::RenderLighting()
 
 void AppModeBase::Draw()
 {
+	static bool doOnce = false;
+	if (!doOnce)
+	{
+		D3D12Utility::TransitionResource(m_commandList, m_materialsBuffer.Resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		doOnce = true;
+	}
+
 	{
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
