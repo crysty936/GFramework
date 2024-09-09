@@ -47,6 +47,7 @@ class D3D12RenderTarget2D
 public:
 	eastl::unique_ptr<D3D12Texture2D> Texture;
 	D3D12_CPU_DESCRIPTOR_HANDLE RTV = {};
+	D3D12_CPU_DESCRIPTOR_HANDLE UAV = {};
 
 };
 

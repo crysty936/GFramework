@@ -42,6 +42,7 @@ ID3D12CommandQueue* D3D12Globals::GraphicsCommandQueue;
 D3D12DescriptorHeap D3D12Globals::GlobalRTVHeap;
 D3D12DescriptorHeap D3D12Globals::GlobalSRVHeap;
 D3D12DescriptorHeap D3D12Globals::GlobalDSVHeap;
+D3D12DescriptorHeap D3D12Globals::GlobalUAVHeap;
 
 // D3D12 RHI stuff to do:
 // Fix the default memory allocation to use a ring buffer instead of the hack that is present right now
@@ -210,6 +211,11 @@ void D3D12RHI::EndFrame()
 
 	D3D12Upload::EndFrame();
 	//D3D12RHI::Get()->ProcessDeferredReleases();
+
+	D3D12Globals::GlobalRTVHeap.EndFrame();
+	D3D12Globals::GlobalSRVHeap.EndFrame();
+	D3D12Globals::GlobalDSVHeap.EndFrame();
+	D3D12Globals::GlobalUAVHeap.EndFrame();
 }
 
 struct ID3D12RootSignature* D3D12RHI::CreateRootSignature(D3D12_VERSIONED_ROOT_SIGNATURE_DESC& inDesc)
@@ -220,6 +226,8 @@ struct ID3D12RootSignature* D3D12RHI::CreateRootSignature(D3D12_VERSIONED_ROOT_S
 	{
 		const char* errText = (char*)error->GetBufferPointer();
 		LOG_ERROR("%s", errText);
+
+		ASSERT(0);
 	}
 
 	ID3D12RootSignature* newSignature = nullptr;
@@ -325,13 +333,20 @@ IDxcBlob* CompileWithRetry(const eastl::string& inFilePath, const eastl::string&
 	return compiledShaderBlob;
 }
 
-GraphicsCompiledShaderPair D3D12RHI::CompileGraphicsShaderFromFile(const eastl::string& inFilePath)
+CompiledShaderResult D3D12RHI::CompileGraphicsShaderFromFile(const eastl::string& inFilePath)
 {
 	IDxcBlob* vsBlob = CompileWithRetry(inFilePath, "VSMain", L"vs_6_5");
 	IDxcBlob* psBlob = CompileWithRetry(inFilePath, "PSMain", L"ps_6_5");
 
 
 	return { vsBlob, psBlob };
+}
+
+CompiledShaderResult D3D12RHI::CompileComputeShaderFromFile(const eastl::string& inFilePath)
+{
+	IDxcBlob* csBlob = CompileWithRetry(inFilePath, "CSMain", L"cs_6_5");
+
+	return { csBlob };
 }
 
 void D3D12RHI::ProcessDeferredReleases()

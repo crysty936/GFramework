@@ -1,4 +1,5 @@
 #include "DescriptorTables.hlsl"
+#include "Utils.hlsl"
 
 struct PSInput
 {
@@ -35,10 +36,6 @@ ConstantBuffer<MatIndexBuffer> MatIndex : register(b0);
 
 SamplerState g_sampler : register(s0);
 
-inline float3x3 tofloat3x3(float4x4 m) {
-    return float3x3(m[0].xyz, m[1].xyz, m[2].xyz);
-}
-
 PSInput VSMain(float4 position : POSITION, float3 normal : NORMAL, float2 uv : TEXCOORD)
 {
     PSInput result;
@@ -46,7 +43,7 @@ PSInput VSMain(float4 position : POSITION, float3 normal : NORMAL, float2 uv : T
     const float4 worldPos = mul(position, SceneBuffer.Model);
     const float4 clipPos = mul(mul(worldPos, SceneBuffer.View), SceneBuffer.Projection);
 
-     const float3x3 LocalToWorldRotationOnly3x3 = tofloat3x3(SceneBuffer.LocalToWorldRotationOnly);
+     const float3x3 LocalToWorldRotationOnly3x3 = ToFloat3x3(SceneBuffer.LocalToWorldRotationOnly);
      float3 vertexNormalWS = normalize(mul(normal, LocalToWorldRotationOnly3x3)); 
 
     result.uv = uv;

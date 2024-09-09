@@ -14,10 +14,10 @@ D3D12DescriptorHeap::~D3D12DescriptorHeap()
 	}
 }
 
-void D3D12DescriptorHeap::Init(bool inShaderVisible, uint32_t inNumPersistent, D3D12_DESCRIPTOR_HEAP_TYPE inHeapType)
+void D3D12DescriptorHeap::Init(bool inShaderVisible, uint32_t inNumPersistent, D3D12_DESCRIPTOR_HEAP_TYPE inHeapType, uint32_t inNumTemp)
 {
 	D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-	rtvHeapDesc.NumDescriptors = inNumPersistent;
+	rtvHeapDesc.NumDescriptors = inNumPersistent + inNumTemp;
 	rtvHeapDesc.Type = inHeapType;
 	rtvHeapDesc.Flags = inShaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	NumHeaps = inShaderVisible ? D3D12Utility::NumFramesInFlight : 1;
@@ -28,6 +28,7 @@ void D3D12DescriptorHeap::Init(bool inShaderVisible, uint32_t inNumPersistent, D
 	}
 
 	NumPersistentDescriptors = inNumPersistent;
+	NumTempDescriptors = inNumTemp;
 	DescriptorSize = D3D12Globals::Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	
 	for (uint32_t i = 0; i < NumHeaps; ++i)
@@ -69,6 +70,26 @@ D3D12_CPU_DESCRIPTOR_HANDLE D3D12DescriptorHeap::GetCPUHandle(uint64_t inIndex, 
 	uint64_t cpuPtr = CPUStart[inHeapIdx].ptr + (DescriptorSize * inIndex);
 
 	return D3D12_CPU_DESCRIPTOR_HANDLE{ cpuPtr };
+}
+
+D3D12DescHeapAllocationDesc D3D12DescriptorHeap::AllocateTemporary()
+{
+	ASSERT((AllocatedTemp + 1) <= NumTempDescriptors);
+
+	D3D12DescHeapAllocationDesc newAllocation;
+	newAllocation.Index = NumPersistentDescriptors + AllocatedTemp;
+
+	newAllocation.CPUHandle[0] = CPUStart[D3D12Utility::CurrentFrameIndex];
+	newAllocation.CPUHandle[0].ptr += newAllocation.Index * DescriptorSize;
+
+	++AllocatedTemp;
+
+	return newAllocation;
+}
+
+void D3D12DescriptorHeap::EndFrame()
+{
+	AllocatedTemp = 0;
 }
 
 D3D12ConstantBuffer::~D3D12ConstantBuffer()

@@ -11,15 +11,18 @@ struct PSOutput
 };
 
 // 256 byte aligned
-cbuffer LightingConstantBuffer : register(b0)
+struct LightingConstantBuffer
 {
 	float4x4 ViewInv;
-	float4x4 PerspInv;
+	float4x4 ProjInv;
+	float4x4 Proj;
 
     float4 ViewPos;
     float4 LightDir;
-    float Padding[24];
+    float Padding[8];
 };
+
+ConstantBuffer<LightingConstantBuffer> ConstBuffer : register(b0);
 
 Texture2D GBufferAlbedo : register(t0);
 Texture2D GBufferNormal : register(t1);
@@ -27,7 +30,6 @@ Texture2D GBufferRoughness : register(t2);
 Texture2D GBufferDepth : register(t3);
 
 SamplerState g_sampler : register(s0);
-
 
 static const float PI = 3.14159265359;
 
@@ -122,15 +124,15 @@ PSOutput PSMain(PSInput input)
 	float2 clipCoord = uv * 2.f - 1.f;
 	float4 clipLoc = float4(clipCoord, depth, 1.f);
 	
-	float4 viewSpacePos = mul(clipLoc, PerspInv);
+	float4 viewSpacePos = mul(clipLoc, ConstBuffer.ProjInv);
 	viewSpacePos /= viewSpacePos.w;
 	
-	const float4 worldSpacePos = mul(viewSpacePos, ViewInv);
+	const float4 worldSpacePos = mul(viewSpacePos, ConstBuffer.ViewInv);
 
 	float3 wsNormal0to1 = GBufferNormal.Sample(g_sampler, uv).xyz;
 	float3 wsNormal = wsNormal0to1 * 2.f - 1.f;
 
-	const float3 viewToFrag = normalize(worldSpacePos.xyz - ViewPos.xyz);
+	const float3 viewToFrag = normalize(worldSpacePos.xyz - ConstBuffer.ViewPos.xyz);
 	const float3 fragToViewW = -viewToFrag;
 
 	const float metalness = GBufferRoughness.Sample(g_sampler, uv).r;
@@ -144,7 +146,7 @@ PSOutput PSMain(PSInput input)
 		float3 N = wsNormal;
 		float3 V = fragToViewW;
 
-		float3 L = -LightDir.xyz;
+		float3 L = -ConstBuffer.LightDir.xyz;
 
 		// Halfway vector
 		float3 H = normalize(V + L);
@@ -199,16 +201,20 @@ PSOutput PSMain(PSInput input)
 	color = pow(color, float3(inverseGamma, inverseGamma, inverseGamma));
 
 	float3 finalColor = color;	
+	output.Color = float4(finalColor * 1.5, 1);
 
-	//const float cameraNear = 0.1f;
-	//const float cameraFar = 10000.f;
+	const float cameraNear = 0.1f;
+	const float cameraFar = 5.f;
 	// Transform depth into view space
 	// Basically inverse of projection, only applied to z
 	//float3 linearizedDepth = (cameraNear * cameraFar) / (cameraFar +  depth * (cameraNear - cameraFar));
-	//linearizedDepth = linearizedDepth / 50;
-	//output.Color = float4(linearizedDepth, 1.0);
 
-	output.Color = float4(finalColor * 1.5, 1);
+	// Same as above, mathematically derived pre-projection z out of 
+	// the operations that happen with z when multiplied with the projection
+	//float3 linearizedDepth = ConstBuffer.Proj._43 / (depth - ConstBuffer.Proj._33); 
+	//linearizedDepth = linearizedDepth / 50;
+
+	//output.Color = float4(linearizedDepth, 1.f);
 
 	//output.Color = albedo;
 	//output.Color = float4(wsNormal0to1, 1.f);

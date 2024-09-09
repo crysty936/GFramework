@@ -17,17 +17,22 @@ namespace D3D12Globals
 	extern D3D12DescriptorHeap GlobalRTVHeap;
 	extern D3D12DescriptorHeap GlobalSRVHeap;
 	extern D3D12DescriptorHeap GlobalDSVHeap;
+	extern D3D12DescriptorHeap GlobalUAVHeap;
 }
 
-struct GraphicsCompiledShaderPair
+struct CompiledShaderResult
 {
 	IDxcBlob* VSByteCode = nullptr;
 	IDxcBlob* PSByteCode = nullptr;
+	IDxcBlob* CSByteCode = nullptr;
 
-	GraphicsCompiledShaderPair(IDxcBlob* inVSByteCode, IDxcBlob* inPSByteCode)
+	CompiledShaderResult(IDxcBlob* inVSByteCode, IDxcBlob* inPSByteCode)
 		: VSByteCode(inVSByteCode), PSByteCode(inPSByteCode) {}
 
-	~GraphicsCompiledShaderPair()
+	CompiledShaderResult(IDxcBlob* inCSByteCode)
+		: VSByteCode(nullptr), PSByteCode(nullptr), CSByteCode(inCSByteCode) {}
+
+	~CompiledShaderResult()
 	{
 		if (VSByteCode != nullptr)
 		{
@@ -40,15 +45,24 @@ struct GraphicsCompiledShaderPair
 			PSByteCode->Release();
 			PSByteCode = nullptr;
 		}
+
+		if (CSByteCode != nullptr)
+		{
+			CSByteCode->Release();
+			CSByteCode = nullptr;
+		}
+
 	}
 
-	GraphicsCompiledShaderPair(GraphicsCompiledShaderPair&& inOther) noexcept
+	CompiledShaderResult(CompiledShaderResult&& inOther) noexcept
 	{
 		this->VSByteCode = inOther.VSByteCode;
 		this->PSByteCode = inOther.PSByteCode;
+		this->CSByteCode = inOther.CSByteCode;
 
 		inOther.VSByteCode = nullptr;
 		inOther.PSByteCode = nullptr;
+		inOther.CSByteCode = nullptr;
 	}
 };
 
@@ -83,7 +97,8 @@ public:
 	eastl::shared_ptr<class D3D12DepthBuffer> CreateDepthBuffer(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName, const ETextureState inInitialState = ETextureState::Render_Target);
 
 	struct ID3D12RootSignature* CreateRootSignature(D3D12_VERSIONED_ROOT_SIGNATURE_DESC& inDesc);
-	GraphicsCompiledShaderPair CompileGraphicsShaderFromFile(const eastl::string& inFilePath);
+	CompiledShaderResult CompileGraphicsShaderFromFile(const eastl::string& inFilePath);
+	CompiledShaderResult CompileComputeShaderFromFile(const eastl::string& inFilePath);
 
 
 

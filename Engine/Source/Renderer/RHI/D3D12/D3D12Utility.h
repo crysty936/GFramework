@@ -52,7 +52,7 @@ inline D3D12_RESOURCE_STATES TexStateToD3D12ResState(const ETextureState inState
 inline bool DXAssert(HRESULT inRez)
 {
 	const bool success = SUCCEEDED(inRez);
-	ASSERT_MSG(success, "Direct3D12 Operation failed with code 0x%08X", static_cast<uint32_t>(inRez));
+	//ASSERT_MSG(success, "Direct3D12 Operation failed with code 0x%08X", static_cast<uint32_t>(inRez));
 
 	return success;
 }
@@ -68,6 +68,7 @@ namespace D3D12Utility
 	D3D12_HEAP_PROPERTIES& GetUploadHeapProps();
 
 	void TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter);
+	void BindTempDescriptorTable(uint32_t inRootParamIdx, ID3D12GraphicsCommandList* inCmdList, const D3D12_CPU_DESCRIPTOR_HANDLE& inHandle);
 
 	void MakeTextureReadable(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource);
 	void MakeTextureWriteable(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource);

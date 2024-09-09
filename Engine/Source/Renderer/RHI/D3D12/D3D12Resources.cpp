@@ -413,7 +413,7 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 	textureDesc.Height = inHeight;
 	textureDesc.MipLevels = 1;
 	textureDesc.Format = texFormat;
-	textureDesc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	textureDesc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	textureDesc.DepthOrArraySize = 1;
 	textureDesc.SampleDesc.Count = 1;
 	textureDesc.SampleDesc.Quality = 0;
@@ -459,8 +459,16 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 		newRT->RTV = descAllocation.CPUHandle[0];
 
 		D3D12Globals::Device->CreateRenderTargetView(ownedTexture->Resource, nullptr, newRT->RTV);
-
 	}
+
+	// Create RTV
+	{
+		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalUAVHeap.AllocatePersistent();
+		newRT->UAV = descAllocation.CPUHandle[0];
+
+		D3D12Globals::Device->CreateUnorderedAccessView(ownedTexture->Resource, nullptr, nullptr, newRT->UAV);
+	}
+
 
 	ownedTexture->Width = inWidth;
 	ownedTexture->Height = inHeight;

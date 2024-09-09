@@ -15,14 +15,19 @@ struct D3D12DescriptorHeap
 public:
 	~D3D12DescriptorHeap();
 
-	void Init(bool inShaderVisible, uint32_t inNumPersistent, D3D12_DESCRIPTOR_HEAP_TYPE inHeapType);
+	void Init(bool inShaderVisible, uint32_t inNumPersistent, D3D12_DESCRIPTOR_HEAP_TYPE inHeapType, uint32_t inNumTemp = 0);
 	D3D12DescHeapAllocationDesc AllocatePersistent();
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUHandle(uint64_t inIndex, const uint64_t inHeapIdx);
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUHandle(uint64_t inIndex, const uint64_t inHeapIdx);
 
+	D3D12DescHeapAllocationDesc AllocateTemporary();
+
+	void EndFrame();
+
 public:
 	ID3D12DescriptorHeap* Heaps[D3D12Utility::NumFramesInFlight] = {};
 	uint32_t NumPersistentDescriptors = 0;
+	uint32_t NumTempDescriptors = 0;
 	uint32_t NumHeaps = 0;
 
 	uint32_t DescriptorSize = 0;
@@ -32,6 +37,7 @@ public:
 
 private:
 	uint32_t Allocated = 0;
+	uint32_t AllocatedTemp = 0;
 };
 
 struct MapResult

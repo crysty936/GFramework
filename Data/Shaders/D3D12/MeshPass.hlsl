@@ -1,4 +1,5 @@
 #include "DescriptorTables.hlsl"
+#include "Utils.hlsl"
 
 struct PSInput
 {
@@ -16,6 +17,15 @@ struct PSOutput
     float4 Normal : SV_TARGET1;
     float4 Roughness : SV_TARGET2;
 };
+
+struct ShaderMaterial
+{
+	uint AlbedoMapIndex;
+	uint NormalMapIndex;
+	uint MRMapIndex;
+};
+
+StructuredBuffer<ShaderMaterial> MaterialsBuffer : register(t0, space100);
 
 // 256 byte aligned
 struct SceneConstantBuffer
@@ -37,25 +47,12 @@ ConstantBuffer<MatIndexBuffer> MatIndex : register(b0);
 
 SamplerState g_sampler : register(s0);
 
-struct ShaderMaterial
-{
-	uint AlbedoMapIndex;
-	uint NormalMapIndex;
-	uint MRMapIndex;
-};
-
-StructuredBuffer<ShaderMaterial> MaterialsBuffer : register(t0, space100);
-
-inline float3x3 tofloat3x3(float4x4 m) {
-    return float3x3(m[0].xyz, m[1].xyz, m[2].xyz);
-}
-
 PSInput VSMain(float4 position : POSITION, float3 VertexNormal : NORMAL, float2 uv : TEXCOORD, float3 tangent : TANGENT, float3 bitangent : BITANGENT)
 {
     const float4 worldPos = mul(position, SceneBuffer.Model);
     const float4 clipPos = mul(mul(worldPos, SceneBuffer.View), SceneBuffer.Projection);
 
-     const float3x3 LocalToWorldRotationOnly3x3 = tofloat3x3(SceneBuffer.LocalToWorldRotationOnly);
+    const float3x3 LocalToWorldRotationOnly3x3 = ToFloat3x3(SceneBuffer.LocalToWorldRotationOnly);
 
     float3 n = normalize(VertexNormal);
     float3 b = normalize(bitangent);
@@ -65,9 +62,9 @@ PSInput VSMain(float4 position : POSITION, float3 VertexNormal : NORMAL, float2 
 
     b = normalize(cross(n, t));
 
-     float3 vertexNormalWS = normalize(mul(n, LocalToWorldRotationOnly3x3)).xyz; 
-     float3 tangentWS = normalize(mul(t, LocalToWorldRotationOnly3x3)).xyz;
-     float3 bitangentWS = normalize(mul(b, LocalToWorldRotationOnly3x3)).xyz;
+    float3 vertexNormalWS = normalize(mul(n, LocalToWorldRotationOnly3x3)).xyz;
+    float3 tangentWS = normalize(mul(t, LocalToWorldRotationOnly3x3)).xyz;
+    float3 bitangentWS = normalize(mul(b, LocalToWorldRotationOnly3x3)).xyz;
 
     float3x3 tangentToLocal = 0;
     tangentToLocal[0] = t;

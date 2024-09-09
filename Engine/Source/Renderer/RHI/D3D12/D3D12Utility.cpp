@@ -1,4 +1,6 @@
 #include "D3D12Utility.h"
+#include "D3D12GraphicsTypes_Internal.h"
+#include "D3D12RHI.h"
 
 uint64_t D3D12Utility::CurrentFrameIndex = 0;
 
@@ -165,6 +167,21 @@ void D3D12Utility::TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D
 	D3D12_RESOURCE_BARRIER barrier = MakeTransitionBarrier(inResource, inStateBefore, inStateAfter);
 
 	inCmdList->ResourceBarrier(1, &barrier);
+}
+
+void D3D12Utility::BindTempDescriptorTable(uint32_t inRootParamIdx, ID3D12GraphicsCommandList* inCmdList, const D3D12_CPU_DESCRIPTOR_HANDLE& inHandle)
+{
+	const D3D12DescHeapAllocationDesc tempDesc = D3D12Globals::GlobalSRVHeap.AllocateTemporary();
+
+	const uint32_t destRanges[1] = { 1 };
+	const D3D12_CPU_DESCRIPTOR_HANDLE handles[1] = {inHandle};
+
+	constexpr uint32_t count = 1;
+	D3D12Globals::Device->CopyDescriptors(1, &tempDesc.CPUHandle[0], destRanges, count, handles, destRanges, D3D12Globals::GlobalSRVHeap.HeapType);
+
+	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = { D3D12Globals::GlobalSRVHeap.GetGPUHandle(tempDesc.Index, D3D12Utility::CurrentFrameIndex) };
+
+	inCmdList->SetComputeRootDescriptorTable(inRootParamIdx, gpuHandle);
 }
 
 void D3D12Utility::MakeTextureReadable(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource)
