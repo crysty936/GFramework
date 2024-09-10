@@ -49,9 +49,10 @@ SamplerState g_sampler : register(s0);
 
 PSInput VSMain(float4 position : POSITION, float3 VertexNormal : NORMAL, float2 uv : TEXCOORD, float3 tangent : TANGENT, float3 bitangent : BITANGENT)
 {
-    const float4 worldPos = mul(position, SceneBuffer.Model);
-    const float4 clipPos = mul(mul(worldPos, SceneBuffer.View), SceneBuffer.Projection);
-
+    float4x4 mvp = mul(SceneBuffer.Model, SceneBuffer.View);
+    mvp = mul(mvp, SceneBuffer.Projection);
+    const float4 clipPos = mul(position, mvp);
+    
     const float3x3 LocalToWorldRotationOnly3x3 = ToFloat3x3(SceneBuffer.LocalToWorldRotationOnly);
 
     float3 n = normalize(VertexNormal);

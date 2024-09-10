@@ -20,7 +20,7 @@ public:
 	D3D12_GPU_DESCRIPTOR_HANDLE GetGPUHandle(uint64_t inIndex, const uint64_t inHeapIdx);
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCPUHandle(uint64_t inIndex, const uint64_t inHeapIdx);
 
-	D3D12DescHeapAllocationDesc AllocateTemporary();
+	D3D12DescHeapAllocationDesc AllocateTemporary(uint32_t inCount);
 
 	void EndFrame();
 
@@ -78,7 +78,8 @@ public:
 	~D3D12StructuredBuffer();
 
 	void Init(const uint64_t inNumElements, const uint64_t inStride);
-	void UploadDataWhole(void* inData, uint64_t inSize);
+	void UploadDataAllFrames(void* inData, uint64_t inSize);
+	void UploadDataCurrentFrame(void* inData, uint64_t inSize);
 	uint64_t GetCurrentGPUAddress();
 
 public:

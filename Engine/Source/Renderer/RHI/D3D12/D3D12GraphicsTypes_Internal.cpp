@@ -72,7 +72,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE D3D12DescriptorHeap::GetCPUHandle(uint64_t inIndex, 
 	return D3D12_CPU_DESCRIPTOR_HANDLE{ cpuPtr };
 }
 
-D3D12DescHeapAllocationDesc D3D12DescriptorHeap::AllocateTemporary()
+D3D12DescHeapAllocationDesc D3D12DescriptorHeap::AllocateTemporary(uint32_t inCount)
 {
 	ASSERT((AllocatedTemp + 1) <= NumTempDescriptors);
 
@@ -82,7 +82,7 @@ D3D12DescHeapAllocationDesc D3D12DescriptorHeap::AllocateTemporary()
 	newAllocation.CPUHandle[0] = CPUStart[D3D12Utility::CurrentFrameIndex];
 	newAllocation.CPUHandle[0].ptr += newAllocation.Index * DescriptorSize;
 
-	++AllocatedTemp;
+	AllocatedTemp+= inCount;
 
 	return newAllocation;
 }
@@ -246,7 +246,7 @@ void D3D12StructuredBuffer::Init(const uint64_t inNumElements, const uint64_t in
 
 }
 
-void D3D12StructuredBuffer::UploadDataWhole(void* inData, uint64_t inSize)
+void D3D12StructuredBuffer::UploadDataAllFrames(void* inData, uint64_t inSize)
 {
 	for (uint32_t i = 0; i < D3D12Utility::NumFramesInFlight; ++i)
 	{
@@ -258,6 +258,17 @@ void D3D12StructuredBuffer::UploadDataWhole(void* inData, uint64_t inSize)
 
 		D3D12Upload::ResourceUploadEnd(bufferUploadContext);
 	}
+}
+
+void D3D12StructuredBuffer::UploadDataCurrentFrame(void* inData, uint64_t inSize)
+{
+	const uint64_t offset = (D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight) * Size;
+	UploadContext bufferUploadContext = D3D12Upload::ResourceUploadBegin(inSize);
+
+	memcpy(bufferUploadContext.CPUAddress, inData, inSize);
+	bufferUploadContext.CmdList->CopyBufferRegion(Resource, offset, bufferUploadContext.Resource, bufferUploadContext.ResourceOffset, inSize);
+
+	D3D12Upload::ResourceUploadEnd(bufferUploadContext);
 }
 
 uint64_t D3D12StructuredBuffer::GetCurrentGPUAddress()

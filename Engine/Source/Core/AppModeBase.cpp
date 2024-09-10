@@ -96,9 +96,12 @@ struct ShaderDecal
 	glm::vec4 Orientation;	// 16 bytes
 	glm::vec3 Size;		// 28 bytes
 	glm::vec3 Position;	// 40 bytes
-	uint32_t AlbedoTexIdx;	// 44 bytes
-	uint32_t NormalTexIdx;	// 48 bytes
+	uint32_t AlbedoMapIdx;	// 44 bytes
+	uint32_t NormalMapIdx;	// 48 bytes
 };
+
+static_assert((sizeof(ShaderDecal) % 16) == 0, "Structs in Structured Buffers have to be 16-byte aligned");
+
 // Constant Buffer
 struct MeshConstantBuffer
 {
@@ -125,22 +128,12 @@ struct DecalConstantBuffer
 {
 	glm::mat4 Projection;
 	glm::mat4 View;
+	glm::mat4 InvViewProj;
 
-	float Padding[32];
+	float Padding[16];
 };
 static_assert((sizeof(DecalConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
-
-struct Decal
-{
-	glm::vec4 Orientation;	// 16 bytes
-	glm::vec3 Size;			// 28 bytes
-	glm::vec3 Position;		// 40 bytes
-	uint32_t AlbedoTexIdx;	// 44 bytes
-	uint32_t NormalTexIdx;	// 48 bytes
-};
-
-static_assert((sizeof(Decal) % 16) == 0, "Structs in Structured Buffers have to be 16-byte aligned");
 
 // One constant buffer view per signature, in the root
 // One table pointing to the global SRV heap where either 
@@ -153,6 +146,17 @@ D3D12StructuredBuffer m_materialsBuffer;
 D3D12StructuredBuffer m_DecalsBuffer;
 uint64_t UsedCBMemory[D3D12Utility::NumFramesInFlight] = { 0 };
 
+class DecalObj : public DrawableObject
+{
+public:
+	DecalObj(const eastl::string& inName)
+		: DrawableObject(inName) {}
+
+
+};
+
+
+eastl::shared_ptr<DecalObj> theDecalObj;
 
 void AppModeBase::Init()
 {
@@ -322,7 +326,31 @@ void AppModeBase::CreateInitialResources()
 			shaderMats.push_back(newShaderMat);
 		}
 
-		m_materialsBuffer.UploadDataWhole(&shaderMats[0], sizeof(ShaderMaterial) * shaderMats.size());
+		m_materialsBuffer.UploadDataAllFrames(&shaderMats[0], sizeof(ShaderMaterial) * shaderMats.size());
+	}
+
+
+	theDecalObj = eastl::make_shared<DecalObj>("Decal");
+	currentScene.AddObject(theDecalObj);
+
+	theDecalObj->SetRelativeLocation(glm::vec3(0.f, -1.f, 0.f));
+	theDecalObj->SetRotationDegrees(glm::vec3(90.f, 0.f, 0.f));
+
+	{
+		eastl::vector<ShaderDecal> shaderDecals;
+		ShaderDecal newDecal = {};
+		const Transform& absTrans = theDecalObj->GetAbsoluteTransform();
+
+		newDecal.Orientation = glm::vec4(absTrans.Rotation.x, absTrans.Rotation.y, absTrans.Rotation.z, absTrans.Rotation.w);
+		newDecal.Position = absTrans.Translation;
+		newDecal.Size = absTrans.Scale;
+
+		newDecal.AlbedoMapIdx = 13;
+		newDecal.NormalMapIdx = 21;
+
+		shaderDecals.push_back(newDecal);
+
+		m_DecalsBuffer.UploadDataAllFrames(&shaderDecals[0], sizeof(ShaderDecal) * shaderDecals.size());
 	}
 
 	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
@@ -586,7 +614,7 @@ void AppModeBase::CreateRootSignatures()
 
 	// Decal Pass Signature
 	{
-		D3D12_ROOT_PARAMETER1 rootParameters[6];
+		D3D12_ROOT_PARAMETER1 rootParameters[5];
 
 		// 0. Main CBV_SRV_UAV heap
 		// 1. Structured Buffer
@@ -638,26 +666,18 @@ void AppModeBase::CreateRootSignatures()
 		rootParameters[3].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 		rootParameters[3].Descriptor.RegisterSpace = 0;
 		rootParameters[3].Descriptor.ShaderRegister = 0;
-
-		// Root Constant
-		rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-		rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-		rootParameters[4].Constants.RegisterSpace = 0;
-		rootParameters[4].Constants.ShaderRegister = 1;
-		rootParameters[4].Constants.Num32BitValues = 1;
-
 		// Output UAV
 		D3D12_DESCRIPTOR_RANGE1 uavRangeCS[1] = {};
 		uavRangeCS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-		uavRangeCS[0].NumDescriptors = 1;
+		uavRangeCS[0].NumDescriptors = 3;
 		uavRangeCS[0].BaseShaderRegister = 0;
 		uavRangeCS[0].RegisterSpace = 0;
 		uavRangeCS[0].OffsetInDescriptorsFromTableStart = 0;
 
-		rootParameters[5].DescriptorTable.pDescriptorRanges = &uavRangeCS[0];
-		rootParameters[5].DescriptorTable.NumDescriptorRanges = _countof(uavRangeCS);
-		rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[4].DescriptorTable.pDescriptorRanges = &uavRangeCS[0];
+		rootParameters[4].DescriptorTable.NumDescriptorRanges = _countof(uavRangeCS);
+		rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 		//////////////////////////////////////////////////////////////////////////
 
@@ -674,7 +694,7 @@ void AppModeBase::CreateRootSignatures()
 		sampler.MaxLOD = D3D12_FLOAT32_MAX;
 		sampler.ShaderRegister = 0;
 		sampler.RegisterSpace = 0;
-		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 		// Allow input layout and deny uneccessary access to certain pipeline stages.
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
@@ -921,6 +941,23 @@ void AppModeBase::BeginFrame()
 	//D3D12RHI::Get()->BeginFrame();
 	ResetFrameResources();
 
+	{
+		eastl::vector<ShaderDecal> shaderDecals;
+		ShaderDecal newDecal = {};
+		const Transform& absTrans = theDecalObj->GetAbsoluteTransform();
+
+		newDecal.Orientation = glm::vec4(absTrans.Rotation.x, absTrans.Rotation.y, absTrans.Rotation.z, absTrans.Rotation.w);
+		newDecal.Position = absTrans.Translation;
+		newDecal.Size = absTrans.Scale;
+
+		newDecal.AlbedoMapIdx = 13;
+		newDecal.NormalMapIdx = 21;
+
+		shaderDecals.push_back(newDecal);
+
+		m_DecalsBuffer.UploadDataCurrentFrame(&shaderDecals[0], sizeof(ShaderDecal) * shaderDecals.size());
+	}
+
 
 
 	//ImGui::ShowDemoWindow();
@@ -1129,7 +1166,7 @@ uint32_t DivideAndRoundUp(uint32_t Dividend, uint32_t Divisor)
 
 void AppModeBase::ComputeDecals()
 {
-	PIXMarker Marker(m_commandList, "Render Deferred Lighting");
+	PIXMarker Marker(m_commandList, "Compute Decals");
 
 	// Draw screen quad
 	ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heaps[D3D12Utility::CurrentFrameIndex] };
@@ -1147,10 +1184,10 @@ void AppModeBase::ComputeDecals()
 	// 1. Structured Buffer
 	// 2. Depth Buffer
 	// 3. Constant Buffer
-	// 4. Root Constant
 	// 5. Output UAV
 
-	m_commandList->SetComputeRootShaderResourceView(1, m_materialsBuffer.GetCurrentGPUAddress());
+	m_commandList->SetComputeRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
+	m_commandList->SetComputeRootShaderResourceView(1, m_DecalsBuffer.GetCurrentGPUAddress());
 	m_commandList->SetComputeRootDescriptorTable(2, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
 
 	{
@@ -1158,6 +1195,7 @@ void AppModeBase::ComputeDecals()
 
 		decalConstantBufferData.Projection = glm::transpose(GetMainProjection());
 		decalConstantBufferData.View = glm::transpose(currentScene.GetMainCameraLookAt());
+		decalConstantBufferData.InvViewProj = glm::transpose(glm::inverse(GetMainProjection() * currentScene.GetMainCameraLookAt()));
 
 		// Use temp buffer in main constant buffer
 		MapResult cBufferMap = m_constantBuffer.ReserveTempBufferMemory(sizeof(decalConstantBufferData));
@@ -1165,20 +1203,15 @@ void AppModeBase::ComputeDecals()
 		m_commandList->SetComputeRootConstantBufferView(3, cBufferMap.GPUAddress);
 	}
 
-
-	const uint32_t rootConstValue = 4;
-	m_commandList->SetComputeRoot32BitConstant(4, rootConstValue, 0);
-
-	D3D12Utility::BindTempDescriptorTable(5, m_commandList, m_GBufferAlbedo->UAV);
-
-#define NUM_THREADS_PER_GROUP_DIMENSION 32
+	const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE> uavHandles = { m_GBufferAlbedo->UAV, m_GBufferNormal->UAV, m_GBufferRoughness->UAV };
+	D3D12Utility::BindTempDescriptorTable(4, m_commandList, uavHandles);
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
 
 	const glm::vec<2, uint32_t> GroupCounts = glm::vec<2, uint32_t>(
-		DivideAndRoundUp(props.Width, NUM_THREADS_PER_GROUP_DIMENSION),
-		DivideAndRoundUp(props.Height, NUM_THREADS_PER_GROUP_DIMENSION));
+		DivideAndRoundUp(props.Width, 32),
+		DivideAndRoundUp(props.Height, 32));
 
 	m_commandList->Dispatch(GroupCounts.x, GroupCounts.y, 1);
 }
@@ -1254,6 +1287,7 @@ void AppModeBase::EndFrame()
 	SwapBuffers();
 
 	D3D12RHI::Get()->EndFrame();
+
 }
 
 

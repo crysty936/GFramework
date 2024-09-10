@@ -68,7 +68,7 @@ namespace D3D12Utility
 	D3D12_HEAP_PROPERTIES& GetUploadHeapProps();
 
 	void TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter);
-	void BindTempDescriptorTable(uint32_t inRootParamIdx, ID3D12GraphicsCommandList* inCmdList, const D3D12_CPU_DESCRIPTOR_HANDLE& inHandle);
+	void BindTempDescriptorTable(uint32_t inRootParamIdx, ID3D12GraphicsCommandList* inCmdList, const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& inHandles);
 
 	void MakeTextureReadable(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource);
 	void MakeTextureWriteable(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource);

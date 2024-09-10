@@ -169,15 +169,13 @@ void D3D12Utility::TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D
 	inCmdList->ResourceBarrier(1, &barrier);
 }
 
-void D3D12Utility::BindTempDescriptorTable(uint32_t inRootParamIdx, ID3D12GraphicsCommandList* inCmdList, const D3D12_CPU_DESCRIPTOR_HANDLE& inHandle)
+void D3D12Utility::BindTempDescriptorTable(uint32_t inRootParamIdx, ID3D12GraphicsCommandList* inCmdList, const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& inHandles)
 {
-	const D3D12DescHeapAllocationDesc tempDesc = D3D12Globals::GlobalSRVHeap.AllocateTemporary();
+	const D3D12DescHeapAllocationDesc tempDesc = D3D12Globals::GlobalSRVHeap.AllocateTemporary(inHandles.size());
 
-	const uint32_t destRanges[1] = { 1 };
-	const D3D12_CPU_DESCRIPTOR_HANDLE handles[1] = {inHandle};
-
-	constexpr uint32_t count = 1;
-	D3D12Globals::Device->CopyDescriptors(1, &tempDesc.CPUHandle[0], destRanges, count, handles, destRanges, D3D12Globals::GlobalSRVHeap.HeapType);
+	const uint32_t destRanges[1] = { inHandles.size() };
+	//D3D12Globals::Device->CopyDescriptors(1, &tempDesc.CPUHandle[0], destRanges, inHandles.size(), &inHandles[0], destRanges, D3D12Globals::GlobalSRVHeap.HeapType);
+	D3D12Globals::Device->CopyDescriptorsSimple(inHandles.size(), tempDesc.CPUHandle[0], inHandles[0], D3D12Globals::GlobalSRVHeap.HeapType);
 
 	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = { D3D12Globals::GlobalSRVHeap.GetGPUHandle(tempDesc.Index, D3D12Utility::CurrentFrameIndex) };
 

@@ -220,4 +220,9 @@ PSOutput PSMain(PSInput input)
 	//output.Color = float4(wsNormal0to1, 1.f);
 
     return output;
+
+// 	PSOutput testOutput;
+// 	testOutput.Color = float4(wsNormal, 1.f);
+// 	
+//     return testOutput;
 }

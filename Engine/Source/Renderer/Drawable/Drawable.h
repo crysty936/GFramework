@@ -10,7 +10,6 @@ public:
 	virtual ~DrawableObject();
 
 	virtual glm::mat4 GetModelMatrix() const { return GetAbsoluteTransform().GetMatrix(); }
-	virtual void UpdateCustomUniforms(eastl::unordered_map<eastl::string, struct SelfRegisteringUniform>& inUniformsCache) const {};
 
 	inline void SetVisible(const bool inValue) { bIsVisible = inValue; }
 	inline bool IsVisible() const { return bIsVisible; }
