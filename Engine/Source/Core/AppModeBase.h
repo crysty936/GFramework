@@ -28,6 +28,7 @@ public:
 private:
 	void DrawGBuffer();
 	void RenderLighting();
+	void ComputeTiledBinning();
 	void ComputeDecals();
 	void CreateInitialResources();
 	void CreateRootSignatures();

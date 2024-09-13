@@ -136,7 +136,7 @@ PSOutput PSMain(PSInput input)
 	const float3 fragToViewW = -viewToFrag;
 
 	const float metalness = GBufferRoughness.Sample(g_sampler, uv).r;
-	const float roughness = GBufferRoughness.Sample(g_sampler, uv).r;
+	const float roughness = GBufferRoughness.Sample(g_sampler, uv).b;
 	
 	float3 DirLightRadiance = 0;
 
@@ -202,6 +202,8 @@ PSOutput PSMain(PSInput input)
 
 	float3 finalColor = color;	
 	output.Color = float4(finalColor * 1.5, 1);
+	//output.Color = float4(metalness, metalness, metalness, 1);
+	//output.Color = float4(roughness, roughness, roughness, 1);
 
 	const float cameraNear = 0.1f;
 	const float cameraFar = 5.f;

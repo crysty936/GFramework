@@ -88,10 +88,24 @@ public:
 	uint64_t Stride = 0;
 	uint64_t Size = 0;
 
-	uint8_t* CPUAddress = nullptr;
 	uint64_t GPUAddress = 0;
 };
 
+class D3D12RawBuffer
+{
+public:
+	~D3D12RawBuffer();
+
+	void Init(const uint64_t inNumElements);
+	uint64_t GetCurrentGPUAddress();
+
+public:
+	struct ID3D12Resource* Resource = nullptr;
+	uint64_t NumElements = 0;
+	uint64_t Size = 0;
+
+	uint64_t GPUAddress = 0;
+};
 
 struct D3D12Fence
 {

@@ -1,7 +1,7 @@
 #include "DescriptorTables.hlsl"
 #include "Utils.hlsl"
 
-#define NUM_THREADS_PER_GROUP_DIMENSION 32
+#define TILE_SIZE 32
 
 // 16 byte aligned
 struct ShaderDecal
@@ -36,12 +36,17 @@ RWTexture2D<float4> OutputNormal : register(u1);
 RWTexture2D<float4> OutputMetallicRoughness : register(u2);
 
 
-[numthreads(NUM_THREADS_PER_GROUP_DIMENSION, NUM_THREADS_PER_GROUP_DIMENSION, 1)]
+[numthreads(TILE_SIZE, TILE_SIZE, 1)]
 void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_GroupIndex,
-            in uint GroupID : SV_GroupID, in uint3 GroupThreadID : SV_GroupThreadID)
+            in uint3 GroupID : SV_GroupID, in uint3 GroupThreadID : SV_GroupThreadID)
 {
 	float2 pixelPos = DispatchID.xy;
 
+// 	float3 groupColor = GroupThreadID * float3(0.01f, 0.01f, 0.01f);
+// 	float3 groupColor = GroupID * float3(0.01f, 0.01f, 0.01f);
+// 
+// 	OutputAlbedo[pixelPos] = float4(groupColor, 1.f);
+// 	return;	
 
 	ShaderDecal usedDecal = DecalBuffer[0];
 
@@ -58,20 +63,20 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 
 	float2 clipCoord = UV * 2.f - 1.f;
 	float4 clipPos = float4(clipCoord, clipDepth, 1.f);
-	clipPos.y *= -1.f; // Why?
+	clipPos.y *= -1.f; // NDC coordinates for D3D start from upper left corner, so X stays the same but Y is flipped
 
 	const float4 worldPosHom = mul(clipPos, ConstBuffer.InvViewProj);
 	const float4 worldPos = worldPosHom / worldPosHom.w;	
 	
 	//OutputAlbedo[pixelPos] = worldPos;
+	//return;
 
 	float3x3 decalRot = QuatTo3x3(usedDecal.Orientation);
 
-	
 	float3 localPos = worldPos.xyz - usedDecal.Position;
 	localPos = mul(localPos, transpose(decalRot));
 	float3 decalUVW = localPos / usedDecal.Size;
-	//decalUVW.y *= -1;
+	decalUVW.y *= -1;
 	
 	[branch]
 	if (
@@ -95,7 +100,6 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		decalNormalWS *= 2.f - 1.f;
 		
 		OutputNormal[pixelPos] = float4(decalNormalWS, 1.f);
-
 	}
 
 

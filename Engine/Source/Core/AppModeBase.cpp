@@ -17,6 +17,8 @@
 #include "Camera/Camera.h"
 #include "Utils/Utils.h"
 #include "Utils/PerfUtils.h"
+#include "Renderer/Model/3D/Assimp/AssimpModel3D.h"
+#include "Math/MathUtils.h"
 
 
 // Windows includes
@@ -31,7 +33,6 @@
 #include <DirectXMath.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
-#include "Renderer/Model/3D/Assimp/AssimpModel3D.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -73,16 +74,19 @@ eastl::shared_ptr<D3D12DepthBuffer> m_MainDepthBuffer;
 
 ID3D12CommandAllocator* m_commandAllocators[D3D12Utility::NumFramesInFlight];
 
+ID3D12GraphicsCommandList* m_commandList;
+
 ID3D12RootSignature* m_GBufferMainMeshRootSignature;
 ID3D12RootSignature* m_GBufferBasicObjectsRootSignature;
 ID3D12RootSignature* m_LightingRootSignature;
 ID3D12RootSignature* m_DecalRootSignature;
-ID3D12GraphicsCommandList* m_commandList;
+ID3D12RootSignature* m_TileBinningRootSignature;
 
 ID3D12PipelineState* m_MainMeshPassPipelineState;
 ID3D12PipelineState* m_BasicObjectsPipelineState;
 ID3D12PipelineState* m_LightingPipelineState;
 ID3D12PipelineState* m_DecalPipelineState;
+ID3D12PipelineState* m_TiledBinningPipelineState;
 
 struct ShaderMaterial
 {
@@ -134,17 +138,10 @@ struct DecalConstantBuffer
 };
 static_assert((sizeof(DecalConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
-
-// One constant buffer view per signature, in the root
-// One table pointing to the global SRV heap where either 
-// A: all descriptors are stored and just the root for the table is modified per drawcall or
-// B: Just the necessary descriptors are stored and they are copied over before the drawcall from non shader-visible heaps
-
-// Constant Buffer is double buffered to allow modifying it each frame, same as descriptor heaps
 D3D12ConstantBuffer m_constantBuffer;
 D3D12StructuredBuffer m_materialsBuffer;
 D3D12StructuredBuffer m_DecalsBuffer;
-uint64_t UsedCBMemory[D3D12Utility::NumFramesInFlight] = { 0 };
+D3D12RawBuffer m_DecalsTilingBuffer;
 
 class DecalObj : public DrawableObject
 {
@@ -171,6 +168,7 @@ void AppModeBase::Init()
 }
 
 glm::mat4 MainProjection;
+glm::vec<2, uint32_t> TileComputeGroupCounts;
 
 inline const glm::mat4& GetMainProjection()
 {
@@ -183,6 +181,14 @@ void AppModeBase::CreateInitialResources()
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
+
+#define TILE_SIZE 16
+
+	TileComputeGroupCounts = glm::vec<2, uint32_t>(
+		MathUtils::DivideAndRoundUp(props.Width, TILE_SIZE),
+		MathUtils::DivideAndRoundUp(props.Height, TILE_SIZE));
+
+#undef TILE_SIZE
 
 	// Create Main Projection
 	const float CAMERA_FOV = 45.f;
@@ -352,6 +358,9 @@ void AppModeBase::CreateInitialResources()
 
 		m_DecalsBuffer.UploadDataAllFrames(&shaderDecals[0], sizeof(ShaderDecal) * shaderDecals.size());
 	}
+
+	constexpr uint64_t DecalElementsPerTile = 2;
+	m_DecalsTilingBuffer.Init(TileComputeGroupCounts.x * TileComputeGroupCounts.y * DecalElementsPerTile);
 
 	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
 
@@ -718,6 +727,91 @@ void AppModeBase::CreateRootSignatures()
 		m_DecalRootSignature = D3D12RHI::Get()->CreateRootSignature(versionedRootSignatureDesc);
 	}
 
+	// Tiled Binning Root Signature
+	{
+		D3D12_ROOT_PARAMETER1 rootParameters[4];
+
+		// 1. Structured Buffer
+		// 2. Depth Buffer
+		// 3. Constant Buffer
+		// 4. Root Constant
+		// 5. Output UAV
+
+		// Structured Buffer
+		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
+		rootParameters[0].Descriptor.RegisterSpace = 0;
+		rootParameters[0].Descriptor.ShaderRegister = 0;
+
+		// Depth Buffer
+		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+		D3D12_DESCRIPTOR_RANGE1 depthBufferRange[1];
+		depthBufferRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		depthBufferRange[0].BaseShaderRegister = 1;
+		depthBufferRange[0].RegisterSpace = 0;
+		depthBufferRange[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+		depthBufferRange[0].OffsetInDescriptorsFromTableStart = 0;
+		depthBufferRange[0].NumDescriptors = 1;
+
+		rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(depthBufferRange);
+		rootParameters[1].DescriptorTable.pDescriptorRanges = &depthBufferRange[0];
+
+		// Constant Buffer
+		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[2].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[2].Descriptor.RegisterSpace = 0;
+		rootParameters[2].Descriptor.ShaderRegister = 0;
+
+		// Output UAV
+		rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+		rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[3].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
+		rootParameters[3].Descriptor.RegisterSpace = 0;
+		rootParameters[3].Descriptor.ShaderRegister = 0;
+
+		//////////////////////////////////////////////////////////////////////////
+
+		D3D12_STATIC_SAMPLER_DESC sampler = {};
+		sampler.Filter = D3D12_FILTER_ANISOTROPIC;
+		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.MipLODBias = 0;
+		sampler.MaxAnisotropy = 16;
+		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
+		sampler.MinLOD = 0.0f;
+		sampler.MaxLOD = D3D12_FLOAT32_MAX;
+		sampler.ShaderRegister = 0;
+		sampler.RegisterSpace = 0;
+		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+		// Allow input layout and deny uneccessary access to certain pipeline stages.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+			| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
+			| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
+			| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+		//| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.NumParameters = _countof(rootParameters);
+		rootSignatureDesc.pParameters = &rootParameters[0];
+		rootSignatureDesc.NumStaticSamplers = 1;
+		rootSignatureDesc.pStaticSamplers = &sampler;
+		rootSignatureDesc.Flags = rootSignatureFlags;
+
+		D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedRootSignatureDesc = {};
+		versionedRootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+		versionedRootSignatureDesc.Desc_1_1 = rootSignatureDesc;
+
+		m_TileBinningRootSignature = D3D12RHI::Get()->CreateRootSignature(versionedRootSignatureDesc);
+	}
+
 
 }
 
@@ -879,6 +973,26 @@ void AppModeBase::CreatePSOs()
 
 		DXAssert(D3D12Globals::Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&m_DecalPipelineState)));
 	}
+
+	// Compute Decal Pass PSO
+	{
+		eastl::string fullPath = "../Data/Shaders/D3D12/";
+		fullPath += "TiledBinning.hlsl";
+
+		const CompiledShaderResult compiledShader = D3D12RHI::Get()->CompileComputeShaderFromFile(fullPath);
+
+		// shader bytecodes
+		D3D12_SHADER_BYTECODE csByteCode;
+		csByteCode.pShaderBytecode = compiledShader.CSByteCode->GetBufferPointer();
+		csByteCode.BytecodeLength = compiledShader.CSByteCode->GetBufferSize();
+
+		// Describe and create the graphics pipeline state object (PSO).
+		D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.pRootSignature = m_TileBinningRootSignature;
+		psoDesc.CS = csByteCode;
+
+		DXAssert(D3D12Globals::Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&m_TiledBinningPipelineState)));
+	}
 }
 
 void AppModeBase::SwapBuffers()
@@ -941,6 +1055,12 @@ void AppModeBase::BeginFrame()
 	//D3D12RHI::Get()->BeginFrame();
 	ResetFrameResources();
 
+	// The descriptor heap needs to be set at least once per frame and preferrably never changed during that frame
+	// as a change in descriptor heaps can incur a pipeline flush
+	// Only one CBV SRV UAV heap and one Samplers heap can be bound at the same time
+	ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heaps[D3D12Utility::CurrentFrameIndex] };
+	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
 	{
 		eastl::vector<ShaderDecal> shaderDecals;
 		ShaderDecal newDecal = {};
@@ -965,8 +1085,6 @@ void AppModeBase::BeginFrame()
 
 uint64_t TestNrMeshesToDraw = uint64_t(-1);
 uint64_t NrMeshesDrawn = 0;
-
-
 
 void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes, const Scene& inCurrentScene, const eastl::vector<MeshMaterial>& inMaterials)
 {
@@ -1010,10 +1128,6 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 
 			m_commandList->SetGraphicsRootShaderResourceView(1, m_materialsBuffer.GetCurrentGPUAddress());
 
-			// Only one CBV SRV UAV heap and one Samplers heap can be bound at the same time
-			ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heaps[D3D12Utility::CurrentFrameIndex]};
-			m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-
 			m_commandList->SetGraphicsRoot32BitConstant(3, modelChild->MatIndex, 0);
 
 			m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
@@ -1034,7 +1148,6 @@ void AppModeBase::DrawGBuffer()
 	PIXMarker Marker(m_commandList, "Draw GBuffer");
 
 	m_constantBuffer.ClearUsedMemory();
-	UsedCBMemory[D3D12Utility::CurrentFrameIndex] = 0;
 
 	// Populate Command List
 
@@ -1104,8 +1217,6 @@ void AppModeBase::RenderLighting()
 	PIXMarker Marker(m_commandList, "Render Deferred Lighting");
 
 	// Draw screen quad
-	ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heaps[D3D12Utility::CurrentFrameIndex]};
-	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
 	// Backbuffers are the first 2 RTVs in the Global Heap
 	D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Utility::CurrentFrameIndex, 0);
@@ -1159,9 +1270,47 @@ void AppModeBase::RenderLighting()
 
 }
 
-uint32_t DivideAndRoundUp(uint32_t Dividend, uint32_t Divisor)
+void AppModeBase::ComputeTiledBinning()
 {
-	return (Dividend + Divisor - 1) / Divisor;
+	PIXMarker Marker(m_commandList, "Tiled Binning");
+
+	// Draw screen quad
+	m_commandList->SetComputeRootSignature(m_TileBinningRootSignature);
+	m_commandList->SetPipelineState(m_TiledBinningPipelineState);
+
+	SceneManager& sManager = SceneManager::Get();
+	const Scene& currentScene = sManager.GetCurrentScene();
+
+	const eastl::shared_ptr<Camera>& currentCamera = currentScene.GetCurrentCamera();
+
+	// 0. Structured Buffer
+	// 1. Depth Buffer
+	// 2. Constant Buffer
+	// 3. Output UAV
+
+	m_commandList->SetComputeRootShaderResourceView(0, m_DecalsBuffer.GetCurrentGPUAddress());
+	m_commandList->SetComputeRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
+
+	{
+		DecalConstantBuffer decalConstantBufferData;
+
+		decalConstantBufferData.Projection = glm::transpose(GetMainProjection());
+		decalConstantBufferData.View = glm::transpose(currentScene.GetMainCameraLookAt());
+		decalConstantBufferData.InvViewProj = glm::transpose(glm::inverse(GetMainProjection() * currentScene.GetMainCameraLookAt()));
+
+		// Use temp buffer in main constant buffer
+		MapResult cBufferMap = m_constantBuffer.ReserveTempBufferMemory(sizeof(decalConstantBufferData));
+		memcpy(cBufferMap.CPUAddress, &decalConstantBufferData, sizeof(decalConstantBufferData));
+		m_commandList->SetComputeRootConstantBufferView(2, cBufferMap.GPUAddress);
+	}
+
+	m_commandList->SetComputeRootUnorderedAccessView(3, m_DecalsTilingBuffer.GetCurrentGPUAddress());
+
+	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
+	const WindowProperties& props = mainWindow.GetProperties();
+
+	m_commandList->Dispatch(TileComputeGroupCounts.x, TileComputeGroupCounts.y, 1);
+#undef TILE_SIZE
 }
 
 void AppModeBase::ComputeDecals()
@@ -1169,9 +1318,6 @@ void AppModeBase::ComputeDecals()
 	PIXMarker Marker(m_commandList, "Compute Decals");
 
 	// Draw screen quad
-	ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heaps[D3D12Utility::CurrentFrameIndex] };
-	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-
 	m_commandList->SetComputeRootSignature(m_DecalRootSignature);
 	m_commandList->SetPipelineState(m_DecalPipelineState);
 
@@ -1209,11 +1355,14 @@ void AppModeBase::ComputeDecals()
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
 
+#define LIGHTING_TILE_SIZE 32
+
 	const glm::vec<2, uint32_t> GroupCounts = glm::vec<2, uint32_t>(
-		DivideAndRoundUp(props.Width, 32),
-		DivideAndRoundUp(props.Height, 32));
+		MathUtils::DivideAndRoundUp(props.Width, LIGHTING_TILE_SIZE),
+		MathUtils::DivideAndRoundUp(props.Height, LIGHTING_TILE_SIZE));
 
 	m_commandList->Dispatch(GroupCounts.x, GroupCounts.y, 1);
+#undef LIGHTING_TILE_SIZE
 }
 
 
@@ -1237,9 +1386,21 @@ void AppModeBase::Draw()
 	}
 
 	{
+		D3D12Utility::TransitionResource(m_commandList, m_DecalsTilingBuffer.Resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		D3D12Utility::TransitionResource(m_commandList, m_MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+		ComputeTiledBinning();
+
+		D3D12Utility::TransitionResource(m_commandList, m_MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+		D3D12Utility::TransitionResource(m_commandList, m_DecalsTilingBuffer.Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	}
+
+
+
+	{
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		//D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
-		//D3D12Utility::TransitionResource(m_commandList, m_GBufferRoughness->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		D3D12Utility::TransitionResource(m_commandList, m_GBufferRoughness->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		D3D12Utility::TransitionResource(m_commandList, m_MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 		ComputeDecals();
@@ -1250,8 +1411,8 @@ void AppModeBase::Draw()
 		D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Utility::CurrentFrameIndex, 0);
 		D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		D3D12Utility::TransitionResource(m_commandList, m_GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		D3D12Utility::TransitionResource(m_commandList, m_GBufferRoughness->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		D3D12Utility::TransitionResource(m_commandList, m_GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		D3D12Utility::TransitionResource(m_commandList, m_GBufferRoughness->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		D3D12Utility::TransitionResource(m_commandList, m_MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		RenderLighting();

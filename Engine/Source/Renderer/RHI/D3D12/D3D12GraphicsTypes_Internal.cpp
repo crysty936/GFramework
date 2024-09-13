@@ -224,8 +224,7 @@ void D3D12StructuredBuffer::Init(const uint64_t inNumElements, const uint64_t in
 	constantBufferDesc.SampleDesc.Quality = 0;
 	constantBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
-	// TODO: D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS should be added for Compute
-	constantBufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	constantBufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 	DXAssert(D3D12Globals::Device->CreateCommittedResource(
 		&heapProps,
@@ -272,6 +271,59 @@ void D3D12StructuredBuffer::UploadDataCurrentFrame(void* inData, uint64_t inSize
 }
 
 uint64_t D3D12StructuredBuffer::GetCurrentGPUAddress()
+{
+	return GPUAddress + ((D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight) * Size);
+}
+
+D3D12RawBuffer::~D3D12RawBuffer()
+{
+	Resource->Release();
+	Resource = nullptr;
+}
+
+void D3D12RawBuffer::Init(const uint64_t inNumElements)
+{
+	NumElements = inNumElements;
+
+	const uint64_t totalSize = inNumElements * sizeof(uint64_t);
+	Size = Utils::AlignTo(totalSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+	// Right now, it's supposed to only be written to by compute
+	D3D12_HEAP_PROPERTIES heapProps = D3D12Utility::GetDefaultHeapProps();
+
+	D3D12_RESOURCE_DESC constantBufferDesc;
+	constantBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	constantBufferDesc.Alignment = 0;
+	constantBufferDesc.Width = Size * D3D12Utility::NumFramesInFlight;
+	constantBufferDesc.Height = 1;
+	constantBufferDesc.DepthOrArraySize = 1;
+	constantBufferDesc.MipLevels = 1;
+	constantBufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+	constantBufferDesc.SampleDesc.Count = 1;
+	constantBufferDesc.SampleDesc.Quality = 0;
+	constantBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+	constantBufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+	DXAssert(D3D12Globals::Device->CreateCommittedResource(
+		&heapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&constantBufferDesc,
+		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+		nullptr,
+		IID_PPV_ARGS(&Resource)));
+
+	GPUAddress = Resource->GetGPUVirtualAddress();
+
+	static uint64_t RawBuffer = 0;
+	eastl::wstring bufferName = L"RawBuffer_";
+	bufferName.append(eastl::to_wstring(RawBuffer));
+	++RawBuffer;
+
+	Resource->SetName(bufferName.c_str());
+}
+
+uint64_t D3D12RawBuffer::GetCurrentGPUAddress()
 {
 	return GPUAddress + ((D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight) * Size);
 }
