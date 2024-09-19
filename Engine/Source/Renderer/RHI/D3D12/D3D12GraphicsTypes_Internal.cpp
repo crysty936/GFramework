@@ -285,7 +285,7 @@ void D3D12RawBuffer::Init(const uint64_t inNumElements)
 {
 	NumElements = inNumElements;
 
-	const uint64_t totalSize = inNumElements * sizeof(uint64_t);
+	const uint64_t totalSize = inNumElements * sizeof(uint32_t);
 	Size = Utils::AlignTo(totalSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 
 	// Right now, it's supposed to only be written to by compute

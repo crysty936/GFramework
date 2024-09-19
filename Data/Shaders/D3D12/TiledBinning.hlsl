@@ -21,8 +21,9 @@ struct DecalConstantBuffer
     float4x4 Projection;
     float4x4 View;
 	float4x4 InvViewProj;
+	uint NumDecals;
 
-	float Padding[16];
+	float Padding[15];
 };
 
 // 256 byte aligned
@@ -43,7 +44,7 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 
 	float2 pixelPos = DispatchID.xy;
 
-
+	
 
 		
 

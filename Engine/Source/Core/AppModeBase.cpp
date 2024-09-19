@@ -133,8 +133,9 @@ struct DecalConstantBuffer
 	glm::mat4 Projection;
 	glm::mat4 View;
 	glm::mat4 InvViewProj;
+	uint32_t NumDecals;
 
-	float Padding[16];
+	float Padding[15];
 };
 static_assert((sizeof(DecalConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
@@ -148,12 +149,8 @@ class DecalObj : public DrawableObject
 public:
 	DecalObj(const eastl::string& inName)
 		: DrawableObject(inName) {}
-
-
 };
-
-
-eastl::shared_ptr<DecalObj> theDecalObj;
+eastl::vector<eastl::shared_ptr<DecalObj>> SceneDecals;
 
 void AppModeBase::Init()
 {
@@ -175,6 +172,9 @@ inline const glm::mat4& GetMainProjection()
 	return MainProjection;
 }
 
+// TODO: Send this to the shaders through the compiler defines
+#define TILE_SIZE 16
+
 void AppModeBase::CreateInitialResources()
 {
 	BENCH_SCOPE("Create Resources");
@@ -182,13 +182,32 @@ void AppModeBase::CreateInitialResources()
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
 
-#define TILE_SIZE 16
+	// The main idea of this binning is to combine MJPs bit representation of the binning result with the Forward+ algorithm for tiling only in 2D.
+
+	// The tiled binning pass uses each thread in each tile to process one decal.
+	// All threads in all tiles go over the same decals at the same time(theoretically), which means that if there are not 
+	// many decals, a lot of the threads in each tile will just sleep.
+	// There can be no more decals to process than the bit representation allows in the binned buffer, given that each bit represents one index, increasing.
+	// This means that there is no reason for tiles to contain more threads than that representation allows decals, only less and they can go through them with a for.
+
+	// The smaller the tile is, the more tiles will be launched.
+	// To fit 256 decals in the scene, 256 bits are requires and thus 8 uint32 necessary. This means that the decal pass needs to go through a for with 8 elements.
+	// 8 uint32s = 32 bytes per tile.
+	// The number of tiles needs to be equal in the binning pass and the decal pass. At the end of the day, each decal tile needs results for one corresponding tile.
+	// Again, the number of possible decals is completely separate from the number of tiles.
+	// The number of possible decals is represented only by the number of uin32s per tile(multiplied by 32).
+	// Tiles there can be as many as required. There should be a kind of correlation, though, as allowing many decals in the scene at once, they will probably be processed better by larger tiles(maybe).
+
+	// 256 possible decals -> 32 bytes per tile. If we use 16 * 16 tiles, then we will have a thread for each possible decal in the decal scene buffer, not needing a for(it can still be present).
+	// For 1920*1080, 1920/16 = 120, 1080/16 = ~68 => 120 * 68 tiles = 8160 tiles
+	// 8160 tiles * 32 bytes = 261120 bytes = 0.27 megabytes which is more than fine, could probably increase size even more.
+	// Number of decals doesn't have to correlate to number of tiles, though. This can be done with a for depending on the number of uint32s, like in MJPs decal implementation.
+	// At processing time, a for can be used as well to decouple the number of tiles from the number of decals.
+
 
 	TileComputeGroupCounts = glm::vec<2, uint32_t>(
 		MathUtils::DivideAndRoundUp(props.Width, TILE_SIZE),
 		MathUtils::DivideAndRoundUp(props.Height, TILE_SIZE));
-
-#undef TILE_SIZE
 
 	// Create Main Projection
 	const float CAMERA_FOV = 45.f;
@@ -335,26 +354,29 @@ void AppModeBase::CreateInitialResources()
 		m_materialsBuffer.UploadDataAllFrames(&shaderMats[0], sizeof(ShaderMaterial) * shaderMats.size());
 	}
 
-
-	theDecalObj = eastl::make_shared<DecalObj>("Decal");
+	eastl::shared_ptr<DecalObj> theDecalObj = eastl::make_shared<DecalObj>("Decal");
 	currentScene.AddObject(theDecalObj);
+	SceneDecals.push_back(theDecalObj);
 
 	theDecalObj->SetRelativeLocation(glm::vec3(0.f, -1.f, 0.f));
 	theDecalObj->SetRotationDegrees(glm::vec3(90.f, 0.f, 0.f));
 
 	{
 		eastl::vector<ShaderDecal> shaderDecals;
-		ShaderDecal newDecal = {};
-		const Transform& absTrans = theDecalObj->GetAbsoluteTransform();
+		for (uint32_t i = 0; i < SceneDecals.size(); ++i)
+		{
+			ShaderDecal newDecal = {};
+			const Transform& absTrans = SceneDecals[i]->GetAbsoluteTransform();
 
-		newDecal.Orientation = glm::vec4(absTrans.Rotation.x, absTrans.Rotation.y, absTrans.Rotation.z, absTrans.Rotation.w);
-		newDecal.Position = absTrans.Translation;
-		newDecal.Size = absTrans.Scale;
+			newDecal.Orientation = glm::vec4(absTrans.Rotation.x, absTrans.Rotation.y, absTrans.Rotation.z, absTrans.Rotation.w);
+			newDecal.Position = absTrans.Translation;
+			newDecal.Size = absTrans.Scale;
 
-		newDecal.AlbedoMapIdx = 13;
-		newDecal.NormalMapIdx = 21;
+			newDecal.AlbedoMapIdx = 13;
+			newDecal.NormalMapIdx = 21;
 
-		shaderDecals.push_back(newDecal);
+			shaderDecals.push_back(newDecal);
+		}
 
 		m_DecalsBuffer.UploadDataAllFrames(&shaderDecals[0], sizeof(ShaderDecal) * shaderDecals.size());
 	}
@@ -1063,22 +1085,23 @@ void AppModeBase::BeginFrame()
 
 	{
 		eastl::vector<ShaderDecal> shaderDecals;
-		ShaderDecal newDecal = {};
-		const Transform& absTrans = theDecalObj->GetAbsoluteTransform();
+		for (uint32_t i = 0; i < SceneDecals.size(); ++i)
+		{
+			ShaderDecal newDecal = {};
+			const Transform& absTrans = SceneDecals[i]->GetAbsoluteTransform();
 
-		newDecal.Orientation = glm::vec4(absTrans.Rotation.x, absTrans.Rotation.y, absTrans.Rotation.z, absTrans.Rotation.w);
-		newDecal.Position = absTrans.Translation;
-		newDecal.Size = absTrans.Scale;
+			newDecal.Orientation = glm::vec4(absTrans.Rotation.x, absTrans.Rotation.y, absTrans.Rotation.z, absTrans.Rotation.w);
+			newDecal.Position = absTrans.Translation;
+			newDecal.Size = absTrans.Scale;
 
-		newDecal.AlbedoMapIdx = 13;
-		newDecal.NormalMapIdx = 21;
+			newDecal.AlbedoMapIdx = 13;
+			newDecal.NormalMapIdx = 21;
 
-		shaderDecals.push_back(newDecal);
+			shaderDecals.push_back(newDecal);
+		}
 
 		m_DecalsBuffer.UploadDataCurrentFrame(&shaderDecals[0], sizeof(ShaderDecal) * shaderDecals.size());
 	}
-
-
 
 	//ImGui::ShowDemoWindow();
 }
@@ -1297,6 +1320,7 @@ void AppModeBase::ComputeTiledBinning()
 		decalConstantBufferData.Projection = glm::transpose(GetMainProjection());
 		decalConstantBufferData.View = glm::transpose(currentScene.GetMainCameraLookAt());
 		decalConstantBufferData.InvViewProj = glm::transpose(glm::inverse(GetMainProjection() * currentScene.GetMainCameraLookAt()));
+		decalConstantBufferData.NumDecals = SceneDecals.size();
 
 		// Use temp buffer in main constant buffer
 		MapResult cBufferMap = m_constantBuffer.ReserveTempBufferMemory(sizeof(decalConstantBufferData));
@@ -1310,7 +1334,6 @@ void AppModeBase::ComputeTiledBinning()
 	const WindowProperties& props = mainWindow.GetProperties();
 
 	m_commandList->Dispatch(TileComputeGroupCounts.x, TileComputeGroupCounts.y, 1);
-#undef TILE_SIZE
 }
 
 void AppModeBase::ComputeDecals()
@@ -1342,6 +1365,7 @@ void AppModeBase::ComputeDecals()
 		decalConstantBufferData.Projection = glm::transpose(GetMainProjection());
 		decalConstantBufferData.View = glm::transpose(currentScene.GetMainCameraLookAt());
 		decalConstantBufferData.InvViewProj = glm::transpose(glm::inverse(GetMainProjection() * currentScene.GetMainCameraLookAt()));
+		decalConstantBufferData.NumDecals = SceneDecals.size();
 
 		// Use temp buffer in main constant buffer
 		MapResult cBufferMap = m_constantBuffer.ReserveTempBufferMemory(sizeof(decalConstantBufferData));
@@ -1355,15 +1379,13 @@ void AppModeBase::ComputeDecals()
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
 
-#define LIGHTING_TILE_SIZE 32
-
 	const glm::vec<2, uint32_t> GroupCounts = glm::vec<2, uint32_t>(
-		MathUtils::DivideAndRoundUp(props.Width, LIGHTING_TILE_SIZE),
-		MathUtils::DivideAndRoundUp(props.Height, LIGHTING_TILE_SIZE));
+		MathUtils::DivideAndRoundUp(props.Width, TILE_SIZE),
+		MathUtils::DivideAndRoundUp(props.Height, TILE_SIZE));
 
 	m_commandList->Dispatch(GroupCounts.x, GroupCounts.y, 1);
-#undef LIGHTING_TILE_SIZE
 }
+
 
 
 
