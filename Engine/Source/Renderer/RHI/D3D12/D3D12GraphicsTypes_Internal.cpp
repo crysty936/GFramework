@@ -320,6 +320,24 @@ void D3D12RawBuffer::Init(const uint64_t inNumElements)
 	bufferName.append(eastl::to_wstring(RawBuffer));
 	++RawBuffer;
 
+
+	// Create UAV
+	{
+		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalUAVHeap.AllocatePersistent();
+		UAV = descAllocation.CPUHandle[0];
+
+		D3D12_UNORDERED_ACCESS_VIEW_DESC desc = {};
+		desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+		desc.Format = DXGI_FORMAT_R32_TYPELESS;
+		desc.Buffer.CounterOffsetInBytes = 0;
+		desc.Buffer.FirstElement = 0;
+		desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+		desc.Buffer.NumElements = uint32_t(NumElements);
+
+		D3D12Globals::Device->CreateUnorderedAccessView(Resource, nullptr, &desc, UAV);
+	}
+
+
 	Resource->SetName(bufferName.c_str());
 }
 

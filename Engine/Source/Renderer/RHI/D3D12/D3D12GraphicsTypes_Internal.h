@@ -103,6 +103,7 @@ public:
 	struct ID3D12Resource* Resource = nullptr;
 	uint64_t NumElements = 0;
 	uint64_t Size = 0;
+	D3D12_CPU_DESCRIPTOR_HANDLE UAV = {};
 
 	uint64_t GPUAddress = 0;
 };

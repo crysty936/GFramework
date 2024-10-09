@@ -134,15 +134,29 @@ struct DecalConstantBuffer
 	glm::mat4 View;
 	glm::mat4 InvViewProj;
 	uint32_t NumDecals;
+	glm::vec<2, uint32_t> NumWorkGroups;
 
-	float Padding[15];
+	float Padding[13];
 };
 static_assert((sizeof(DecalConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
+
+
+struct DecalTilingConstantBuffer
+{
+	glm::mat4 Projection;
+	glm::mat4 View;
+	glm::mat4 InvViewProj;
+	uint32_t NumDecals;
+	glm::vec<2, uint32_t> NumWorkGroups;
+
+	float Padding[13];
+};
+static_assert((sizeof(DecalTilingConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
 D3D12ConstantBuffer m_constantBuffer;
 D3D12StructuredBuffer m_materialsBuffer;
 D3D12StructuredBuffer m_DecalsBuffer;
-D3D12RawBuffer m_DecalsTilingBuffer;
+D3D12RawBuffer m_DecalsTiledBinningBuffer;
 
 class DecalObj : public DrawableObject
 {
@@ -187,7 +201,7 @@ void AppModeBase::CreateInitialResources()
 	// The tiled binning pass uses each thread in each tile to process one decal.
 	// All threads in all tiles go over the same decals at the same time(theoretically), which means that if there are not 
 	// many decals, a lot of the threads in each tile will just sleep.
-	// There can be no more decals to process than the bit representation allows in the binned buffer, given that each bit represents one index, increasing.
+	// There can be no more decals to process than the bit representation allows in the binned buffer, because each bit represents a decal idx which will be used to index in the same buffer used for processing.
 	// This means that there is no reason for tiles to contain more threads than that representation allows decals, only less and they can go through them with a for.
 
 	// The smaller the tile is, the more tiles will be launched.
@@ -195,12 +209,12 @@ void AppModeBase::CreateInitialResources()
 	// 8 uint32s = 32 bytes per tile.
 	// The number of tiles needs to be equal in the binning pass and the decal pass. At the end of the day, each decal tile needs results for one corresponding tile.
 	// Again, the number of possible decals is completely separate from the number of tiles.
-	// The number of possible decals is represented only by the number of uin32s per tile(multiplied by 32).
+	// The number of possible decals is represented only by the number of uint32s per tile used in the binned buffer.
 	// Tiles there can be as many as required. There should be a kind of correlation, though, as allowing many decals in the scene at once, they will probably be processed better by larger tiles(maybe).
 
 	// 256 possible decals -> 32 bytes per tile. If we use 16 * 16 tiles, then we will have a thread for each possible decal in the decal scene buffer, not needing a for(it can still be present).
 	// For 1920*1080, 1920/16 = 120, 1080/16 = ~68 => 120 * 68 tiles = 8160 tiles
-	// 8160 tiles * 32 bytes = 261120 bytes = 0.27 megabytes which is more than fine, could probably increase size even more.
+	// 8160 tiles * 32 bytes = 261120 bytes = 0.27 megabytes, could probably increase size to have more decals.
 	// Number of decals doesn't have to correlate to number of tiles, though. This can be done with a for depending on the number of uint32s, like in MJPs decal implementation.
 	// At processing time, a for can be used as well to decouple the number of tiles from the number of decals.
 
@@ -354,12 +368,24 @@ void AppModeBase::CreateInitialResources()
 		m_materialsBuffer.UploadDataAllFrames(&shaderMats[0], sizeof(ShaderMaterial) * shaderMats.size());
 	}
 
-	eastl::shared_ptr<DecalObj> theDecalObj = eastl::make_shared<DecalObj>("Decal");
-	currentScene.AddObject(theDecalObj);
-	SceneDecals.push_back(theDecalObj);
+	{
+		eastl::shared_ptr<DecalObj> decalObj = eastl::make_shared<DecalObj>("Decal");
+		currentScene.AddObject(decalObj);
+		SceneDecals.push_back(decalObj);
 
-	theDecalObj->SetRelativeLocation(glm::vec3(0.f, -1.f, 0.f));
-	theDecalObj->SetRotationDegrees(glm::vec3(90.f, 0.f, 0.f));
+		decalObj->SetRelativeLocation(glm::vec3(0.f, -1.f, 0.f));
+		decalObj->SetRotationDegrees(glm::vec3(90.f, 0.f, 0.f));
+	}
+
+	//{
+	//	eastl::shared_ptr<DecalObj> decalObj = eastl::make_shared<DecalObj>("Decal");
+	//	currentScene.AddObject(decalObj);
+	//	SceneDecals.push_back(decalObj);
+
+	//	decalObj->SetRelativeLocation(glm::vec3(0.f, -1.f, -5.f));
+	//	decalObj->SetRotationDegrees(glm::vec3(90.f, 0.f, 0.f));
+	//}
+
 
 	{
 		eastl::vector<ShaderDecal> shaderDecals;
@@ -381,8 +407,8 @@ void AppModeBase::CreateInitialResources()
 		m_DecalsBuffer.UploadDataAllFrames(&shaderDecals[0], sizeof(ShaderDecal) * shaderDecals.size());
 	}
 
-	constexpr uint64_t DecalElementsPerTile = 2;
-	m_DecalsTilingBuffer.Init(TileComputeGroupCounts.x * TileComputeGroupCounts.y * DecalElementsPerTile);
+	constexpr uint64_t DecalElementsPerTile = 1;
+	m_DecalsTiledBinningBuffer.Init(TileComputeGroupCounts.x * TileComputeGroupCounts.y * DecalElementsPerTile);
 
 	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
 
@@ -645,7 +671,7 @@ void AppModeBase::CreateRootSignatures()
 
 	// Decal Pass Signature
 	{
-		D3D12_ROOT_PARAMETER1 rootParameters[5];
+		D3D12_ROOT_PARAMETER1 rootParameters[6];
 
 		// 0. Main CBV_SRV_UAV heap
 		// 1. Structured Buffer
@@ -676,27 +702,35 @@ void AppModeBase::CreateRootSignatures()
 		rootParameters[1].Descriptor.RegisterSpace = 100;
 		rootParameters[1].Descriptor.ShaderRegister = 0;
 
-		// Depth Buffer
-		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		// Binning Buffer
+		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
 		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[2].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
+		rootParameters[2].Descriptor.RegisterSpace = 100;
+		rootParameters[2].Descriptor.ShaderRegister = 1;
+
+		// Depth Buffer
+		rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 		D3D12_DESCRIPTOR_RANGE1 depthBufferRange[1];
 		depthBufferRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		depthBufferRange[0].BaseShaderRegister = 1;
+		depthBufferRange[0].BaseShaderRegister = 2;
 		depthBufferRange[0].RegisterSpace = 100;
 		depthBufferRange[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 		depthBufferRange[0].OffsetInDescriptorsFromTableStart = 0;
 		depthBufferRange[0].NumDescriptors = 1;
 
-		rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(depthBufferRange);
-		rootParameters[2].DescriptorTable.pDescriptorRanges = &depthBufferRange[0];
+		rootParameters[3].DescriptorTable.NumDescriptorRanges = _countof(depthBufferRange);
+		rootParameters[3].DescriptorTable.pDescriptorRanges = &depthBufferRange[0];
 
 		// Constant Buffer
-		rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-		rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-		rootParameters[3].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
-		rootParameters[3].Descriptor.RegisterSpace = 0;
-		rootParameters[3].Descriptor.ShaderRegister = 0;
+		rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[4].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[4].Descriptor.RegisterSpace = 0;
+		rootParameters[4].Descriptor.ShaderRegister = 0;
+
 		// Output UAV
 		D3D12_DESCRIPTOR_RANGE1 uavRangeCS[1] = {};
 		uavRangeCS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
@@ -705,10 +739,10 @@ void AppModeBase::CreateRootSignatures()
 		uavRangeCS[0].RegisterSpace = 0;
 		uavRangeCS[0].OffsetInDescriptorsFromTableStart = 0;
 
-		rootParameters[4].DescriptorTable.pDescriptorRanges = &uavRangeCS[0];
-		rootParameters[4].DescriptorTable.NumDescriptorRanges = _countof(uavRangeCS);
-		rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[5].DescriptorTable.pDescriptorRanges = &uavRangeCS[0];
+		rootParameters[5].DescriptorTable.NumDescriptorRanges = _countof(uavRangeCS);
+		rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 		//////////////////////////////////////////////////////////////////////////
 
@@ -1311,24 +1345,35 @@ void AppModeBase::ComputeTiledBinning()
 	// 2. Constant Buffer
 	// 3. Output UAV
 
+	// Clear decal binning buffer
+	{
+		const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE> uavHandles = { m_DecalsTiledBinningBuffer.UAV };
+		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = D3D12Utility::CreateTempDescriptorTable(m_commandList, uavHandles);
+
+		uint32_t values[4] = {};
+		m_commandList->ClearUnorderedAccessViewUint(gpuHandle, uavHandles[0], m_DecalsTiledBinningBuffer.Resource, values, 0, nullptr);
+	}
+
 	m_commandList->SetComputeRootShaderResourceView(0, m_DecalsBuffer.GetCurrentGPUAddress());
 	m_commandList->SetComputeRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
 
 	{
-		DecalConstantBuffer decalConstantBufferData;
+		DecalTilingConstantBuffer tilingConstBufferData;
 
-		decalConstantBufferData.Projection = glm::transpose(GetMainProjection());
-		decalConstantBufferData.View = glm::transpose(currentScene.GetMainCameraLookAt());
-		decalConstantBufferData.InvViewProj = glm::transpose(glm::inverse(GetMainProjection() * currentScene.GetMainCameraLookAt()));
-		decalConstantBufferData.NumDecals = SceneDecals.size();
+		tilingConstBufferData.Projection = glm::transpose(GetMainProjection());
+		tilingConstBufferData.View = glm::transpose(currentScene.GetMainCameraLookAt());
+		tilingConstBufferData.InvViewProj = glm::transpose(glm::inverse(GetMainProjection() * currentScene.GetMainCameraLookAt()));
+
+		tilingConstBufferData.NumDecals = SceneDecals.size();
+		tilingConstBufferData.NumWorkGroups = TileComputeGroupCounts;
 
 		// Use temp buffer in main constant buffer
-		MapResult cBufferMap = m_constantBuffer.ReserveTempBufferMemory(sizeof(decalConstantBufferData));
-		memcpy(cBufferMap.CPUAddress, &decalConstantBufferData, sizeof(decalConstantBufferData));
+		MapResult cBufferMap = m_constantBuffer.ReserveTempBufferMemory(sizeof(tilingConstBufferData));
+		memcpy(cBufferMap.CPUAddress, &tilingConstBufferData, sizeof(tilingConstBufferData));
 		m_commandList->SetComputeRootConstantBufferView(2, cBufferMap.GPUAddress);
 	}
 
-	m_commandList->SetComputeRootUnorderedAccessView(3, m_DecalsTilingBuffer.GetCurrentGPUAddress());
+	m_commandList->SetComputeRootUnorderedAccessView(3, m_DecalsTiledBinningBuffer.GetCurrentGPUAddress());
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
@@ -1357,7 +1402,8 @@ void AppModeBase::ComputeDecals()
 
 	m_commandList->SetComputeRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
 	m_commandList->SetComputeRootShaderResourceView(1, m_DecalsBuffer.GetCurrentGPUAddress());
-	m_commandList->SetComputeRootDescriptorTable(2, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
+	m_commandList->SetComputeRootShaderResourceView(2, m_DecalsTiledBinningBuffer.GetCurrentGPUAddress());
+	m_commandList->SetComputeRootDescriptorTable(3, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
 
 	{
 		DecalConstantBuffer decalConstantBufferData;
@@ -1366,15 +1412,16 @@ void AppModeBase::ComputeDecals()
 		decalConstantBufferData.View = glm::transpose(currentScene.GetMainCameraLookAt());
 		decalConstantBufferData.InvViewProj = glm::transpose(glm::inverse(GetMainProjection() * currentScene.GetMainCameraLookAt()));
 		decalConstantBufferData.NumDecals = SceneDecals.size();
+		decalConstantBufferData.NumWorkGroups = TileComputeGroupCounts;
 
 		// Use temp buffer in main constant buffer
 		MapResult cBufferMap = m_constantBuffer.ReserveTempBufferMemory(sizeof(decalConstantBufferData));
 		memcpy(cBufferMap.CPUAddress, &decalConstantBufferData, sizeof(decalConstantBufferData));
-		m_commandList->SetComputeRootConstantBufferView(3, cBufferMap.GPUAddress);
+		m_commandList->SetComputeRootConstantBufferView(4, cBufferMap.GPUAddress);
 	}
 
 	const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE> uavHandles = { m_GBufferAlbedo->UAV, m_GBufferNormal->UAV, m_GBufferRoughness->UAV };
-	D3D12Utility::BindTempDescriptorTable(4, m_commandList, uavHandles);
+	D3D12Utility::BindTempDescriptorTable(5, m_commandList, uavHandles);
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
@@ -1408,13 +1455,13 @@ void AppModeBase::Draw()
 	}
 
 	{
-		D3D12Utility::TransitionResource(m_commandList, m_DecalsTilingBuffer.Resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		D3D12Utility::TransitionResource(m_commandList, m_DecalsTiledBinningBuffer.Resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		D3D12Utility::TransitionResource(m_commandList, m_MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 		ComputeTiledBinning();
 
 		D3D12Utility::TransitionResource(m_commandList, m_MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-		D3D12Utility::TransitionResource(m_commandList, m_DecalsTilingBuffer.Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		D3D12Utility::TransitionResource(m_commandList, m_DecalsTiledBinningBuffer.Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	}
 
 

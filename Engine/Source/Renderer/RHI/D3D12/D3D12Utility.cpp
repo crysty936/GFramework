@@ -71,22 +71,22 @@ void D3D12Utility::Init()
 	{
 		D3D12_BLEND_DESC& disabledBlendDesc = BlendStates[uint8_t(EBlendState::Disabled)];
 
-		disabledBlendDesc.AlphaToCoverageEnable = FALSE;
-		disabledBlendDesc.IndependentBlendEnable = FALSE;
+disabledBlendDesc.AlphaToCoverageEnable = FALSE;
+disabledBlendDesc.IndependentBlendEnable = FALSE;
 
-		const D3D12_RENDER_TARGET_BLEND_DESC defaultRenderTargetBlendDesc =
-		{
-			FALSE,FALSE,
-			D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
-			D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
-			D3D12_LOGIC_OP_NOOP,
-			D3D12_COLOR_WRITE_ENABLE_ALL,
-		};
+const D3D12_RENDER_TARGET_BLEND_DESC defaultRenderTargetBlendDesc =
+{
+	FALSE,FALSE,
+	D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
+	D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
+	D3D12_LOGIC_OP_NOOP,
+	D3D12_COLOR_WRITE_ENABLE_ALL,
+};
 
-		for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
-		{
-			disabledBlendDesc.RenderTarget[i] = defaultRenderTargetBlendDesc;
-		}
+for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+{
+	disabledBlendDesc.RenderTarget[i] = defaultRenderTargetBlendDesc;
+}
 	}
 
 	// Depth States
@@ -124,11 +124,11 @@ D3D12_HEAP_PROPERTIES& D3D12Utility::GetDefaultHeapProps()
 		0
 	};
 
-// 	DefaultHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-// 	DefaultHeapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-// 	DefaultHeapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-// 	DefaultHeapProps.CreationNodeMask = 1;
-// 	DefaultHeapProps.VisibleNodeMask = 1;
+	// 	DefaultHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+	// 	DefaultHeapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	// 	DefaultHeapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	// 	DefaultHeapProps.CreationNodeMask = 1;
+	// 	DefaultHeapProps.VisibleNodeMask = 1;
 
 	return DefaultHeapProps;
 }
@@ -169,15 +169,21 @@ void D3D12Utility::TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D
 	inCmdList->ResourceBarrier(1, &barrier);
 }
 
-void D3D12Utility::BindTempDescriptorTable(uint32_t inRootParamIdx, ID3D12GraphicsCommandList* inCmdList, const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& inHandles)
+D3D12_GPU_DESCRIPTOR_HANDLE D3D12Utility::CreateTempDescriptorTable(ID3D12GraphicsCommandList* inCmdList, const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& inHandles)
 {
 	const D3D12DescHeapAllocationDesc tempDesc = D3D12Globals::GlobalSRVHeap.AllocateTemporary(inHandles.size());
 
 	const uint32_t destRanges[1] = { inHandles.size() };
-	//D3D12Globals::Device->CopyDescriptors(1, &tempDesc.CPUHandle[0], destRanges, inHandles.size(), &inHandles[0], destRanges, D3D12Globals::GlobalSRVHeap.HeapType);
 	D3D12Globals::Device->CopyDescriptorsSimple(inHandles.size(), tempDesc.CPUHandle[0], inHandles[0], D3D12Globals::GlobalSRVHeap.HeapType);
 
 	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = { D3D12Globals::GlobalSRVHeap.GetGPUHandle(tempDesc.Index, D3D12Utility::CurrentFrameIndex) };
+
+	return gpuHandle;
+}
+
+void D3D12Utility::BindTempDescriptorTable(uint32_t inRootParamIdx, ID3D12GraphicsCommandList* inCmdList, const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& inHandles)
+{
+	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = CreateTempDescriptorTable(inCmdList, inHandles);
 
 	inCmdList->SetComputeRootDescriptorTable(inRootParamIdx, gpuHandle);
 }
