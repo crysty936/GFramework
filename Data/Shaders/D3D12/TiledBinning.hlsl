@@ -172,7 +172,7 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 
 		// Debug
 		const float2 positiveStepPlusHalf = (2.f * float2(float2(TileIdx) + float2(0.5f, 0.5f))) / float2(TilesCount);
-		float2 frustumPoint = float2(- 1 + positiveStepPlusHalf.x, -1 + positiveStepPlusHalf.y);
+		float2 frustumPoint = float2(- 1 + positiveStepPlusHalf.x, 1 - positiveStepPlusHalf.y);
 		
 		float4 clipPos = float4(position, 1.f);
 		clipPos = mul(clipPos, viewProj);
@@ -181,7 +181,7 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		
 		float dist = length(frustumPoint - clipPos.xy);
 
-		if (dist > 0.01f)
+		if (dist > 0.1f)
 		{
 			visibleDecalInTile = false;
 		}
@@ -205,16 +205,16 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		uint TileIdx = (GroupID.y * ConstBuffer.NumWorkGroups.x) + GroupID.x;
 		uint address = (TileIdx * 4) + 1;
 
-		if (ConstBuffer.DebugFlag == 0)
-		{
-			TilingBuffer.Store(address, 0xFF);
-			//TilingBuffer.InterlockedOr(address, 0xFF);
-		}
-		
-// 		if (visibleDecalsCount > 0)
+// 		if (ConstBuffer.DebugFlag == 0)
 // 		{
-//  			TilingBuffer.InterlockedOr(address, 0xFF);
+// 			//TilingBuffer.Store(address, 0xFF);
+// 			TilingBuffer.InterlockedOr(address, 0xFF);
 // 		}
+		
+		if (visibleDecalsCount > 0)
+		{
+ 			TilingBuffer.InterlockedOr(address, 0xFF);
+		}
 		
 
 // 		for (uint i = 0; i < visibleDecalsCount; ++i)

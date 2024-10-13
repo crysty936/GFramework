@@ -85,29 +85,29 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		float3 decalUVW = localPos / usedDecal.Size;
 		decalUVW.y *= -1;
 	
-// 		[branch]
-// 		if (
-// 			decalUVW.x >= -1.f && decalUVW.x <= 1.f &&
-// 			decalUVW.y >= -1.f && decalUVW.y <= 1.f &&
-// 			decalUVW.z >= -1.f && decalUVW.z <= 1.f)
-// 		{
-// 			Texture2D AlbedoMap = Tex2DTable[usedDecal.AlbedoMapIdx];
-// 			//OutputTexture[pixelPos] = float4(1.f, 0.f, 0.f, 1.f);
-// 			OutputAlbedo[pixelPos] = AlbedoMap.SampleLevel(g_sampler, decalUVW.xy, 0);
-// 		
-// 			Texture2D NormalMap = Tex2DTable[usedDecal.NormalMapIdx];
-// 
-// 			float3 decalNormalTS = NormalMap.SampleLevel(g_sampler, decalUVW.xy, 0).xyz;
-// 			//float3 decalNormalTS = float3(0.f, 0.f, 1.f);
-// 			decalNormalTS *= 0.5f + 0.5f;
-// 		
-// 			decalNormalTS.z *= -1.f;
-// 		
-// 			float3 decalNormalWS = mul(decalNormalTS, decalRot);
-// 			decalNormalWS *= 2.f - 1.f;
-// 		
-// 			OutputNormal[pixelPos] = float4(decalNormalWS, 1.f);
-// 		}
+		[branch]
+		if (
+			decalUVW.x >= -1.f && decalUVW.x <= 1.f &&
+			decalUVW.y >= -1.f && decalUVW.y <= 1.f &&
+			decalUVW.z >= -1.f && decalUVW.z <= 1.f)
+		{
+			Texture2D AlbedoMap = Tex2DTable[usedDecal.AlbedoMapIdx];
+			//OutputTexture[pixelPos] = float4(1.f, 0.f, 0.f, 1.f);
+			OutputAlbedo[pixelPos] = AlbedoMap.SampleLevel(g_sampler, decalUVW.xy, 0);
+		
+			Texture2D NormalMap = Tex2DTable[usedDecal.NormalMapIdx];
+
+			float3 decalNormalTS = NormalMap.SampleLevel(g_sampler, decalUVW.xy, 0).xyz;
+			//float3 decalNormalTS = float3(0.f, 0.f, 1.f);
+			decalNormalTS *= 0.5f + 0.5f;
+		
+			decalNormalTS.z *= -1.f;
+		
+			float3 decalNormalWS = mul(decalNormalTS, decalRot);
+			decalNormalWS *= 2.f - 1.f;
+		
+			OutputNormal[pixelPos] = float4(decalNormalWS, 1.f);
+		}
 
 		uint TileIdx = (GroupID.y * ConstBuffer.NumWorkGroups.x) + GroupID.x;
 		uint address = (TileIdx * 4) + 1;
