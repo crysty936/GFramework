@@ -23,8 +23,9 @@ struct DecalTilingConstantBuffer
 	float4x4 InvViewProj;
 	uint NumDecals;
 	uint2 NumWorkGroups;
+	uint DebugFlag;
 
-	float Padding[13];
+	float Padding[12];
 };
 
 // 256 byte aligned
@@ -40,8 +41,6 @@ groupshared uint maxDepthUint;
 groupshared uint visibleDecalsCount;
 groupshared float4 frustumPlanes[6];
 groupshared uint visibleDecalIndices[1024];
-
-
 
 [numthreads(TILE_SIZE, TILE_SIZE, 1)]
 void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_GroupIndex,
@@ -126,7 +125,6 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		// Far
 		frustumPlanes[5] = float4(0.f, 0.f, -1.f, maxDepth);
 
-
 		for (int i = 0; i < 6; ++i)
 		{
 			// Planes are covariant
@@ -159,19 +157,36 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		bool visibleDecalInTile = true;
 		// Check the planes of the frustum
 		// If one fails, test fails
-		float distance = 0.f;
-		for (uint j = 0; j < 6; ++j)
-		{
-			distance = dot(position, frustumPlanes[i].xyz);
+// 		float distance = 0.f;
+// 		for (uint j = 0; j < 6; ++j)
+// 		{
+// 			distance = dot(position, frustumPlanes[i].xyz);
+// 
+// 			if (distance < frustumPlanes[i].w)
+// 			{
+// 				// Point is outside of plane
+// 				visibleDecalInTile = false;
+// 				break;
+// 			}
+// 		}
 
-			if (distance < frustumPlanes[i].w)
-			{
-				// Point is outside of plane
-				visibleDecalInTile = false;
-				break;
-			}
-			
+		// Debug
+		const float2 positiveStepPlusHalf = (2.f * float2(float2(TileIdx) + float2(0.5f, 0.5f))) / float2(TilesCount);
+		float2 frustumPoint = float2(- 1 + positiveStepPlusHalf.x, -1 + positiveStepPlusHalf.y);
+		
+		float4 clipPos = float4(position, 1.f);
+		clipPos = mul(clipPos, viewProj);
+		clipPos /= clipPos.w;
+
+		
+		float dist = length(frustumPoint - clipPos.xy);
+
+		if (dist > 0.01f)
+		{
+			visibleDecalInTile = false;
 		}
+
+
 				
 		if (visibleDecalInTile)
 		{
@@ -190,10 +205,17 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		uint TileIdx = (GroupID.y * ConstBuffer.NumWorkGroups.x) + GroupID.x;
 		uint address = (TileIdx * 4) + 1;
 
-		if (GroupID.x % 2 == 0)
+		if (ConstBuffer.DebugFlag == 0)
 		{
-			TilingBuffer.InterlockedOr(address, 0xFF);
+			TilingBuffer.Store(address, 0xFF);
+			//TilingBuffer.InterlockedOr(address, 0xFF);
 		}
+		
+// 		if (visibleDecalsCount > 0)
+// 		{
+//  			TilingBuffer.InterlockedOr(address, 0xFF);
+// 		}
+		
 
 // 		for (uint i = 0; i < visibleDecalsCount; ++i)
 // 		{

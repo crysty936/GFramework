@@ -294,7 +294,8 @@ void D3D12RawBuffer::Init(const uint64_t inNumElements)
 	D3D12_RESOURCE_DESC constantBufferDesc;
 	constantBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	constantBufferDesc.Alignment = 0;
-	constantBufferDesc.Width = Size * D3D12Utility::NumFramesInFlight;
+	// Not cpu visible so not double buffered
+	constantBufferDesc.Width = Size;
 	constantBufferDesc.Height = 1;
 	constantBufferDesc.DepthOrArraySize = 1;
 	constantBufferDesc.MipLevels = 1;
@@ -341,9 +342,9 @@ void D3D12RawBuffer::Init(const uint64_t inNumElements)
 	Resource->SetName(bufferName.c_str());
 }
 
-uint64_t D3D12RawBuffer::GetCurrentGPUAddress()
+uint64_t D3D12RawBuffer::GetGPUAddress()
 {
-	return GPUAddress + ((D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight) * Size);
+	return GPUAddress;
 }
 
 D3D12Fence::~D3D12Fence()

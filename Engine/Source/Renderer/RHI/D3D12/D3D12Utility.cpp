@@ -162,6 +162,16 @@ D3D12_RESOURCE_BARRIER MakeTransitionBarrier(ID3D12Resource* inResource, D3D12_R
 	return barrier;
 }
 
+void D3D12Utility::UAVBarrier(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource)
+{
+	D3D12_RESOURCE_BARRIER barrier = {};
+	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	barrier.UAV.pResource = inResource;
+
+	inCmdList->ResourceBarrier(1, &barrier);
+}
+
 void D3D12Utility::TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter)
 {
 	D3D12_RESOURCE_BARRIER barrier = MakeTransitionBarrier(inResource, inStateBefore, inStateAfter);

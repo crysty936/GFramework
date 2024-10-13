@@ -97,7 +97,7 @@ public:
 	~D3D12RawBuffer();
 
 	void Init(const uint64_t inNumElements);
-	uint64_t GetCurrentGPUAddress();
+	uint64_t GetGPUAddress();
 
 public:
 	struct ID3D12Resource* Resource = nullptr;

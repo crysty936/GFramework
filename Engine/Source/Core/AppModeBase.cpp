@@ -148,8 +148,9 @@ struct DecalTilingConstantBuffer
 	glm::mat4 InvViewProj;
 	uint32_t NumDecals;
 	glm::vec<2, uint32_t> NumWorkGroups;
+	uint32_t DebugFlag;
 
-	float Padding[13];
+	float Padding[12];
 };
 static_assert((sizeof(DecalTilingConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
@@ -1347,12 +1348,16 @@ void AppModeBase::ComputeTiledBinning()
 
 	// Clear decal binning buffer
 	{
+		D3D12Utility::UAVBarrier(m_commandList, m_DecalsTiledBinningBuffer.Resource);
+
 		const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE> uavHandles = { m_DecalsTiledBinningBuffer.UAV };
 		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = D3D12Utility::CreateTempDescriptorTable(m_commandList, uavHandles);
 
 		uint32_t values[4] = {};
 		m_commandList->ClearUnorderedAccessViewUint(gpuHandle, uavHandles[0], m_DecalsTiledBinningBuffer.Resource, values, 0, nullptr);
 	}
+
+	D3D12Utility::UAVBarrier(m_commandList, m_DecalsTiledBinningBuffer.Resource);
 
 	m_commandList->SetComputeRootShaderResourceView(0, m_DecalsBuffer.GetCurrentGPUAddress());
 	m_commandList->SetComputeRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
@@ -1364,6 +1369,11 @@ void AppModeBase::ComputeTiledBinning()
 		tilingConstBufferData.View = glm::transpose(currentScene.GetMainCameraLookAt());
 		tilingConstBufferData.InvViewProj = glm::transpose(glm::inverse(GetMainProjection() * currentScene.GetMainCameraLookAt()));
 
+		static int32_t debugFlag = 1;
+
+		ImGui::SliderInt("Debug Flag", &debugFlag, 0, 1);
+
+		tilingConstBufferData.DebugFlag = uint32_t(debugFlag);
 		tilingConstBufferData.NumDecals = SceneDecals.size();
 		tilingConstBufferData.NumWorkGroups = TileComputeGroupCounts;
 
@@ -1373,7 +1383,7 @@ void AppModeBase::ComputeTiledBinning()
 		m_commandList->SetComputeRootConstantBufferView(2, cBufferMap.GPUAddress);
 	}
 
-	m_commandList->SetComputeRootUnorderedAccessView(3, m_DecalsTiledBinningBuffer.GetCurrentGPUAddress());
+	m_commandList->SetComputeRootUnorderedAccessView(3, m_DecalsTiledBinningBuffer.GetGPUAddress());
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
@@ -1400,9 +1410,11 @@ void AppModeBase::ComputeDecals()
 	// 3. Constant Buffer
 	// 5. Output UAV
 
+	D3D12Utility::UAVBarrier(m_commandList, m_DecalsTiledBinningBuffer.Resource);
+
 	m_commandList->SetComputeRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
 	m_commandList->SetComputeRootShaderResourceView(1, m_DecalsBuffer.GetCurrentGPUAddress());
-	m_commandList->SetComputeRootShaderResourceView(2, m_DecalsTiledBinningBuffer.GetCurrentGPUAddress());
+	m_commandList->SetComputeRootShaderResourceView(2, m_DecalsTiledBinningBuffer.GetGPUAddress());
 	m_commandList->SetComputeRootDescriptorTable(3, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
 
 	{

@@ -9,6 +9,8 @@
 
 static const AddPluginHelper<RenderDocPlugin> AddPlugin("RenderDocPlugin");
 
+static int32_t NumFramesToCapture = 1;
+
 eastl::string GetTimeString()
 {
 	time_t rawtime;
@@ -26,7 +28,7 @@ eastl::string GetTimeString()
 
 void RenderDocPlugin::Init()
 {
-	return;
+	//return;
 
 	PostInitCallback& postInitMulticast = GEngine->GetPostInitMulticast();
 	postInitMulticast.BindRaw(this, &RenderDocPlugin::OnEngineInitDone);
@@ -126,6 +128,8 @@ void RenderDocPlugin::Tick(const float inDeltaTime)
 	{
 		ImGui::Begin("RenderDoc"); // RHIWorkDisabled
 
+		ImGui::SliderInt("Num Frames To Capture", &NumFramesToCapture, 1, 10);
+
 		if (ImGui::Button("Do RenderDoc Capture")) // RHIWorkDisabled
 		{
 			DoCapture();
@@ -152,7 +156,7 @@ void RenderDocPlugin::Tick(const float inDeltaTime)
 		bPendingCapture = false;
 		bCaptureInProgress = true;
 
-		CaptureEndFrame = GFrameCounter + 1;
+		CaptureEndFrame = GFrameCounter + NumFramesToCapture;
 
 		RenderDocAPI->StartFrameCapture(nullptr, GetWindowHandle());
 	}
