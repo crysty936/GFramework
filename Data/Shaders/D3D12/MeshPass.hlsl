@@ -9,6 +9,7 @@ struct PSInput
     float3 VertexTangentWS : VERTEX_TANGENT;
     float3 VertexBitangentWS : VERTEX_BITANGENT;
     float3x3 TangentToWorld : TANGENT_TO_WORLD;
+    float4 clipSpacePos : CLIP_POS;
 };
 
 struct PSOutput
@@ -90,6 +91,7 @@ PSInput VSMain(float4 position : POSITION, float3 VertexNormal : NORMAL, float2 
     result.uv.y = 1 - uv.y;
 
     result.position = clipPos;
+    result.clipSpacePos = clipPos;
 
     result.TangentToWorld = tangentToWorld;
 
@@ -127,6 +129,13 @@ PSOutput PSMain(PSInput input)
     output.Normal = float4(wsNormal / 2.0 + 0.5, 1);
 
     //output.Albedo = float4(tangentWS / 2.0 + 0.5, 1);
+
+    // Visualize Clip space coords
+    // NOTE: SV_Position is transformed to screen coordinates, (0,0) to (viewport.Width, viewport.Height).
+    //float2 homPos = input.clipSpacePos.xy / input.clipSpacePos.w;
+    //float2 zeroToOnePos = (homPos / 2.f) + 0.5f;    
+    //output.Albedo = float4(zeroToOnePos, 0.f, 1.f);
+
 
     return output;
 }

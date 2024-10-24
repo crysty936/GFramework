@@ -149,8 +149,9 @@ struct DecalTilingConstantBuffer
 	uint32_t NumDecals;
 	glm::vec<2, uint32_t> NumWorkGroups;
 	uint32_t DebugFlag;
+	float DebugValue;
 
-	float Padding[12];
+	float Padding[11];
 };
 static_assert((sizeof(DecalTilingConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
@@ -188,7 +189,7 @@ inline const glm::mat4& GetMainProjection()
 }
 
 // TODO: Send this to the shaders through the compiler defines
-#define TILE_SIZE 16
+#define TILE_SIZE 32
 
 void AppModeBase::CreateInitialResources()
 {
@@ -1362,6 +1363,15 @@ void AppModeBase::ComputeTiledBinning()
 	m_commandList->SetComputeRootShaderResourceView(0, m_DecalsBuffer.GetCurrentGPUAddress());
 	m_commandList->SetComputeRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
 
+	// TODO: Separate binning tile size and count from decal computing tile size and count
+
+// 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
+// 	const WindowProperties& props = mainWindow.GetProperties();
+// 
+// 	glm::vec<2, uint32_t> binningComputeGroupCounts = glm::vec<2, uint32_t>(
+// 		MathUtils::DivideAndRoundUp(props.Width, 64),
+// 		MathUtils::DivideAndRoundUp(props.Height, 64));
+
 	{
 		DecalTilingConstantBuffer tilingConstBufferData;
 
@@ -1369,10 +1379,15 @@ void AppModeBase::ComputeTiledBinning()
 		tilingConstBufferData.View = glm::transpose(currentScene.GetMainCameraLookAt());
 		tilingConstBufferData.InvViewProj = glm::transpose(glm::inverse(GetMainProjection() * currentScene.GetMainCameraLookAt()));
 
+
+
 		static int32_t debugFlag = 1;
+		static float debugValue = 1.f;
 
 		ImGui::SliderInt("Debug Flag", &debugFlag, 0, 1);
+		ImGui::SliderFloat("Debug Value", &debugValue, 0.f, 10.f);
 
+		tilingConstBufferData.DebugValue = debugValue;
 		tilingConstBufferData.DebugFlag = uint32_t(debugFlag);
 		tilingConstBufferData.NumDecals = SceneDecals.size();
 		tilingConstBufferData.NumWorkGroups = TileComputeGroupCounts;
@@ -1384,9 +1399,6 @@ void AppModeBase::ComputeTiledBinning()
 	}
 
 	m_commandList->SetComputeRootUnorderedAccessView(3, m_DecalsTiledBinningBuffer.GetGPUAddress());
-
-	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
-	const WindowProperties& props = mainWindow.GetProperties();
 
 	m_commandList->Dispatch(TileComputeGroupCounts.x, TileComputeGroupCounts.y, 1);
 }

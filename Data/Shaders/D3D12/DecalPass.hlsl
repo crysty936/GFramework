@@ -1,7 +1,7 @@
 #include "DescriptorTables.hlsl"
 #include "Utils.hlsl"
 
-#define TILE_SIZE 16
+#define TILE_SIZE 32
 
 // 16 byte aligned
 struct ShaderDecal
@@ -109,15 +109,27 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 			OutputNormal[pixelPos] = float4(decalNormalWS, 1.f);
 		}
 
-		uint TileIdx = (GroupID.y * ConstBuffer.NumWorkGroups.x) + GroupID.x;
-		uint address = (TileIdx * 4) + 1;
+		const uint TileIdx = (GroupID.y * ConstBuffer.NumWorkGroups.x) + GroupID.x;
+		const uint address = (TileIdx * 4) + 1;
 
-		uint value = BinningBuffer.Load(address);
+		const uint value = BinningBuffer.Load(address);
 		
 		if (value > 0)
 		{
-			OutputAlbedo[pixelPos] = float4(1.f, 0.f, 0.f, 1.f);
+			OutputAlbedo[pixelPos] = float4(0.f, 1.f, 0.f, 1.f);
 		}
+		else
+		{
+			const uint totalNrTiles = ConstBuffer.NumWorkGroups.x * ConstBuffer.NumWorkGroups.y;
+			const float test = float(TileIdx % 2);
+			const float tilePercentage = float(GroupID.y) / float(ConstBuffer.NumWorkGroups.y);
+
+			OutputAlbedo[pixelPos] = float4( test * tilePercentage, 0.f, (1.f -test) * tilePercentage, 1.f);
+		}
+
+		// Visualize GroupID values
+		//float2 testVal = float2(GroupID.xy) / float2(ConstBuffer.NumWorkGroups);
+		//OutputAlbedo[pixelPos] = float4(testVal, 0.f, 1.f);
 	}
 
 
