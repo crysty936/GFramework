@@ -24,9 +24,10 @@ struct DecalTilingConstantBuffer
 	uint NumDecals;
 	uint2 NumWorkGroups;
 	uint DebugFlag;
-	float DebugValue;
+	float4 DebugValue;
+	float4 DebugQuat;
 
-	float Padding[11];
+	float Padding[4];
 };
 
 // 256 byte aligned
@@ -36,12 +37,26 @@ SamplerState g_sampler : register(s0);
 
 RWByteAddressBuffer TilingBuffer : register(u0);
 
+RWTexture2D<float4> OutputDebug : register(u1);
 
 groupshared uint minDepthUint;
 groupshared uint maxDepthUint;
 groupshared uint visibleDecalsCount;
 groupshared float4 frustumPlanes[6];
+groupshared float4 frustumPlanesOrigins[6];
 groupshared uint visibleDecalIndices[1024];
+
+static const float3 BoxPoints[8] =
+{
+	float3(1.0f, 1.0f, 0.f),
+	float3(-1.0f, 1.0f, 0.f),
+	float3(1.0f, -1.0f, 0.f),
+	float3(-1.0f, -1.0f, 0.f),
+	float3(1.0f, 1.0f, 1.f),
+	float3(-1.0f, 1.0f, 1.f),
+	float3(1.0f, -1.0f, 1.f),
+	float3(-1.0f, -1.0f, 1.f)
+};
 
 [numthreads(TILE_SIZE, TILE_SIZE, 1)]
 void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_GroupIndex,
@@ -60,13 +75,9 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		minDepthUint = uint(-1);
 		maxDepthUint = 0;
 		visibleDecalsCount = 0;
-		
-
-
 	}
 	
 	GroupMemoryBarrierWithGroupSync();
- 
 	
 	// Get thread depth
 	int2 TextureSize;
@@ -98,10 +109,8 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 	const uint2 TilesCount = ConstBuffer.NumWorkGroups;
 	const uint2 TileIdx = GroupID.xy;
 
-
 	const float maxDepth = asfloat(maxDepthUint);
 	const float minDepth = asfloat(minDepthUint); 
-
 
 	const float4x4 viewProj = mul(ConstBuffer.View, ConstBuffer.Projection);
 
@@ -114,10 +123,7 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 
 		const float2 positiveStepPlus1 = (2.f * float2(TileIdx + uint2(1, 1))) / float2(TilesCount);
 		
-
-
-
-		// Normal and distance
+// Normal and distance
 // Potential ones
 // 
 // //		// +x
@@ -134,12 +140,11 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 
 		
 // Valid ones
+//	Planes are in the end not positions so multiplying them is not *exactly* the same.
+//	The projection contains a -1 in the translation for multiplication and to compensate for that, when the direction is positive, w has to be negated.
+//	When the direction is negative, it works by default.
 		// +x
 		frustumPlanes[0] = float4(1.f, 0.f, 0.f, 1 - negativeStep.x);
-
-		// TODO: Why are the wrong versions wrong? They seem like they should be correct on paper
-		// Potentially could be that dot product between plane normal and distance can't be negative? That's one hypothesis that seems true
-		// but maybe it's a side effect of something else
 
 		// -x
 		frustumPlanes[1] = float4(-1.f, 0.f, 0.f, -1 + positiveStepPlus1.x);
@@ -160,54 +165,46 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		// Far
 		frustumPlanes[5] = float4(0.f, 0.f, -1.f, maxDepth);
 
-		const float difference = 0.1f;
-
-// Full screen test frustum
-// 		// +x
-// 		frustumPlanes[0] = float4(1.f, 0.f, 0.f, -1 + difference);
-// 
-// 		// -x
-// 		frustumPlanes[1] = float4(-1.f, 0.f, 0.f, 1 - difference);
-// 
-// 		// Y is different from OpenGl version and w is exchanged between +y and -y
-// 
-// 		// +y
-// 		frustumPlanes[2] = float4(0.f, 1.f, 0.f, -1 + difference);
-// 
-// 		// -y
-// 		frustumPlanes[3] = float4(0.f, -1.f, 0.f, 1 - difference);
-
-
-
-
-		for (int i = 0; i < 6; ++i)
-			{
-				// Planes are covariant
-				// This means that it needs to be transformed by the transpose of the inverse of the matrix
-				// https://math.stackexchange.com/questions/3123130/transforming-a-plane
-				// https://stackoverflow.com/questions/7685495/transforming-a-3d-plane-using-a-4x4-matrix
-				// This means that ViewProj can be used and instead of transposing, it can be post-multiplied(which is used in column major, not row-major)
-				// to get the same behavior
-				
-				frustumPlanes[i] = mul(viewProj, frustumPlanes[i]);
-				
-				// Plane normalization
-				frustumPlanes[i] = frustumPlanes[i] / length(frustumPlanes[i].xyz);
-			}
-
 	}
+
+	GroupMemoryBarrierWithGroupSync();
+
+// 	if(GroupIndex == 0)
+// 	{
+// // 		for (int i = 0; i < 6; ++i)
+// // 			{
+// // 				// Planes are covariant
+// // 				// This means that it needs to be transformed by the transpose of the inverse of the matrix
+// // 				// https://math.stackexchange.com/questions/3123130/transforming-a-plane
+// // 				// https://stackoverflow.com/questions/7685495/transforming-a-3d-plane-using-a-4x4-matrix
+// // 				// This means that ViewProj can be used and instead of transposing, it can be post-multiplied(which is used in column major, not row-major)
+// // 				// to get the same behavior
+// // 				
+// // // 				frustumPlanesOrigins[i] = mul(frustumPlanesOrigins[i], ConstBuffer.InvViewProj);
+// // // 				frustumPlanesOrigins[i] /= frustumPlanesOrigins[i].w;
+// // 				
+// // 				frustumPlanes[i] = mul(viewProj, frustumPlanes[i]);
+// // 				
+// // 				// Plane normalization
+// // 				frustumPlanes[i] = frustumPlanes[i] / length(frustumPlanes[i].xyz);
+// // 			}
+// 	}
 	
 	GroupMemoryBarrierWithGroupSync();
 
 	// Cull decals
 
 	const uint threadCount = TILE_SIZE * TILE_SIZE;
-	//const uint passCount = (ConstBuffer.NumDecals + threadCount - 1) / threadCount;
-	const uint passCount = 1;
+	const uint passCount = (ConstBuffer.NumDecals + threadCount - 1) / threadCount;
+	//const uint passCount = 1;
 
-	for (uint i = 0; i < passCount; ++i)
+
+	// Have to be done outside of pass because inside only the threads that can pick up a decal will write
+	//OutputDebug[pixelPos] = frustumPlanes[1];
+
+	for (uint passIdx = 0; passIdx < passCount; ++passIdx)
 	{
-		const uint currDecalIdx = i * threadCount + GroupIndex;
+		const uint currDecalIdx = passIdx * threadCount + GroupIndex;
 		if (currDecalIdx >= ConstBuffer.NumDecals)
 		{
 			break;
@@ -215,97 +212,121 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 
 		const ShaderDecal currDecal = DecalBuffer[currDecalIdx];
 
-		const float3 position = currDecal.Position;
-		const float3x3 decalRot = transpose(QuatTo3x3(currDecal.Orientation));
-		//const float3 rotatedPosition = mul(position, decalRot);
+		const float3 decalPos = currDecal.Position;
+		const float3x3 decalRot = QuatTo3x3(currDecal.Orientation);
 
-		bool visibleDecalInTile = true;
+		//const float3x3 inverseDecalRot = transpose(decalRot);
+		//const float3x3 debugRot = QuatTo3x3(ConstBuffer.DebugQuat);
+
+		//bool visibleDecalInTile = true;
+ 		float distance = 0.f;
 		// Check the planes of the frustum
 		// If one fails, test fails
-// Proper one
-		float distance = 0.f;
-		for (uint j = 0; j < 4; ++j)
+
+// World Space test wip one
+// 		for (uint j = 1; j < 2; ++j)
+// 		{
+// 			//float3 currPlane = frustumPlanes[j].xyz;
+// 			//currPlane = mul(currPlane.xyz, decalRot);
+// 			//distance = dot(position, currPlane);
+// 
+// 			float3 frustumPlaneNormal = frustumPlanes[j].xyz;
+// 			float3 frustumPlaneOrigin = frustumPlanesOrigins[j].xyz;
+// 			
+// 			//frustumPlaneNormal = mul(frustumPlaneNormal, decalRot);
+// 			//frustumPlaneNormal = mul(frustumPlaneNormal, debugRot);
+// 			//frustumPlaneNormal = normalize(frustumPlaneNormal);
+// 			
+// 
+// 			distance = dot(position, frustumPlaneNormal);
+// 			float originDistance = dot(frustumPlaneNormal, frustumPlaneOrigin);
+// 
+// 
+// 			//const float distanceOnPlaneNormal = abs(dot(frustumPlanes[j].xyz, currDecal.Size));
+// 
+// 			if (distance <= originDistance )
+// 			//if (distance <= frustumPlanes[j].w )
+// 			//if (distance + ConstBuffer.DebugValue.x <= frustumPlanes[j].w )
+// 			//if (distance + ConstBuffer.DebugValue.x <= -frustumPlanes[j].w )
+// 			{
+// 				// Point is outside of plane
+// 				visibleDecalInTile = false;
+// 				break;
+// 			}
+//		}
+
+
+//TODO: Get all 8 points of the box, transform them to clip space and then use a border/ortho transform at the end that 
+// transforms relative to this compute group's position and size and just check against that based on if the points are outside of the bounds(-1, 1), 
+// instead of checking all points for all planes
+
+		float3 clipPositions[8];
+
+		// Transform decal corner positions to clip space
+		for (uint posIdx = 0; posIdx < 8; ++posIdx)
 		{
-			distance = dot(position, frustumPlanes[j].xyz);
-
-			//const float distanceOnPlaneNormal = abs(dot(frustumPlanes[j].xyz, currDecal.Size));
-
-			//if (distance + ConstBuffer.DebugValue <= frustumPlanes[j].w )
-			if (distance + ConstBuffer.DebugValue <= -frustumPlanes[j].w )
-			{
-				// Point is outside of plane
-				visibleDecalInTile = false;
-				break;
-			}
+			float3 currPoint = BoxPoints[posIdx];
+			// TODO: Better to send over matrix and multiply than this
+			currPoint = currPoint - decalPos; // Translate	
+			currPoint = mul(currPoint, decalRot); // Rotate
+			currPoint = currPoint * currDecal.Size; // Scale
+			
+			float4 clipSpacePoint = float4(currPoint, 1.f);
+			clipSpacePoint = mul(clipSpacePoint, viewProj);
+			clipSpacePoint /= clipSpacePoint.w;
+			
+			clipPositions[posIdx] = clipSpacePoint.xyz;
 		}
 
-// Frustum test one
+
+
+		bool visibleDecalInTile = false;
+
+		// Output clip positions debug
 // 		const float2 positiveStepPlusHalf = (2.f * float2(float2(TileIdx) + float2(0.5f, 0.5f))) / float2(TilesCount);
-// 		float2 frustumPoint = float2( -1 + positiveStepPlusHalf.x, 1 - positiveStepPlusHalf.y);
-// 		//float3 frustumPointFull = float3(frustumPoint, clipDepth);
-// 		float3 frustumPointFull = float3(frustumPoint, ConstBuffer.DebugValue);
-// 		
-// 		float4 frustumPointWorldPos = mul(float4(frustumPointFull, 1.f), ConstBuffer.InvViewProj);
-// 		frustumPointWorldPos /= frustumPointWorldPos.w;
-// 
-// 
-//  		float distance = 0.f;
-// 		for (uint j = 0; j < 1; ++j)
-// 		{
-// 			//distance = dot(frustumPoint.xy, frustumPlanes[j].xy);
-// 			distance = dot(frustumPointWorldPos.xyz, frustumPlanes[j].xyz);
-// 
-// 			//if (distance + ConstBuffer.DebugValue <= frustumPlanes[j].w )
-// 			if (distance /*+ ConstBuffer.DebugValue */< frustumPlanes[j].w)
+//		const float2 frustumPoint = float2( -1 + positiveStepPlusHalf.x, 1 - positiveStepPlusHalf.y);		
+// 		for (uint posIdx2 = 0; posIdx2 < 8; ++posIdx2)
+// 		{	
+// 			const float3 currPos = clipPositions[posIdx2];
+// 			const float distance = length(currPos.xy - frustumPoint);
+// 			if (distance < 0.05f)
 // 			{
-// 				// Point is outside of plane
-// 				visibleDecalInTile = false;
-// 				break;
+// 				visibleDecalInTile = true;
 // 			}
 // 		}
 
 
-
-
-// Clip space test one
-// 		float4 clipPos = mul(float4(position, 1.f), viewProj);
-// 		clipPos /= clipPos.w;
-// 		
-// 		for (uint j = 0; j < 1; ++j)
-// 		{
-// 			distance = dot(clipPos.xyz, frustumPlanes[i].xyz);
-// 	
-// 			if (distance > frustumPlanes[i].w)
-// 			{
-// 				// Point is outside of plane
-// 				visibleDecalInTile = false;
-// 				break;
-// 			}
+		// Get min and max
+// 		for (uint posIdx = 0; posIdx < 8; ++posIdx)
+// 		{	
+// 
 // 		}
 
+		float4 clipPos = float4(0.f, 0.f, 0.f, 0.f);
 
-		// Debug transform frustum point to world space and compare against radius
-// 		const float2 positiveStepPlusHalf = (2.f * float2(float2(TileIdx) + float2(0.5f, 0.5f))) / float2(TilesCount);
-// 		float2 frustumPoint = float2( -1 + positiveStepPlusHalf.x, 1 - positiveStepPlusHalf.y);
-// 		float3 frustumPointFull = float3(frustumPoint, clipDepth);
-// 		
-// 		float4 frustumPointWorldPos = mul(float4(frustumPointFull, 1.f), ConstBuffer.InvViewProj);
-// 		frustumPointWorldPos /= frustumPointWorldPos.w;
-// 
-// 
-// 		float4 clipPos = float4(position, 1.f);
-// 		clipPos = mul(clipPos, viewProj);
-// 		clipPos /= clipPos.w;
-// 
-// 		
-// 		//float dist = length(frustumPoint - clipPos.xy);
-// 		float dist = length(frustumPointWorldPos.xyz - position);
-// 
-// 		if (dist > 1.1f)
-// 		{
-// 			visibleDecalInTile = false;
-// 		}
+		bool allPlanesValid = true;
+		for (uint planeIdx = 0; planeIdx < 4; ++planeIdx)
+		{
+			bool visiblePosInTile = false;
+			for (uint posIdx = 0; posIdx < 8; ++posIdx)
+			{
+				const float3 currPos = clipPositions[posIdx];
+				distance = dot(currPos, frustumPlanes[planeIdx].xyz);
+				const bool test = distance > -frustumPlanes[planeIdx].w;
+				OutputDebug[pixelPos] = float4(frustumPlanes[planeIdx].w, distance, float(test), 0.f);
 
+				if (test)
+				{
+					// Point is inside plane
+					visiblePosInTile = true;
+					break;
+				}
+			}
+
+			allPlanesValid &= visiblePosInTile;
+ 		}
+
+		visibleDecalInTile = allPlanesValid;
 
 		if (visibleDecalInTile)
 		{
@@ -324,31 +345,10 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		uint TileIdx = (GroupID.y * ConstBuffer.NumWorkGroups.x) + GroupID.x;
 		uint address = (TileIdx * 4) + 1;
 
-// 		if (ConstBuffer.DebugFlag == 0)
-// 		{
-// 			//TilingBuffer.Store(address, 0xFF);
-// 			TilingBuffer.InterlockedOr(address, 0xFF);
-// 		}
-		
 		if (visibleDecalsCount > 0)
 		{
  			TilingBuffer.InterlockedOr(address, 0xFF);
 		}
-		
-
-// 		for (uint i = 0; i < visibleDecalsCount; ++i)
-// 		{
-// 			uint mask = 0xFFFFFFFF;
-// 
-// 			TilingBuffer.InterlockedOr(address, mask);
-// 		}
-
 	}
-	
-	
-		
-	
-	
-
 
 }

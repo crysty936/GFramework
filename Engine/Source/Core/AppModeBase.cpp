@@ -19,7 +19,7 @@
 #include "Utils/PerfUtils.h"
 #include "Renderer/Model/3D/Assimp/AssimpModel3D.h"
 #include "Math/MathUtils.h"
-
+#include "glm/gtc/type_ptr.inl"
 
 // Windows includes
 #ifndef WIN32_LEAN_AND_MEAN
@@ -30,9 +30,9 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <D3Dcompiler.h>
+#define _XM_NO_INTRINSICS_
 #include <DirectXMath.h>
 #include <wrl/client.h>
-#include <DirectXMath.h>
 
 using Microsoft::WRL::ComPtr;
 
@@ -70,6 +70,7 @@ ID3D12Resource* m_BackBuffers[D3D12Utility::NumFramesInFlight];
 eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferAlbedo;
 eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferNormal;
 eastl::shared_ptr<D3D12RenderTarget2D> m_GBufferRoughness;
+eastl::shared_ptr<D3D12RenderTarget2D> m_DebugRT;
 eastl::shared_ptr<D3D12DepthBuffer> m_MainDepthBuffer;
 
 ID3D12CommandAllocator* m_commandAllocators[D3D12Utility::NumFramesInFlight];
@@ -149,9 +150,10 @@ struct DecalTilingConstantBuffer
 	uint32_t NumDecals;
 	glm::vec<2, uint32_t> NumWorkGroups;
 	uint32_t DebugFlag;
-	float DebugValue;
+	glm::vec4 DebugValue;
+	glm::vec4 DebugQuat;
 
-	float Padding[11];
+	float Padding[4];
 };
 static_assert((sizeof(DecalTilingConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
@@ -191,6 +193,11 @@ inline const glm::mat4& GetMainProjection()
 // TODO: Send this to the shaders through the compiler defines
 #define TILE_SIZE 32
 
+// For main projection
+const float CAMERA_FOV = 45.f;
+const float CAMERA_NEAR = 0.1f;
+const float CAMERA_FAR = 10000.f;
+
 void AppModeBase::CreateInitialResources()
 {
 	BENCH_SCOPE("Create Resources");
@@ -225,11 +232,8 @@ void AppModeBase::CreateInitialResources()
 		MathUtils::DivideAndRoundUp(props.Width, TILE_SIZE),
 		MathUtils::DivideAndRoundUp(props.Height, TILE_SIZE));
 
-	// Create Main Projection
-	const float CAMERA_FOV = 45.f;
-	const float CAMERA_NEAR = 0.1f;
-	const float CAMERA_FAR = 10000.f;
 
+	DirectX::XMMATRIX testMatrix = DirectX::XMMatrixPerspectiveFovLH(glm::radians(CAMERA_FOV), static_cast<float>(props.Width) / static_cast<float>(props.Height), CAMERA_NEAR, CAMERA_FAR);
 	MainProjection = glm::perspectiveLH_ZO(glm::radians(CAMERA_FOV), static_cast<float>(props.Width) / static_cast<float>(props.Height), CAMERA_NEAR, CAMERA_FAR);
 
 	// Create descriptor heaps.
@@ -282,6 +286,8 @@ void AppModeBase::CreateInitialResources()
 	m_GBufferRoughness = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferRoughness", ERHITexturePrecision::UnsignedByte, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
 
 	m_MainDepthBuffer = D3D12RHI::Get()->CreateDepthBuffer(props.Width, props.Height, L"Main Depth Buffer", ETextureState::Shader_Resource);
+
+	m_DebugRT= D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"DebugRT", ERHITexturePrecision::Float32, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
 
 	CreateRootSignatures();
 
@@ -787,13 +793,13 @@ void AppModeBase::CreateRootSignatures()
 
 	// Tiled Binning Root Signature
 	{
-		D3D12_ROOT_PARAMETER1 rootParameters[4];
+		D3D12_ROOT_PARAMETER1 rootParameters[5];
 
-		// 1. Structured Buffer
-		// 2. Depth Buffer
-		// 3. Constant Buffer
-		// 4. Root Constant
-		// 5. Output UAV
+		// 0. Structured Buffer
+		// 1. Depth Buffer
+		// 2. Constant Buffer
+		// 3. Output UAV
+		// 4. Debug UAV
 
 		// Structured Buffer
 		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -830,6 +836,19 @@ void AppModeBase::CreateRootSignatures()
 		rootParameters[3].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
 		rootParameters[3].Descriptor.RegisterSpace = 0;
 		rootParameters[3].Descriptor.ShaderRegister = 0;
+
+		// Debug UAV
+		D3D12_DESCRIPTOR_RANGE1 uavRangeCS[1] = {};
+		uavRangeCS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+		uavRangeCS[0].NumDescriptors = 1;
+		uavRangeCS[0].BaseShaderRegister = 1;
+		uavRangeCS[0].RegisterSpace = 0;
+		uavRangeCS[0].OffsetInDescriptorsFromTableStart = 0;
+
+		rootParameters[4].DescriptorTable.pDescriptorRanges = &uavRangeCS[0];
+		rootParameters[4].DescriptorTable.NumDescriptorRanges = _countof(uavRangeCS);
+		rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 		//////////////////////////////////////////////////////////////////////////
 
@@ -1333,6 +1352,22 @@ void AppModeBase::ComputeTiledBinning()
 {
 	PIXMarker Marker(m_commandList, "Tiled Binning");
 
+
+
+	glm::vec4 testPlane = glm::vec4(-1.f, 0.f, 0.f, 0.2f);
+
+	glm::vec3 normal = glm::vec3(testPlane.x, testPlane.y, testPlane.z);
+
+	const float radians = glm::radians(90.f);
+	const glm::quat additiveRotation = glm::angleAxis(radians, glm::vec3(0.f, 0.f, 1.f));
+	const glm::mat3 rotation = glm::mat3_cast(additiveRotation);
+	const glm::vec3 res = rotation * normal;
+	const float test = glm::inversesqrt(glm::dot(res, res));
+
+	const glm::vec3 resNormalized = glm::normalize(res);
+
+
+
 	// Draw screen quad
 	m_commandList->SetComputeRootSignature(m_TileBinningRootSignature);
 	m_commandList->SetPipelineState(m_TiledBinningPipelineState);
@@ -1351,22 +1386,29 @@ void AppModeBase::ComputeTiledBinning()
 	{
 		D3D12Utility::UAVBarrier(m_commandList, m_DecalsTiledBinningBuffer.Resource);
 
-		const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE> uavHandles = { m_DecalsTiledBinningBuffer.UAV };
+		const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE> uavHandles = { m_DecalsTiledBinningBuffer.UAV, m_DebugRT->UAV };
 		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = D3D12Utility::CreateTempDescriptorTable(m_commandList, uavHandles);
 
 		uint32_t values[4] = {};
 		m_commandList->ClearUnorderedAccessViewUint(gpuHandle, uavHandles[0], m_DecalsTiledBinningBuffer.Resource, values, 0, nullptr);
+
+// 		float floatValues[4] = {};
+// 		m_commandList->ClearRenderTargetView(m_DebugRT->RTV, floatValues, 0, nullptr);
+
+		//m_commandList->ClearUnorderedAccessViewFloat(gpuHandle, uavHandles[1], m_DebugRT->Texture->Resource, floatValues, 0, nullptr);
+
 	}
 
 	D3D12Utility::UAVBarrier(m_commandList, m_DecalsTiledBinningBuffer.Resource);
+	D3D12Utility::UAVBarrier(m_commandList, m_DebugRT->Texture->Resource);
 
 	m_commandList->SetComputeRootShaderResourceView(0, m_DecalsBuffer.GetCurrentGPUAddress());
 	m_commandList->SetComputeRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(m_MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
 
 	// TODO: Separate binning tile size and count from decal computing tile size and count
 
-// 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
-// 	const WindowProperties& props = mainWindow.GetProperties();
+ 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
+ 	const WindowProperties& props = mainWindow.GetProperties();
 // 
 // 	glm::vec<2, uint32_t> binningComputeGroupCounts = glm::vec<2, uint32_t>(
 // 		MathUtils::DivideAndRoundUp(props.Width, 64),
@@ -1375,19 +1417,32 @@ void AppModeBase::ComputeTiledBinning()
 	{
 		DecalTilingConstantBuffer tilingConstBufferData;
 
+		const DirectX::XMMATRIX testMatrix = DirectX::XMMatrixPerspectiveFovLH(glm::radians(CAMERA_FOV), static_cast<float>(props.Width) / static_cast<float>(props.Height), CAMERA_NEAR, CAMERA_FAR);
+		const DirectX::XMMATRIX testMatrixInverse = DirectX::XMMatrixInverse(nullptr, testMatrix);
+
 		tilingConstBufferData.Projection = glm::transpose(GetMainProjection());
 		tilingConstBufferData.View = glm::transpose(currentScene.GetMainCameraLookAt());
 		tilingConstBufferData.InvViewProj = glm::transpose(glm::inverse(GetMainProjection() * currentScene.GetMainCameraLookAt()));
 
-
+		//memcpy(glm::value_ptr(tilingConstBufferData.Projection), &testMatrix.m[0][0], sizeof(glm::mat4));
+		//memcpy(glm::value_ptr(tilingConstBufferData.InvViewProj), &testMatrixInverse.m[0][0], sizeof(glm::mat4));
 
 		static int32_t debugFlag = 1;
 		static float debugValue = 1.f;
+		static glm::vec3 debugRot; // Degrees
+
 
 		ImGui::SliderInt("Debug Flag", &debugFlag, 0, 1);
-		ImGui::SliderFloat("Debug Value", &debugValue, 0.f, 10.f);
+		ImGui::SliderFloat("Debug Value", &debugValue, -1.f, 1.f);
+		ImGui::DragFloat3("Debug Rot", &debugRot.x, 0.05f,-360.f, 360.f);
 
-		tilingConstBufferData.DebugValue = debugValue;
+		const glm::quat q = glm::quat(glm::radians(debugRot));
+		
+
+
+		tilingConstBufferData.DebugQuat = glm::vec4(q.x, q.y, q.z, q.w);;
+		
+		tilingConstBufferData.DebugValue = glm::vec4(debugValue, 0.f, 0.f, 0.f);
 		tilingConstBufferData.DebugFlag = uint32_t(debugFlag);
 		tilingConstBufferData.NumDecals = SceneDecals.size();
 		tilingConstBufferData.NumWorkGroups = TileComputeGroupCounts;
@@ -1399,6 +1454,9 @@ void AppModeBase::ComputeTiledBinning()
 	}
 
 	m_commandList->SetComputeRootUnorderedAccessView(3, m_DecalsTiledBinningBuffer.GetGPUAddress());
+
+	const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE> uavHandles = { m_DebugRT->UAV};
+	D3D12Utility::BindTempDescriptorTable(4, m_commandList, uavHandles);
 
 	m_commandList->Dispatch(TileComputeGroupCounts.x, TileComputeGroupCounts.y, 1);
 }
