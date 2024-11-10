@@ -1,6 +1,6 @@
 #include "Utils.hlsl"
 
-#define TILE_SIZE 32
+#define TILE_SIZE 16
 
 // 16 byte aligned
 struct ShaderDecal
@@ -48,10 +48,10 @@ groupshared uint visibleDecalIndices[1024];
 
 static const float3 BoxPoints[8] =
 {
-	float3(1.0f, 1.0f, 0.f),
-	float3(-1.0f, 1.0f, 0.f),
-	float3(1.0f, -1.0f, 0.f),
-	float3(-1.0f, -1.0f, 0.f),
+	float3(1.0f, 1.0f, -1.f),
+	float3(-1.0f, 1.0f, -1.f),
+	float3(1.0f, -1.0f, -1.f),
+	float3(-1.0f, -1.0f, -1.f),
 	float3(1.0f, 1.0f, 1.f),
 	float3(-1.0f, 1.0f, 1.f),
 	float3(1.0f, -1.0f, 1.f),
@@ -124,8 +124,12 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		const float2 positiveStepPlus1 = (2.f * float2(TileIdx + uint2(1, 1))) / float2(TilesCount);
 		
 // Normal and distance
-// Potential ones
-// 
+// Logical ones
+// These are correct.
+// It is just because of how the comparison is done at the end with w, that the w for some needs to be negated.
+// Otherwise, difference comparison operations would be needed for different planes
+// Using the logical w and negating the other one ensures that the same comparison operation can be used for both
+// Same thing would be valid with a different comparison operation and negating the other side
 // //		// +x
 //  		//frustumPlanes[0] = float4(1.f, 0.f, 0.f, -1 + negativeStep.x); // Wrong
 // // 
@@ -138,11 +142,6 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 // // 		// -y
 // // 		//frustumPlanes[3] = float4(0.f, -1.f, 0.f, 1 - positiveStepPlus1.y); // Wrong
 
-		
-// Valid ones
-//	Planes are in the end not positions so multiplying them is not *exactly* the same.
-//	The projection contains a -1 in the translation for multiplication and to compensate for that, when the direction is positive, w has to be negated.
-//	When the direction is negative, it works by default.
 		// +x
 		frustumPlanes[0] = float4(1.f, 0.f, 0.f, 1 - negativeStep.x);
 
@@ -157,8 +156,7 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		// -y
 		frustumPlanes[3] = float4(0.f, -1.f, 0.f, 1 - negativeStep.y);
 
-		// Is there a reason to check near and far given that this will contain all decals because it's calculated based on them?
-		// Yes, because this sets up the max and min depth for this Tile using the depth buffer, to compare with *all* decals
+		// Also compare depth, to not process decal pixels that are behind visible geometry
 
 		// Near
 		frustumPlanes[4] = float4(0.f, 0.f, 1.f, minDepth);
@@ -179,9 +177,6 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 // // 				// https://stackoverflow.com/questions/7685495/transforming-a-3d-plane-using-a-4x4-matrix
 // // 				// This means that ViewProj can be used and instead of transposing, it can be post-multiplied(which is used in column major, not row-major)
 // // 				// to get the same behavior
-// // 				
-// // // 				frustumPlanesOrigins[i] = mul(frustumPlanesOrigins[i], ConstBuffer.InvViewProj);
-// // // 				frustumPlanesOrigins[i] /= frustumPlanesOrigins[i].w;
 // // 				
 // // 				frustumPlanes[i] = mul(viewProj, frustumPlanes[i]);
 // // 				
@@ -204,11 +199,12 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 
 	for (uint passIdx = 0; passIdx < passCount; ++passIdx)
 	{
-		const uint currDecalIdx = passIdx * threadCount + GroupIndex;
-		if (currDecalIdx >= ConstBuffer.NumDecals)
-		{
-			break;
-		}
+// 		const uint currDecalIdx = passIdx * threadCount + GroupIndex;
+// 		if (currDecalIdx >= ConstBuffer.NumDecals)
+// 		{
+// 			break;
+// 		}
+		const uint currDecalIdx = 0;
 
 		const ShaderDecal currDecal = DecalBuffer[currDecalIdx];
 
@@ -223,7 +219,7 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		// Check the planes of the frustum
 		// If one fails, test fails
 
-// World Space test wip one
+// World Space test one. Uses radius test so not correct
 // 		for (uint j = 1; j < 2; ++j)
 // 		{
 // 			//float3 currPlane = frustumPlanes[j].xyz;
@@ -256,7 +252,7 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 //		}
 
 
-//TODO: Get all 8 points of the box, transform them to clip space and then use a border/ortho transform at the end that 
+//TODO: Use a border/ortho transform at the end that 
 // transforms relative to this compute group's position and size and just check against that based on if the points are outside of the bounds(-1, 1), 
 // instead of checking all points for all planes
 
@@ -267,8 +263,8 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		{
 			float3 currPoint = BoxPoints[posIdx];
 			// TODO: Better to send over matrix and multiply than this
-			currPoint = currPoint - decalPos; // Translate	
 			currPoint = mul(currPoint, decalRot); // Rotate
+			currPoint = currPoint + decalPos; // Translate	
 			currPoint = currPoint * currDecal.Size; // Scale
 			
 			float4 clipSpacePoint = float4(currPoint, 1.f);
@@ -284,7 +280,7 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 
 		// Output clip positions debug
 // 		const float2 positiveStepPlusHalf = (2.f * float2(float2(TileIdx) + float2(0.5f, 0.5f))) / float2(TilesCount);
-//		const float2 frustumPoint = float2( -1 + positiveStepPlusHalf.x, 1 - positiveStepPlusHalf.y);		
+// 		const float2 frustumPoint = float2( -1 + positiveStepPlusHalf.x, 1 - positiveStepPlusHalf.y);		
 // 		for (uint posIdx2 = 0; posIdx2 < 8; ++posIdx2)
 // 		{	
 // 			const float3 currPos = clipPositions[posIdx2];
@@ -295,17 +291,8 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 // 			}
 // 		}
 
-
-		// Get min and max
-// 		for (uint posIdx = 0; posIdx < 8; ++posIdx)
-// 		{	
-// 
-// 		}
-
-		float4 clipPos = float4(0.f, 0.f, 0.f, 0.f);
-
 		bool allPlanesValid = true;
-		for (uint planeIdx = 0; planeIdx < 4; ++planeIdx)
+		for (uint planeIdx = 0; planeIdx < 1; ++planeIdx)
 		{
 			bool visiblePosInTile = false;
 			for (uint posIdx = 0; posIdx < 8; ++posIdx)
@@ -347,6 +334,7 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 
 		if (visibleDecalsCount > 0)
 		{
+			// TODO: Write proper index and not FF
  			TilingBuffer.InterlockedOr(address, 0xFF);
 		}
 	}

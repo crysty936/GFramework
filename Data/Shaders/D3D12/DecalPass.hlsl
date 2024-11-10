@@ -1,7 +1,7 @@
 #include "DescriptorTables.hlsl"
 #include "Utils.hlsl"
 
-#define TILE_SIZE 32
+#define TILE_SIZE 16
 
 // 16 byte aligned
 struct ShaderDecal
@@ -118,14 +118,14 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		{
 			OutputAlbedo[pixelPos] = float4(0.f, 1.f, 0.f, 1.f);
 		}
-		else
-		{
-			const uint totalNrTiles = ConstBuffer.NumWorkGroups.x * ConstBuffer.NumWorkGroups.y;
-			const float test = float(TileIdx % 2);
-			const float tilePercentage = float(GroupID.y) / float(ConstBuffer.NumWorkGroups.y);
-
-			OutputAlbedo[pixelPos] = float4( test * tilePercentage, 0.f, (1.f -test) * tilePercentage, 1.f);
-		}
+// 		else
+// 		{
+// 			const uint totalNrTiles = ConstBuffer.NumWorkGroups.x * ConstBuffer.NumWorkGroups.y;
+// 			const float test = float(TileIdx % 2);
+// 			const float tilePercentage = float(GroupID.y) / float(ConstBuffer.NumWorkGroups.y);
+// 
+// 			OutputAlbedo[pixelPos] = float4( test * tilePercentage, 0.f, (1.f -test) * tilePercentage, 1.f);
+// 		}
 
 		// Visualize GroupID values
 		//float2 testVal = float2(GroupID.xy) / float2(ConstBuffer.NumWorkGroups);

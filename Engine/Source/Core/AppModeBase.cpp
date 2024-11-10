@@ -191,7 +191,7 @@ inline const glm::mat4& GetMainProjection()
 }
 
 // TODO: Send this to the shaders through the compiler defines
-#define TILE_SIZE 32
+#define TILE_SIZE 16
 
 // For main projection
 const float CAMERA_FOV = 45.f;
