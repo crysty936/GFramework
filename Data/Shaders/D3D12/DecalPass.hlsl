@@ -57,8 +57,24 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 	const float2 Resolution = float2(TextureSize.x, TextureSize.y);
 	const float2 TexelSize = 1 / Resolution;
 
+	const uint TileIdx = (GroupID.y * ConstBuffer.NumWorkGroups.x) + GroupID.x;
+	const uint address = (TileIdx * 4) + 1;
+
+	const uint binningValue = BinningBuffer.Load(address);
+
 	for (uint i = 0; i < ConstBuffer.NumDecals; ++i)
 	{
+		const uint mask = 1u << i;
+		const bool shouldCompute = mask & binningValue;
+		
+		//OutputAlbedo[pixelPos] = float(binningValue);
+		//return;
+
+		if (!shouldCompute)
+		{
+			continue;
+		}
+
 		ShaderDecal usedDecal = DecalBuffer[i];
 
 		const float2 UV = TexelSize * (pixelPos + 0.5f);
@@ -109,15 +125,12 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 			OutputNormal[pixelPos] = float4(decalNormalWS, 1.f);
 		}
 
-		const uint TileIdx = (GroupID.y * ConstBuffer.NumWorkGroups.x) + GroupID.x;
-		const uint address = (TileIdx * 4) + 1;
 
-		const uint value = BinningBuffer.Load(address);
 		
-		if (value > 0)
-		{
-			OutputAlbedo[pixelPos] = float4(0.f, 1.f, 0.f, 1.f);
-		}
+// 		if (binningValue > 0)
+// 		{
+// 			OutputAlbedo[pixelPos] = float4(0.f, 1.f, 0.f, 1.f);
+// 		}
 // 		else
 // 		{
 // 			const uint totalNrTiles = ConstBuffer.NumWorkGroups.x * ConstBuffer.NumWorkGroups.y;

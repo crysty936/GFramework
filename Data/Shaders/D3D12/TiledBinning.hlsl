@@ -45,6 +45,7 @@ groupshared uint visibleDecalsCount;
 groupshared float4 frustumPlanes[6];
 groupshared float4 frustumPlanesOrigins[6];
 groupshared uint visibleDecalIndices[1024];
+groupshared uint visibleDecalIndicesWord; // TODO: Have to make based on the number of 32 bits [n]
 
 static const float3 BoxPoints[8] =
 {
@@ -75,6 +76,7 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 		minDepthUint = uint(-1);
 		maxDepthUint = 0;
 		visibleDecalsCount = 0;
+		visibleDecalIndicesWord = 0;
 	}
 	
 	GroupMemoryBarrierWithGroupSync();
@@ -199,12 +201,12 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 
 	for (uint passIdx = 0; passIdx < passCount; ++passIdx)
 	{
-// 		const uint currDecalIdx = passIdx * threadCount + GroupIndex;
-// 		if (currDecalIdx >= ConstBuffer.NumDecals)
-// 		{
-// 			break;
-// 		}
-		const uint currDecalIdx = 0;
+		const uint currDecalIdx = passIdx * threadCount + GroupIndex;
+		if (currDecalIdx >= ConstBuffer.NumDecals)
+		{
+			break;
+		}
+		//const uint currDecalIdx = 0;
 
 		const ShaderDecal currDecal = DecalBuffer[currDecalIdx];
 
@@ -292,7 +294,7 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 // 		}
 
 		bool allPlanesValid = true;
-		for (uint planeIdx = 0; planeIdx < 1; ++planeIdx)
+		for (uint planeIdx = 0; planeIdx < 6; ++planeIdx)
 		{
 			bool visiblePosInTile = false;
 			for (uint posIdx = 0; posIdx < 8; ++posIdx)
@@ -317,26 +319,27 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 
 		if (visibleDecalInTile)
 		{
-			uint originalValue;
-			InterlockedAdd(visibleDecalsCount, 1, originalValue);
-			visibleDecalIndices[originalValue] = currDecalIdx;
+			//uint originalValue;
+			//InterlockedAdd(visibleDecalsCount, 1, originalValue);
+			//visibleDecalIndices[originalValue] = currDecalIdx;
+			
+			InterlockedOr(visibleDecalIndicesWord, 1u << currDecalIdx);
+			//visibleDecalIndicesWord &= ;
 		}
 	}
 	
 
 	GroupMemoryBarrierWithGroupSync();
 	
+
+	OutputDebug[pixelPos] = float4(float(visibleDecalIndicesWord), 0.f, 0.f, 0.f);
 	
 	if (GroupIndex == 0)
 	{
 		uint TileIdx = (GroupID.y * ConstBuffer.NumWorkGroups.x) + GroupID.x;
 		uint address = (TileIdx * 4) + 1;
-
-		if (visibleDecalsCount > 0)
-		{
-			// TODO: Write proper index and not FF
- 			TilingBuffer.InterlockedOr(address, 0xFF);
-		}
+		
+		TilingBuffer.InterlockedOr(address, visibleDecalIndicesWord);
 	}
 
 }
