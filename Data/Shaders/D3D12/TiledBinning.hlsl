@@ -337,7 +337,7 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 	if (GroupIndex == 0)
 	{
 		uint TileIdx = (GroupID.y * ConstBuffer.NumWorkGroups.x) + GroupID.x;
-		uint address = (TileIdx * 4) + 1;
+		uint address = (TileIdx * 4); // Multiplied by 4 because each uint has 4 bytes. TileIdx should be summed with an ElementClusterIdx in case more than 1 uint is used because more decals need to fit
 		
 		TilingBuffer.InterlockedOr(address, visibleDecalIndicesWord);
 	}

@@ -58,9 +58,12 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 	const float2 TexelSize = 1 / Resolution;
 
 	const uint TileIdx = (GroupID.y * ConstBuffer.NumWorkGroups.x) + GroupID.x;
-	const uint address = (TileIdx * 4) + 1;
+	const uint address = (TileIdx * 4);
 
 	const uint binningValue = BinningBuffer.Load(address);
+	
+	
+	
 
 	for (uint i = 0; i < ConstBuffer.NumDecals; ++i)
 	{

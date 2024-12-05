@@ -1,5 +1,5 @@
 # GFramework
-A Graphics Framework used for prototyping.
+A D3D12 Graphics Framework used for prototyping.
 
 
 ## 
