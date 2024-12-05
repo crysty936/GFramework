@@ -2,7 +2,7 @@
 A D3D12 Graphics Framework used for prototyping.  
   
 Features:  
-Bindless Renderer  
+PBR Renderer  
 Bindless, Compute Screen Space Decals using Forward+ Style Binning  
   
 ## 
