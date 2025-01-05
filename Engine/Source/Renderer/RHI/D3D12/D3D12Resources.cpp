@@ -155,12 +155,87 @@ D3D12_VERTEX_BUFFER_VIEW D3D12VertexBuffer::VBView() const
 }
 
 
+void UploadTextureRaw(ID3D12Resource* inDestResource, const uint32_t* inRawData, UploadContext& inContext, const uint32_t inWidth, const uint32_t inHeight)
+{
+	const uint32_t numMips = 1u;
+	uint32_t NumSubresources = numMips;
 
-void UploadTexture(ID3D12Resource* inDestResource, uint32_t NumSubresources, DirectX::ScratchImage& inRes, UploadContext& inContext)
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = static_cast<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(_alloca(sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT) * NumSubresources));
+	ASSERT(layouts != nullptr);
+
+	uint64_t* rowSize = (uint64_t*)(_alloca(sizeof(uint64_t) * NumSubresources));
+	ASSERT(rowSize != nullptr);
+
+	uint32_t* numRows = (uint32_t*)(_alloca(sizeof(uint32_t) * NumSubresources));
+	ASSERT(numRows != nullptr);
+
+	uint64_t requiredSize = 0;
+
+	const D3D12_RESOURCE_DESC DestDesc = inDestResource->GetDesc();
+
+	D3D12Globals::Device->GetCopyableFootprints(&DestDesc, 0, NumSubresources, 0, layouts, numRows, rowSize, &requiredSize);
+
+	ID3D12Resource* uploadBuffer = inContext.Resource;
+
+	const D3D12_RESOURCE_DESC uploadBufferDesc = uploadBuffer->GetDesc();
+
+	const bool isCopyValid =
+		uploadBufferDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER &&
+		uploadBufferDesc.Width >= requiredSize + layouts[0].Offset &&
+		requiredSize <= size_t(-1) &&
+		(DestDesc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER || (NumSubresources == 1));
+
+	ASSERT(isCopyValid);
+
+	uint32_t* uploadMem = reinterpret_cast<uint32_t*>(inContext.CPUAddress);
+
+	// Copy to the staging upload heap
+	{
+		ASSERT(rowSize[0] <= size_t(-1));
+
+		const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& mipSubresourceLayout = layouts[0];
+		const uint64_t subResourceHeight = numRows[0];
+		const uint64_t subResourcePitch = mipSubresourceLayout.Footprint.RowPitch;
+		const uint64_t subResourceDepth = mipSubresourceLayout.Footprint.Depth;
+
+		ASSERT(mipSubresourceLayout.Offset == 0); // We don't take offset into consideration so make sure it's 0
+
+		uint32_t* dstSubresourceMem = uploadMem;
+
+		const uint32_t* srcSubImageTexels = inRawData;
+		const uint64_t rowPitch = inWidth * 4; // Width size in bytes
+
+		for (uint64_t y = 0; y < subResourceHeight; ++y)
+		{
+			memcpy(dstSubresourceMem, srcSubImageTexels, glm::min(subResourcePitch, rowPitch));
+			dstSubresourceMem += (subResourcePitch / 4);
+			srcSubImageTexels += (inWidth);
+		}
+	}
+
+	// Copy to the upload buffer
+	{
+		D3D12_TEXTURE_COPY_LOCATION dest = {};
+		dest.pResource = inDestResource;
+		dest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+		dest.PlacedFootprint = {};
+		dest.SubresourceIndex = 0;
+
+
+		D3D12_TEXTURE_COPY_LOCATION src = {};
+		src.pResource = inContext.Resource;
+		src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+		src.PlacedFootprint = layouts[0];
+		src.PlacedFootprint.Offset += inContext.ResourceOffset;
+
+		inContext.CmdList->CopyTextureRegion(&dest, 0, 0, 0, &src, nullptr);
+	}
+}
+
+void UploadTexture(ID3D12Resource* inDestResource, DirectX::ScratchImage& inRes, UploadContext& inContext)
 {
 	const uint32_t numMips = (uint32_t)(inRes.GetImageCount());
-	const DirectX::TexMetadata& metaData = inRes.GetMetadata();
-	NumSubresources = numMips;
+	uint32_t NumSubresources = numMips;
 
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = static_cast<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(_alloca(sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT) * NumSubresources));
 	ASSERT(layouts != nullptr);
@@ -289,7 +364,82 @@ inline uint64_t GetRequiredIntermediateSize(
 	return RequiredSize;
 }
 
-eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::string& inDataPath, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList)
+
+eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2DFromRawMemory(const uint32_t* inData, const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList)
+{
+	eastl::shared_ptr<D3D12Texture2D> newTexture = eastl::make_shared<D3D12Texture2D>();
+
+	ID3D12Resource* texResource;
+
+	// Describe and create the Texture on GPU(Default Heap)
+	D3D12_RESOURCE_DESC textureDesc = {};
+	textureDesc.MipLevels = 1u;
+	textureDesc.Format = inSRGB ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+	textureDesc.Width = inWidth;
+	textureDesc.Height = inHeight;
+	textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	textureDesc.DepthOrArraySize = 1;
+	textureDesc.SampleDesc.Count = 1;
+	textureDesc.SampleDesc.Quality = 0;
+	textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+
+	DXAssert(D3D12Globals::Device->CreateCommittedResource(
+		&D3D12Utility::GetDefaultHeapProps(),
+		D3D12_HEAP_FLAG_NONE,
+		&textureDesc,
+		D3D12_RESOURCE_STATE_COPY_DEST,
+		nullptr,
+		IID_PPV_ARGS(&texResource)));
+
+	texResource->SetName(L"Raw Data Texture");
+
+	// Describe and create a SRV for the texture.
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Format = textureDesc.Format;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Texture2D.MipLevels = 1u;
+
+	D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalSRVHeap.AllocatePersistent();
+	newTexture->SRVIndex = descAllocation.Index;
+	for (uint32_t i = 0; i < D3D12Utility::NumFramesInFlight; ++i)
+	{
+		D3D12Globals::Device->CreateShaderResourceView(texResource, &srvDesc, descAllocation.CPUHandle[i]);
+	}
+
+	// Get required size by device
+	UINT64 uploadBufferSize = 0;
+	D3D12Globals::Device->GetCopyableFootprints(&textureDesc, 0, 1, 0, nullptr, nullptr, nullptr, &uploadBufferSize);
+	// Same thing
+	//const UINT64 uploadBufferSize = GetRequiredIntermediateSize(textureHandle, 0, 1);
+
+	// Submit an upload request
+	UploadContext& uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
+
+	// Add buffer regions commands to Cmdlist
+	UploadTextureRaw(texResource, inData, uploadcontext, inWidth, inHeight);
+
+	// Submit commands
+	D3D12Upload::ResourceUploadEnd(uploadcontext);
+
+	// Transition from copy dest to shader resource
+	D3D12Utility::TransitionResource(inCommandList, texResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+	newTexture->NumMips = 1u;
+	newTexture->ChannelsType = ERHITextureChannelsType::RGBA;
+	newTexture->NrChannels = 4;
+	newTexture->Height = textureDesc.Height;
+	newTexture->Width = textureDesc.Width;
+	newTexture->Precision = ERHITexturePrecision::UnsignedByte;
+	newTexture->SourcePath = "Raw Texture";
+	newTexture->TextureType = ETextureType::Single;
+	newTexture->Resource = texResource;
+
+	return newTexture;
+}
+
+
+eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::string& inDataPath, const bool inSRGB, const bool bGenerateMipMaps, ID3D12GraphicsCommandList* inCommandList)
 {
 	eastl::shared_ptr<D3D12Texture2D> newTexture = eastl::make_shared<D3D12Texture2D>();
 
@@ -306,13 +456,18 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 
 	ENSURE(success);
 
-	// Generate mip maps for it
-	DirectX::ScratchImage res;
-	DirectX::GenerateMipMaps(*dxImage.GetImage(0, 0, 0), DirectX::TEX_FILTER_FLAGS::TEX_FILTER_DEFAULT, 0, res, false);
+	DirectX::ScratchImage* finalImage = &dxImage;
+
+	DirectX::ScratchImage mipMapRes;
+	if (bGenerateMipMaps)
+	{
+		DirectX::GenerateMipMaps(*dxImage.GetImage(0, 0, 0), DirectX::TEX_FILTER_FLAGS::TEX_FILTER_DEFAULT, 0, mipMapRes, false);
+		finalImage = &mipMapRes;
+	}
 
 	// Describe and create the Texture on GPU(Default Heap)
 	D3D12_RESOURCE_DESC textureDesc = {};
-	textureDesc.MipLevels = (uint16_t)res.GetImageCount();
+	textureDesc.MipLevels = (uint16_t)finalImage->GetImageCount();
 	textureDesc.Format = inSRGB ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
 	textureDesc.Width = (uint32_t)dxMetadata.width;
 	textureDesc.Height = (uint32_t)dxMetadata.height;
@@ -337,7 +492,7 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.Format = textureDesc.Format;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Texture2D.MipLevels = (uint32_t)res.GetImageCount();
+	srvDesc.Texture2D.MipLevels = (uint32_t)finalImage->GetImageCount();
 
 	D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalSRVHeap.AllocatePersistent();
 	newTexture->SRVIndex = descAllocation.Index;
@@ -348,16 +503,15 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 
 	// Get required size by device
 	UINT64 uploadBufferSize = 0;
-	D3D12Globals::Device->GetCopyableFootprints(&textureDesc, 0, (uint32_t)res.GetImageCount(), 0, nullptr, nullptr, nullptr, &uploadBufferSize);
+	D3D12Globals::Device->GetCopyableFootprints(&textureDesc, 0, (uint32_t)finalImage->GetImageCount(), 0, nullptr, nullptr, nullptr, &uploadBufferSize);
 	// Same thing
 	//const UINT64 uploadBufferSize = GetRequiredIntermediateSize(textureHandle, 0, 1);
-
 
 	// Submit an upload request
 	UploadContext& uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
 
 	// Add buffer regions commands to Cmdlist
-	UploadTexture(texResource, 1, res, uploadcontext);
+	UploadTexture(texResource, *finalImage, uploadcontext);
 
 	// Submit commands
 	D3D12Upload::ResourceUploadEnd(uploadcontext);
@@ -365,7 +519,7 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	// Transition from copy dest to shader resource
 	D3D12Utility::TransitionResource(inCommandList, texResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-	newTexture->NumMips = (uint16_t)res.GetImageCount();
+	newTexture->NumMips = (uint16_t)finalImage->GetImageCount();
 	newTexture->ChannelsType = ERHITextureChannelsType::RGBA;
 	newTexture->NrChannels = 4;
 	newTexture->Height = textureDesc.Height;
@@ -486,7 +640,7 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 	// Based on DXGI_FORMAT_D32_FLOAT
 	DXGI_FORMAT texFormat = DXGI_FORMAT_R32_TYPELESS;
 	DXGI_FORMAT srvFormat = DXGI_FORMAT_R32_FLOAT;
-	
+
 	D3D12_RESOURCE_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
 	textureDesc.Format = texFormat;
@@ -556,6 +710,6 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 	newDB->Texture = std::move(ownedTexture);
 
 	return newDB;
-}	
+}
 
 

@@ -27,7 +27,7 @@ void CubeShape::Init(ID3D12GraphicsCommandList* inCommandList)
 		cubeNode->VertexBuffer = D3D12RHI::Get()->CreateVertexBuffer(vbLayout, BasicShapesData::GetCubeVertices(), BasicShapesData::GetCubeVerticesCount(), cubeNode->IndexBuffer);
 	}
 
-	eastl::shared_ptr<D3D12Texture2D> newTex = D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, inCommandList);
+	eastl::shared_ptr<D3D12Texture2D> newTex = D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ false, true, inCommandList);
 
 	MeshMaterial newMat;
 	newMat.AlbedoMap = newTex;
@@ -65,7 +65,7 @@ void TBNQuadShape::Init(ID3D12GraphicsCommandList* inCommandList)
 		quadNode->VertexBuffer = D3D12RHI::Get()->CreateVertexBuffer(vbLayout, BasicShapesData::GetTBNQuadVertices(), BasicShapesData::GetTBNQuadVerticesCount(), quadNode->IndexBuffer);
 	}
 
-	eastl::shared_ptr<D3D12Texture2D> newTex = D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, inCommandList);
+	eastl::shared_ptr<D3D12Texture2D> newTex = D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ false, true, inCommandList);
 
 	MeshMaterial newMat;
 	newMat.AlbedoMap = newTex;
