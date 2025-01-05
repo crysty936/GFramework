@@ -60,25 +60,22 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 	const uint TileIdx = (GroupID.y * ConstBuffer.NumWorkGroups.x) + GroupID.x;
 	const uint address = (TileIdx * 4);
 
-	const uint binningValue = BinningBuffer.Load(address);
-	
-	
-	
+	uint clusterElemMask = BinningBuffer.Load(address);
+	clusterElemMask = WaveActiveBitOr(clusterElemMask);// Force all lanes in this wavefront to compute all elements, at the expense of a few lanes processing decals that don't matter to 
+	// them(they're going to be processed anyway, just 0ed out with the execution mask), to get everything to be scalar
 
-	for (uint i = 0; i < ConstBuffer.NumDecals; ++i)
+	clusterElemMask = WaveReadLaneFirst(clusterElemMask);// All have the same clusterElemMask now so this just forces it to be scalar
+
+	while(clusterElemMask)
 	{
-		const uint mask = 1u << i;
-		const bool shouldCompute = mask & binningValue;
-		
 		//OutputAlbedo[pixelPos] = float(binningValue);
 		//return;
 
-		if (!shouldCompute)
-		{
-			continue;
-		}
+		uint bitIdx = firstbitlow(clusterElemMask); // Get the first decal, from right to left
+		clusterElemMask &= ~(1u << bitIdx);// 0 out that decal because it has been processed
+		const uint decalIdx = bitIdx * 32;// Get the array index based on the bit position
 
-		ShaderDecal usedDecal = DecalBuffer[i];
+		ShaderDecal usedDecal = DecalBuffer[decalIdx];
 
 		const float2 UV = TexelSize * (pixelPos + 0.5f);
 		const float clipDepth = GBufferDepth[pixelPos].r;
