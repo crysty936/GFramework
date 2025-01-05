@@ -1159,6 +1159,27 @@ void AppModeBase::BeginFrame()
 	}
 
 	//ImGui::ShowDemoWindow();
+
+	// Set viewport and scissor region
+	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
+	const WindowProperties& props = mainWindow.GetProperties();
+
+	static D3D12_VIEWPORT m_viewport;
+	m_viewport.Width = static_cast<float>(props.Width);
+	m_viewport.Height = static_cast<float>(props.Height);
+	m_viewport.MinDepth = 0.f;
+	m_viewport.MaxDepth = 1.f;
+
+	m_commandList->RSSetViewports(1, &m_viewport);
+
+
+	D3D12_RECT scissorRect;
+	scissorRect.left = 0;
+	scissorRect.top = 0;
+	scissorRect.right = props.Width;
+	scissorRect.bottom = props.Height;
+
+	m_commandList->RSSetScissorRects(1, &scissorRect);
 }
 
 uint64_t TestNrMeshesToDraw = uint64_t(-1);
@@ -1231,26 +1252,6 @@ void AppModeBase::DrawGBuffer()
 
 	m_commandList->SetGraphicsRootSignature(m_GBufferMainMeshRootSignature);
 	m_commandList->SetPipelineState(m_MainMeshPassPipelineState);
-
-	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
-	const WindowProperties& props = mainWindow.GetProperties();
-
-	static D3D12_VIEWPORT m_viewport;
-	m_viewport.Width = static_cast<float>(props.Width);
-	m_viewport.Height = static_cast<float>(props.Height);
-	m_viewport.MinDepth = 0.f;
-	m_viewport.MaxDepth = 1.f;
-
-	m_commandList->RSSetViewports(1, &m_viewport);
-
-
-	D3D12_RECT scissorRect;
-	scissorRect.left = 0;
-	scissorRect.top = 0;
-	scissorRect.right = props.Width;
-	scissorRect.bottom = props.Height;
-
-	m_commandList->RSSetScissorRects(1, &scissorRect);
 
 	// Handle RTs
 
@@ -1352,30 +1353,11 @@ void AppModeBase::ComputeTiledBinning()
 {
 	PIXMarker Marker(m_commandList, "Tiled Binning");
 
-
-
-	glm::vec4 testPlane = glm::vec4(-1.f, 0.f, 0.f, 0.2f);
-
-	glm::vec3 normal = glm::vec3(testPlane.x, testPlane.y, testPlane.z);
-
-	const float radians = glm::radians(90.f);
-	const glm::quat additiveRotation = glm::angleAxis(radians, glm::vec3(0.f, 0.f, 1.f));
-	const glm::mat3 rotation = glm::mat3_cast(additiveRotation);
-	const glm::vec3 res = rotation * normal;
-	const float test = glm::inversesqrt(glm::dot(res, res));
-
-	const glm::vec3 resNormalized = glm::normalize(res);
-
-
-
-	// Draw screen quad
 	m_commandList->SetComputeRootSignature(m_TileBinningRootSignature);
 	m_commandList->SetPipelineState(m_TiledBinningPipelineState);
 
 	SceneManager& sManager = SceneManager::Get();
 	const Scene& currentScene = sManager.GetCurrentScene();
-
-	const eastl::shared_ptr<Camera>& currentCamera = currentScene.GetCurrentCamera();
 
 	// 0. Structured Buffer
 	// 1. Depth Buffer
