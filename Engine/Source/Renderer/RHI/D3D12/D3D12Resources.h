@@ -4,6 +4,7 @@
 #include <dxgiformat.h>
 #include <d3d12.h>
 #include "Renderer/RHI/Resources/RHITexture.h"
+#include "D3D12Utility.h"
 
 class D3D12IndexBuffer : public RHIIndexBuffer
 {
@@ -41,9 +42,20 @@ public:
 	uint32_t SRVIndex = -1;
 };
 
+// Texture that can be updated each frame
+class D3D12Texture2DWritable
+{
+public:
+	D3D12Texture2DWritable(const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList, const uint32_t* inData = nullptr);
+	inline eastl::shared_ptr<D3D12Texture2D> GetCurrentImage() { return Textures[D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight]; }
+
+public:
+	eastl::shared_ptr<D3D12Texture2D> Textures[D3D12Utility::NumFramesInFlight];
+};
+
 class D3D12RenderTarget2D
 {
-	
+
 public:
 	eastl::unique_ptr<D3D12Texture2D> Texture;
 	D3D12_CPU_DESCRIPTOR_HANDLE RTV = {};

@@ -364,8 +364,24 @@ inline uint64_t GetRequiredIntermediateSize(
 	return RequiredSize;
 }
 
+// If the texture does not have D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS set, it needs to be double buffered and set as D3D12_RESOURCE_STATE_COMMON before and after using it on different type Queues(Graphics and Copy)
+void D3D12RHI::UpdateTexture2D(eastl::shared_ptr<D3D12Texture2D>& inTexture, const uint32_t* inData, const uint32_t inWidth, const uint32_t inHeight, ID3D12GraphicsCommandList* inCommandList)
+{
+	ID3D12Resource* texResource = inTexture->Resource;
+	const D3D12_RESOURCE_DESC textureDesc = texResource->GetDesc();
+	ASSERT(textureDesc.Width == inWidth && textureDesc.Height == inHeight);
 
-eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2DFromRawMemory(const uint32_t* inData, const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList)
+	// Get required size by device
+	UINT64 uploadBufferSize = 0;
+	D3D12Globals::Device->GetCopyableFootprints(&textureDesc, 0, 1, 0, nullptr, nullptr, nullptr, &uploadBufferSize);
+
+	UploadContext& uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
+	UploadTextureRaw(texResource, inData, uploadcontext, textureDesc.Width, textureDesc.Height);
+
+	D3D12Upload::ResourceUploadEnd(uploadcontext);
+}
+
+eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2D(const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList, const uint32_t* inData)
 {
 	eastl::shared_ptr<D3D12Texture2D> newTexture = eastl::make_shared<D3D12Texture2D>();
 
@@ -407,23 +423,29 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2DFromRawMemory(const u
 		D3D12Globals::Device->CreateShaderResourceView(texResource, &srvDesc, descAllocation.CPUHandle[i]);
 	}
 
-	// Get required size by device
-	UINT64 uploadBufferSize = 0;
-	D3D12Globals::Device->GetCopyableFootprints(&textureDesc, 0, 1, 0, nullptr, nullptr, nullptr, &uploadBufferSize);
-	// Same thing
-	//const UINT64 uploadBufferSize = GetRequiredIntermediateSize(textureHandle, 0, 1);
+	if (inData != nullptr)
+	{
+		// Get required size by device
+		UINT64 uploadBufferSize = 0;
+		D3D12Globals::Device->GetCopyableFootprints(&textureDesc, 0, 1, 0, nullptr, nullptr, nullptr, &uploadBufferSize);
+		// Same thing
+		//const UINT64 uploadBufferSize = GetRequiredIntermediateSize(textureHandle, 0, 1);
 
-	// Submit an upload request
-	UploadContext& uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
+		// Submit an upload request
+		UploadContext& uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
 
-	// Add buffer regions commands to Cmdlist
-	UploadTextureRaw(texResource, inData, uploadcontext, inWidth, inHeight);
+		// Add buffer regions commands to Cmdlist
+		UploadTextureRaw(texResource, inData, uploadcontext, inWidth, inHeight);
 
-	// Submit commands
-	D3D12Upload::ResourceUploadEnd(uploadcontext);
+
+		D3D12Utility::TransitionResource(uploadcontext.CmdList, texResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
+
+		// Submit commands
+		D3D12Upload::ResourceUploadEnd(uploadcontext);
+	}
 
 	// Transition from copy dest to shader resource
-	D3D12Utility::TransitionResource(inCommandList, texResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	//D3D12Utility::TransitionResource(inCommandList, texResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	newTexture->NumMips = 1u;
 	newTexture->ChannelsType = ERHITextureChannelsType::RGBA;
@@ -712,4 +734,10 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 	return newDB;
 }
 
-
+D3D12Texture2DWritable::D3D12Texture2DWritable(const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList, const uint32_t* inData)
+{
+	for (uint32_t i = 0; i < D3D12Utility::NumFramesInFlight; ++i)
+	{
+		Textures[i] = D3D12RHI::Get()->CreateTexture2D(inWidth, inHeight, inSRGB, inCommandList, inData);
+	}
+}
