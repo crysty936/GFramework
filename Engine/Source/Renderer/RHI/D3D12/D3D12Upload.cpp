@@ -341,6 +341,8 @@ namespace D3D12Upload
 			return newContext;
 		}
 
+		// This executes the command list right away so copies get started as soon as possible
+		// For more granular control, the specific submission Fence Value can be used to wait on
 		uint64_t End(UploadContext& inContext)
 		{
 			ASSERT(inContext.SubmissionIndex != uint64_t(-1));
@@ -379,7 +381,7 @@ namespace D3D12Upload
 		// TODO
 		// This is basically equivalent to flushing the ring buffer
 		// The wait should not be done for all requests in the queue but checking for individual assets when they are needed, 
-		// if they are done based on their submission Fence Value
+		// if they are done, based on the returned Fence Value from End()
 		//RingBuffer.Flush();
 	 	UploadQueue.SyncQueues(D3D12Globals::GraphicsCommandQueue);
 

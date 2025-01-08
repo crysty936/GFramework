@@ -1578,9 +1578,12 @@ void AppModeBase::EndFrame()
 
 	ImGuiRenderDrawData();
 
+	// Make sure that everything is synced up before executing command list
+	// This also executes end frame on the Upload Queue, which (at the moment) forces a wait until everything is uploaded
+	D3D12RHI::Get()->EndFrame();
+
 	SwapBuffers();
 
-	D3D12RHI::Get()->EndFrame();
 
 }
 
