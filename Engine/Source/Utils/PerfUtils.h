@@ -17,11 +17,11 @@ namespace Utils
 	class Benchmark {
 	public:
 		std::chrono::time_point<std::chrono::high_resolution_clock> t0, t1;
-		eastl::string name;
+		eastl::string Name;
 
-		Benchmark(eastl::string& inName) {
+		Benchmark(const eastl::string& inName) {
 			t0 = std::chrono::high_resolution_clock::now();
-			name = inName;
+			Name = inName;
 		}
 		~Benchmark() {
 			t1 = std::chrono::high_resolution_clock::now();
@@ -29,7 +29,7 @@ namespace Utils
 			auto end = std::chrono::time_point_cast<std::chrono::microseconds>(t1).time_since_epoch().count();
 			int64_t res = end - start;
 
-			std::cout << name.c_str() << " took: " << res << "us (" << res * 0.001 << "ms)\n";
+			std::cout << Name.c_str() << " took: " << res << "us (" << res * 0.001 << "ms)\n";
 		}
 	};
 

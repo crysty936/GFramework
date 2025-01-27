@@ -375,7 +375,7 @@ void D3D12RHI::UpdateTexture2D(eastl::shared_ptr<D3D12Texture2D>& inTexture, con
 	UINT64 uploadBufferSize = 0;
 	D3D12Globals::Device->GetCopyableFootprints(&textureDesc, 0, 1, 0, nullptr, nullptr, nullptr, &uploadBufferSize);
 
-	UploadContext& uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
+	UploadContext uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
 	UploadTextureRaw(texResource, inData, uploadcontext, textureDesc.Width, textureDesc.Height);
 
 	D3D12Upload::ResourceUploadEnd(uploadcontext);
@@ -432,7 +432,7 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2D(const uint32_t inWid
 		//const UINT64 uploadBufferSize = GetRequiredIntermediateSize(textureHandle, 0, 1);
 
 		// Submit an upload request
-		UploadContext& uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
+		UploadContext uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
 
 		// Add buffer regions commands to Cmdlist
 		UploadTextureRaw(texResource, inData, uploadcontext, inWidth, inHeight);
@@ -530,7 +530,7 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	//const UINT64 uploadBufferSize = GetRequiredIntermediateSize(textureHandle, 0, 1);
 
 	// Submit an upload request
-	UploadContext& uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
+	UploadContext uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
 
 	// Add buffer regions commands to Cmdlist
 	UploadTexture(texResource, *finalImage, uploadcontext);

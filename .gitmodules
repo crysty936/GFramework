@@ -1,0 +1,6 @@
+[submodule "External/-b"]
+	path = External/-b
+	url = https://github.com/crysty936/assimp.git
+[submodule "External/assimp"]
+	path = External/assimp
+	url = https://github.com/crysty936/assimp.git

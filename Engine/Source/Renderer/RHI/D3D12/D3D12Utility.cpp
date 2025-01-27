@@ -4,9 +4,9 @@
 
 uint64_t D3D12Utility::CurrentFrameIndex = 0;
 
-D3D12_RASTERIZER_DESC RasterizerStates[ERasterizerState::Count];
-D3D12_BLEND_DESC BlendStates[EBlendState::Count];
-D3D12_DEPTH_STENCIL_DESC DepthStates[EDepthState::Count];
+D3D12_RASTERIZER_DESC RasterizerStates[uint8_t(ERasterizerState::Count)];
+D3D12_BLEND_DESC BlendStates[uint8_t(EBlendState::Count)];
+D3D12_DEPTH_STENCIL_DESC DepthStates[uint8_t(EDepthState::Count)];
 
 void D3D12Utility::Init()
 {

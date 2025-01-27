@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.10)
 project(GFramework VERSION 1.0)
 
 # specify the C++ standard
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -60,7 +60,7 @@ list(APPEND EXTRA_INCLUDES "${CMAKE_CURRENT_LIST_DIR}/External/WinPixEventRuntim
 target_link_libraries(GFramework PRIVATE "${CMAKE_CURRENT_LIST_DIR}/External/WinPixEventRuntime/bin/WinPixEventRuntime.lib")
 
 # Copy command for WinPixEventRuntime.dll
-add_custom_command(TARGET GFramework POST_BUILD        # Adds a post-build event to MyTest
+add_custom_command(TARGET GFramework POST_BUILD        # Adds a post-build event to TARGET
     COMMAND ${CMAKE_COMMAND} -E copy_if_different  # which executes "cmake - E copy_if_different..."
         "${CMAKE_CURRENT_LIST_DIR}/External/WinPixEventRuntime/bin/WinPixEventRuntime.dll"      # <--this is in-file
         $<TARGET_FILE_DIR:GFramework>)                 # <--this is out-file path
@@ -94,7 +94,7 @@ target_include_directories(GFramework PUBLIC
 # Stop it from creating unnecessary Project
 set(CMAKE_SUPPRESS_REGENERATION true)
 
-set_target_properties(	assimp imgui EASTL EAStdC EAAssert EAThread DirectXTex
+set_target_properties(	assimp imgui EASTL EAStdC EAAssert EAThread DirectXTex zlibstatic
 						PROPERTIES
 						FOLDER "External")		  
 						

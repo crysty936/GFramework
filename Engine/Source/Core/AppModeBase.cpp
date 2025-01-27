@@ -1232,8 +1232,10 @@ void DrawMeshNodesRecursively(const eastl::vector<TransformObjPtr>& inChildNodes
 			m_commandList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
 
 			m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			m_commandList->IASetVertexBuffers(0, 1, &modelChild->VertexBuffer->VBView());
-			m_commandList->IASetIndexBuffer(&modelChild->IndexBuffer->IBView());
+			const D3D12_VERTEX_BUFFER_VIEW vbView = modelChild->VertexBuffer->VBView();
+			const D3D12_INDEX_BUFFER_VIEW ibView = modelChild->IndexBuffer->IBView();
+			m_commandList->IASetVertexBuffers(0, 1, &vbView);
+			m_commandList->IASetIndexBuffer(&ibView);
 
 			m_commandList->DrawIndexedInstanced(modelChild->IndexBuffer->IndexCount, 1, 0, 0, 0);
 
@@ -1309,10 +1311,8 @@ void AppModeBase::RenderLighting()
 
 	m_commandList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
 
-
 	SceneManager& sManager = SceneManager::Get();
 	const Scene& currentScene = sManager.GetCurrentScene();
-
 	const eastl::shared_ptr<Camera>& currentCamera = currentScene.GetCurrentCamera();
 
 	static glm::vec3 LightDir = glm::vec3(1.f, -1.f, 0.f);
@@ -1341,8 +1341,10 @@ void AppModeBase::RenderLighting()
 
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	m_commandList->IASetVertexBuffers(0, 1, &ScreenQuadVertexBuffer->VBView());
-	m_commandList->IASetIndexBuffer(&ScreenQuadIndexBuffer->IBView());
+	const D3D12_VERTEX_BUFFER_VIEW vbView = ScreenQuadVertexBuffer->VBView();
+	const D3D12_INDEX_BUFFER_VIEW ibView = ScreenQuadIndexBuffer->IBView();
+	m_commandList->IASetVertexBuffers(0, 1, &vbView);
+	m_commandList->IASetIndexBuffer(&ibView);
 
 	m_commandList->DrawIndexedInstanced(ScreenQuadIndexBuffer->IndexCount, 1, 0, 0, 0);
 

@@ -6,7 +6,7 @@
 #include "Core/EngineUtils.h"
 
 template<typename inRetType, typename... inParamTypes>
-class IFunctionContainer : IFunctionContainerBase
+class IFunctionContainer : public IFunctionContainerBase
 {
 public:
 	virtual inRetType Execute(inParamTypes&&...) const = 0;

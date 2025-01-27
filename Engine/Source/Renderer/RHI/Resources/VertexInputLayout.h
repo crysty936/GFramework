@@ -14,7 +14,8 @@ public:
 	template<typename T>
 	void Push(uint32_t Count, const VertexInputType inType, const EAttribDivisor inDivisor = EAttribDivisor::PerVertex)
 	{
-		static_assert(false);
+		ASSERT(false);
+		//static_assert(false);
 	}
 
 	template<>

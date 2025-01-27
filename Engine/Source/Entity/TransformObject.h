@@ -15,7 +15,9 @@ public:
 	TransformObject(const eastl::string& inName);
 	virtual ~TransformObject();
 
-	inline void AddChild(TransformObjPtr inTransfObj) { inTransfObj->SetParent(shared_from_this()); }
+	inline void AddChild(TransformObjPtr inTransfObj) { 
+		TransformObjPtr thisShared = shared_from_this();
+		inTransfObj->SetParent(thisShared); }
 	inline glm::vec3 GetLocation() { return Location; }
 	inline const eastl::vector<TransformObjPtr>& GetChildren() const { return Children; }
 	void SetParent(TransformObjPtr& inParent);
