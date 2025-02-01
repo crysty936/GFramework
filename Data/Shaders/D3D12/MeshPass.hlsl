@@ -120,7 +120,13 @@ PSOutput PSMain(PSInput input)
     Texture2D MetallicRoughnessMap = Tex2DTable[mat.MRMapIndex];
 
     PSOutput output;
-    output.Albedo = AlbedoMap.Sample(g_sampler, uv);
+    float4 albedo = AlbedoMap.Sample(g_sampler, uv);
+    if (albedo.a == 0.f)
+    {
+        discard;
+    }
+
+    output.Albedo = albedo;
     output.Roughness = MetallicRoughnessMap.Sample(g_sampler, uv);
 
     const float3 normalTS = NormalMap.Sample(g_sampler, uv).xyz * 2.f - 1.f;
