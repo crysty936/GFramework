@@ -13,7 +13,7 @@ public:
 	virtual void Init();
 
 	virtual void BeginFrame();
-	virtual void Draw();
+	virtual void ExecutePasses();
 	virtual void EndFrame();
 
 	static void Terminate();
@@ -26,11 +26,7 @@ public:
 	void ImGuiRenderDrawData();
 
 private:
-	void DrawGBuffer();
-	void RenderLighting(struct SceneTextures& inSceneTextures);
 	void CreateInitialResources();
-	void CreateRootSignatures();
-	void CreatePSOs();
 
 	void SwapBuffers();
 	void ResetFrameResources();

@@ -149,7 +149,7 @@ void AppCore::Run()
 		GEditor->Tick(CurrentDeltaT);
 
 		CurrentApp->Tick(CurrentDeltaT);
-		CurrentApp->Draw();
+		CurrentApp->ExecutePasses();
 
 		// Tick plugins
  		for (PluginAndName& container : GetInternalPluginsList())
