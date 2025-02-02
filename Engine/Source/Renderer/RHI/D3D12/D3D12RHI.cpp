@@ -44,6 +44,9 @@ D3D12DescriptorHeap D3D12Globals::GlobalSRVHeap;
 D3D12DescriptorHeap D3D12Globals::GlobalDSVHeap;
 D3D12DescriptorHeap D3D12Globals::GlobalUAVHeap;
 
+D3D12ConstantBuffer D3D12Globals::GlobalConstantsBuffer;
+D3D12StructuredBuffer D3D12Globals::GlobalMaterialsBuffer;
+
 // D3D12 RHI stuff to do:
 // Fix the default memory allocation to use a ring buffer instead of the hack that is present right now
 // Modify the constant buffers to allow a single buffer to be used for all draws

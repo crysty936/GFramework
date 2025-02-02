@@ -4,6 +4,8 @@
 #include "Logger/Logger.h"
 #include "Entity/TransformObject.h"
 #include "Editor/Editor.h"
+#include "Window/WindowProperties.h"
+#include "Window/WindowsWindow.h"
 
 Camera::Camera()
 	: Entity("Camera") 
@@ -11,9 +13,19 @@ Camera::Camera()
 
 Camera::~Camera() = default;
 
+// TODO: Make these customizable
+const float CAMERA_FOV = 45.f;
+const float CAMERA_NEAR = 0.1f;
+const float CAMERA_FAR = 10000.f;
+
 void Camera::Init()
 {
+	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
+	const WindowProperties& props = mainWindow.GetProperties();
 
+	//DirectX::XMMATRIX testMatrix = DirectX::XMMatrixPerspectiveFovLH(glm::radians(CAMERA_FOV), static_cast<float>(props.Width) / static_cast<float>(props.Height), CAMERA_NEAR, CAMERA_FAR);
+
+	ProjMatCache = glm::perspectiveLH_ZO(glm::radians(CAMERA_FOV), static_cast<float>(props.Width) / static_cast<float>(props.Height), CAMERA_NEAR, CAMERA_FAR);
 }
 
 void Camera::Tick(const float inDeltaT)

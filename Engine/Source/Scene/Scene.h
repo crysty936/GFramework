@@ -26,6 +26,7 @@ public:
 	inline eastl::shared_ptr<Camera>& GetCurrentCamera();
 	inline const eastl::shared_ptr<Camera>& GetCurrentCamera() const;
 	inline glm::mat4 GetMainCameraLookAt() const;
+	inline glm::mat4 GetMainCameraProj() const;
 
 	//inline void AddLight(const eastl::shared_ptr<LightSource>& inLightData);
 	//inline const eastl::vector<eastl::shared_ptr<LightSource>>& GetLights() const;
@@ -59,6 +60,11 @@ const eastl::shared_ptr<Camera>& Scene::GetCurrentCamera() const
 glm::mat4 Scene::GetMainCameraLookAt() const
 {
 	return CurrentCamera->GetLookAt();
+}
+
+glm::mat4 Scene::GetMainCameraProj() const
+{
+	return CurrentCamera->GetProjectionMat();
 }
 
 

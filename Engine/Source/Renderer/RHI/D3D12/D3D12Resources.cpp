@@ -734,7 +734,7 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 	return newDB;
 }
 
-D3D12Texture2DWritable::D3D12Texture2DWritable(const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList, const uint32_t* inData)
+D3D12Texture2DCPUWritable::D3D12Texture2DCPUWritable(const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList, const uint32_t* inData)
 {
 	for (uint32_t i = 0; i < D3D12Utility::NumFramesInFlight; ++i)
 	{

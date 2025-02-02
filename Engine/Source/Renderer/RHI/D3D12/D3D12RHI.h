@@ -18,6 +18,9 @@ namespace D3D12Globals
 	extern D3D12DescriptorHeap GlobalSRVHeap;
 	extern D3D12DescriptorHeap GlobalDSVHeap;
 	extern D3D12DescriptorHeap GlobalUAVHeap;
+	
+	extern D3D12ConstantBuffer GlobalConstantsBuffer;
+	extern D3D12StructuredBuffer GlobalMaterialsBuffer;
 }
 
 struct CompiledShaderResult

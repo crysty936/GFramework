@@ -43,10 +43,10 @@ public:
 };
 
 // Texture that can be updated each frame
-class D3D12Texture2DWritable
+class D3D12Texture2DCPUWritable
 {
 public:
-	D3D12Texture2DWritable(const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList, const uint32_t* inData = nullptr);
+	D3D12Texture2DCPUWritable(const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList, const uint32_t* inData = nullptr);
 	inline eastl::shared_ptr<D3D12Texture2D> GetCurrentImage() { return Textures[D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight]; }
 
 public:

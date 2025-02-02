@@ -23,6 +23,7 @@ public:
 	void SetMovementDelegates(class ControllerBase& inController);
 	void OnMouseScrollChanged(const float inNewY);
 	glm::mat4 GetLookAt();
+	inline glm::mat4 GetProjectionMat() const { return ProjMatCache; }
 
 private:
 	void OnMousePosChanged(const float inNewYaw, const float inNewPitch);
@@ -35,6 +36,7 @@ private:
 	float Pitch{ 0.f };
 	float MouseLookSensitivity{ 0.5f };
 	float MouseMoveSensitivity{ 1.0f };
+	glm::mat4 ProjMatCache;
 };
 
 
