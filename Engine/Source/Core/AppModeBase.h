@@ -28,8 +28,6 @@ public:
 private:
 	void DrawGBuffer();
 	void RenderLighting(struct SceneTextures& inSceneTextures);
-	void ComputeTiledBinning(struct SceneTextures& inSceneTextures);
-	void ComputeDecals(struct SceneTextures& inSceneTextures);
 	void CreateInitialResources();
 	void CreateRootSignatures();
 	void CreatePSOs();
