@@ -64,13 +64,6 @@ AppModeBase::~AppModeBase()
 	FlushGPU();
 }
 
-// Pipeline objects.
-ID3D12Resource* m_BackBuffers[D3D12Utility::NumFramesInFlight];
-
-ID3D12CommandAllocator* m_commandAllocators[D3D12Utility::NumFramesInFlight];
-
-ID3D12GraphicsCommandList* m_commandList;
-
 struct ShaderMaterial
 {
 	uint32_t AlbedoMapIndex;
@@ -86,11 +79,8 @@ void AppModeBase::Init()
 {
 	BENCH_SCOPE("App Mode Init");
 
-
 	D3D12RHI::Init();
-
 	ImGuiInit();
-
 	CreateInitialResources();
 }
 
@@ -99,67 +89,10 @@ void AppModeBase::CreateInitialResources()
 {
 	BENCH_SCOPE("Create Resources");
 
-	// TODO: Move this to RHI Init
-	// Create descriptor heaps.
-	{
-		// Describe and create a render target view (RTV) descriptor heap.
-		constexpr uint32_t numRTVs = 32;
-		D3D12Globals::GlobalRTVHeap.Init(false, numRTVs, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-		constexpr uint32_t numSRVs = 1024;
-		constexpr uint32_t numTempSRVs = 128;
-		D3D12Globals::GlobalSRVHeap.Init(true, numSRVs, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, numTempSRVs);
-
-		constexpr uint32_t numDSVs = 32;
-		D3D12Globals::GlobalDSVHeap.Init(false, numDSVs, D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-
-		constexpr uint32_t numUAVs = 128;
-		D3D12Globals::GlobalUAVHeap.Init(false, numUAVs, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		
-		D3D12Globals::GlobalConstantsBuffer.Init(2 * 1024 * 1024);
-	}
-
-	// Create frame resources.
-	{
-		// Create a RTV for each frame.
-		for (UINT i = 0; i < D3D12Utility::NumFramesInFlight; i++)
-		{
-			// Allocate descriptor space
-			D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = D3D12Globals::GlobalRTVHeap.AllocatePersistent().CPUHandle[0];
-
-			// Get a reference to the swapchain buffer
-			DXAssert(D3D12Globals::SwapChain->GetBuffer(i, IID_PPV_ARGS(&m_BackBuffers[i])));
-
-			// Create the descriptor at the target location in the heap
-			D3D12Globals::Device->CreateRenderTargetView(m_BackBuffers[i], nullptr, cpuHandle);
-			eastl::wstring rtName = L"BackBuffer RenderTarget ";
-			rtName += eastl::to_wstring(i);
-
-			m_BackBuffers[i]->SetName(rtName.c_str());
-
-			// Create the command allocator
-			DXAssert(D3D12Globals::Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[i])));
-
-			eastl::wstring commandAllocatorName = L"CommandAllocator ";
-			commandAllocatorName += eastl::to_wstring(i);
-
-			m_commandAllocators[i]->SetName(commandAllocatorName.c_str());
-		}
-	}
-
+	// Init Render Passes
 	DeferredBasePassCommand.Init();
 	BindlessDecalsPassCommmand.Init();
 	DeferredLightingCommand.Init();
-
-	// Create the command list.
-	DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[D3D12Utility::CurrentFrameIndex], nullptr, IID_PPV_ARGS(&m_commandList)));
-	m_commandList->SetName(L"Main GFX Cmd List");
-
-	// Memory upload test
-	//for (int i = 0; i < 500; ++i)
-	//{
-	//	D3D12RHI::Get()->CreateAndLoadTexture2D("../Data/Textures/MinecraftGrass.jpg", /*inSRGB*/ true, m_commandList.Get());
-	//}
 
 	D3D12Globals::GlobalMaterialsBuffer.Init(1024, sizeof(ShaderMaterial));
 
@@ -169,36 +102,28 @@ void AppModeBase::CreateInitialResources()
 	// Cubes creation
 
 	//eastl::shared_ptr<Model3D> TheCube = eastl::make_shared<CubeShape>("TheCube");
-	//TheCube->Init(m_commandList);
-
-	//eastl::shared_ptr<CubeShape> theCube2 = eastl::make_shared<CubeShape>("TheCube2");
-	//theCube2->Init(m_commandList.Get());
-	//TheCube->AddChild(theCube2);
-	//theCube2->Move(glm::vec3(-5.f, 0.f, 0.f));
-
-	//currentScene.AddObject(TheCube);
+	//TheCube->Init(D3D12Globals::GraphicsCmdList);
 
 	//eastl::shared_ptr<TBNQuadShape> model = eastl::make_shared<TBNQuadShape>("TBN Quad");
-	//model->Init(m_commandList);
+	//model->Init(D3D12Globals::GraphicsCmdList);
 	//currentScene.AddObject(model);
-
 
 	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza2/Sponza.fbx", "Sponza");
 	eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza/Sponza.gltf", "Sponza");
 	model->Rotate(90.f, glm::vec3(0.f, 1.f, 0.f));
 	model->Move(glm::vec3(0.f, -1.f, -5.f));
-	model->Init(m_commandList);
+	model->Init(D3D12Globals::GraphicsCmdList);
 
 	//eastl::shared_ptr<AssimpModel3D> model = eastl::make_shared<AssimpModel3D>("../Data/Models/Floor/scene.gltf", "Floor Model");
 	//model->SetScale(glm::vec3(0.05f, 0.05f, 0.05f));
 	//model->Move(glm::vec3(0.f, -3.f, 0.f));
-	//model->Init(m_commandList);
+	//model->Init(D3D12Globals::GraphicsCmdList);
 
 	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sphere/scene.gltf", "Sphere");
-	//model->Init(m_commandList);
+	//model->Init(D3D12Globals::GraphicsCmdList);
 
 	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Shiba/scene.gltf", "Shiba");
-	//model->Init(m_commandList);
+	//model->Init(D3D12Globals::GraphicsCmdList);
 	
 	currentScene.AddObject(model);
 
@@ -218,14 +143,10 @@ void AppModeBase::CreateInitialResources()
 		D3D12Globals::GlobalMaterialsBuffer.UploadDataAllFrames(&shaderMats[0], sizeof(ShaderMaterial) * shaderMats.size());
 	}
 
-
-
-
-
 	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
 
-	DXAssert(m_commandList->Close());
-	ID3D12CommandList* ppCommandLists[] = { m_commandList };
+	DXAssert(D3D12Globals::GraphicsCmdList->Close());
+	ID3D12CommandList* ppCommandLists[] = { D3D12Globals::GraphicsCmdList };
 	D3D12Globals::GraphicsCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
@@ -251,19 +172,19 @@ void AppModeBase::CreateInitialResources()
 
 void AppModeBase::SwapBuffers()
 {
-	D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	D3D12Utility::TransitionResource(D3D12Globals::GraphicsCmdList, D3D12Globals::BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 
-	DXAssert(m_commandList->Close());
+	DXAssert(D3D12Globals::GraphicsCmdList->Close());
 
 	bCmdListOpen = false;
 
-	ID3D12CommandList* commandLists[] = { m_commandList };
+	ID3D12CommandList* commandLists[] = { D3D12Globals::GraphicsCmdList };
 	D3D12Globals::GraphicsCommandQueue->ExecuteCommandLists(1, commandLists);
 
 	if (GEngine->IsImguiEnabled() && ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 	{
 		ImGui::UpdatePlatformWindows();
-		ImGui::RenderPlatformWindowsDefault(nullptr, (void*)m_commandList);
+		ImGui::RenderPlatformWindowsDefault(nullptr, (void*)D3D12Globals::GraphicsCmdList);
 	}
 
 	D3D12Globals::SwapChain->Present(1, 0);
@@ -292,12 +213,12 @@ void AppModeBase::ResetFrameResources()
 	// Command list allocators can only be reset when the associated 
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
-	DXAssert(m_commandAllocators[D3D12Utility::CurrentFrameIndex]->Reset());
+	DXAssert(D3D12Globals::CommandAllocators[D3D12Utility::CurrentFrameIndex]->Reset());
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
-	DXAssert(m_commandList->Reset(m_commandAllocators[D3D12Utility::CurrentFrameIndex], nullptr));
+	DXAssert(D3D12Globals::GraphicsCmdList->Reset(D3D12Globals::CommandAllocators[D3D12Utility::CurrentFrameIndex], nullptr));
 }
 
 void AppModeBase::BeginFrame()
@@ -313,7 +234,7 @@ void AppModeBase::BeginFrame()
 	// as a change in descriptor heaps can incur a pipeline flush
 	// Only one CBV SRV UAV heap and one Samplers heap can be bound at the same time
 	ID3D12DescriptorHeap* ppHeaps[] = { D3D12Globals::GlobalSRVHeap.Heaps[D3D12Utility::CurrentFrameIndex] };
-	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	D3D12Globals::GraphicsCmdList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
 	BindlessDecalsPassCommmand.UpdateBeforeExecute();
 
@@ -329,7 +250,7 @@ void AppModeBase::BeginFrame()
 	m_viewport.MinDepth = 0.f;
 	m_viewport.MaxDepth = 1.f;
 
-	m_commandList->RSSetViewports(1, &m_viewport);
+	D3D12Globals::GraphicsCmdList->RSSetViewports(1, &m_viewport);
 
 
 	D3D12_RECT scissorRect;
@@ -338,31 +259,27 @@ void AppModeBase::BeginFrame()
 	scissorRect.right = props.Width;
 	scissorRect.bottom = props.Height;
 
-	m_commandList->RSSetScissorRects(1, &scissorRect);
+	D3D12Globals::GraphicsCmdList->RSSetScissorRects(1, &scissorRect);
 }
-
-
 
 void AppModeBase::ExecutePasses()
 {
 	static bool doOnce = false;
 	if (!doOnce)
 	{
-		D3D12Utility::TransitionResource(m_commandList, D3D12Globals::GlobalMaterialsBuffer.Resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		D3D12Utility::TransitionResource(D3D12Globals::GraphicsCmdList, D3D12Globals::GlobalMaterialsBuffer.Resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		doOnce = true;
 	}
 
-	DeferredBasePassCommand.Execute(m_commandList);
-	BindlessDecalsPassCommmand.Execute(m_commandList, DeferredBasePassCommand.GBufferTextures);
-
+	DeferredBasePassCommand.Execute(D3D12Globals::GraphicsCmdList);
+	BindlessDecalsPassCommmand.Execute(D3D12Globals::GraphicsCmdList, DeferredBasePassCommand.GBufferTextures);
 
 	{
-		
 		//D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Utility::CurrentFrameIndex, 0);
-		D3D12Utility::TransitionResource(m_commandList, m_BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		D3D12Utility::TransitionResource(D3D12Globals::GraphicsCmdList, D3D12Globals::BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		SceneTextures& sceneTextures = DeferredBasePassCommand.GBufferTextures;
 
-		DeferredLightingCommand.Execute(m_commandList, DeferredBasePassCommand.GBufferTextures);
+		DeferredLightingCommand.Execute(D3D12Globals::GraphicsCmdList, DeferredBasePassCommand.GBufferTextures);
 	}
 
 	// Draw scene hierarchy
@@ -379,8 +296,6 @@ void AppModeBase::ExecutePasses()
 		ImGui::Begin("D3D12 Settings");
 		ImGui::End();
 	}
-
-
 
 }
 
@@ -485,11 +400,11 @@ void AppModeBase::ImGuiInit()
 
 void AppModeBase::ImGuiRenderDrawData()
 {
-	PIXMarker Marker(m_commandList, "Draw ImGui");
+	PIXMarker Marker(D3D12Globals::GraphicsCmdList, "Draw ImGui");
 
 	// Set the imgui descriptor heap
 	ID3D12DescriptorHeap* imguiHeaps[] = { m_imguiCbvSrvHeap };
-	m_commandList->SetDescriptorHeaps(1, imguiHeaps);
+	D3D12Globals::GraphicsCmdList->SetDescriptorHeaps(1, imguiHeaps);
 
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_commandList);
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), D3D12Globals::GraphicsCmdList);
 }

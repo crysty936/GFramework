@@ -39,6 +39,10 @@
 ID3D12Device* D3D12Globals::Device;
 IDXGISwapChain3* D3D12Globals::SwapChain;
 ID3D12CommandQueue* D3D12Globals::GraphicsCommandQueue;
+ID3D12Resource* D3D12Globals::BackBuffers[D3D12Utility::NumFramesInFlight];
+ID3D12CommandAllocator* D3D12Globals::CommandAllocators[D3D12Utility::NumFramesInFlight];
+ID3D12GraphicsCommandList* D3D12Globals::GraphicsCmdList;
+
 D3D12DescriptorHeap D3D12Globals::GlobalRTVHeap;
 D3D12DescriptorHeap D3D12Globals::GlobalSRVHeap;
 D3D12DescriptorHeap D3D12Globals::GlobalDSVHeap;
@@ -46,10 +50,6 @@ D3D12DescriptorHeap D3D12Globals::GlobalUAVHeap;
 
 D3D12ConstantBuffer D3D12Globals::GlobalConstantsBuffer;
 D3D12StructuredBuffer D3D12Globals::GlobalMaterialsBuffer;
-
-// D3D12 RHI stuff to do:
-// Fix the default memory allocation to use a ring buffer instead of the hack that is present right now
-// Modify the constant buffers to allow a single buffer to be used for all draws
 
 using Microsoft::WRL::ComPtr;
 
@@ -205,6 +205,58 @@ void D3D12RHI::InitPipeline()
 	
 	D3D12Utility::Init();
 	D3D12Upload::InitUpload();
+
+
+	// Create descriptor heaps.
+	{
+		// Describe and create a render target view (RTV) descriptor heap.
+		constexpr uint32_t numRTVs = 32;
+		D3D12Globals::GlobalRTVHeap.Init(false, numRTVs, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+		constexpr uint32_t numSRVs = 1024;
+		constexpr uint32_t numTempSRVs = 128;
+		D3D12Globals::GlobalSRVHeap.Init(true, numSRVs, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, numTempSRVs);
+
+		constexpr uint32_t numDSVs = 32;
+		D3D12Globals::GlobalDSVHeap.Init(false, numDSVs, D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+
+		constexpr uint32_t numUAVs = 128;
+		D3D12Globals::GlobalUAVHeap.Init(false, numUAVs, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+		D3D12Globals::GlobalConstantsBuffer.Init(2 * 1024 * 1024);
+	}
+
+	// Create frame resources.
+	{
+		// Create a RTV for each frame.
+		for (UINT i = 0; i < D3D12Utility::NumFramesInFlight; i++)
+		{
+			// Allocate descriptor space
+			D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = D3D12Globals::GlobalRTVHeap.AllocatePersistent().CPUHandle[0];
+
+			// Get a reference to the swapchain buffer
+			DXAssert(D3D12Globals::SwapChain->GetBuffer(i, IID_PPV_ARGS(&D3D12Globals::BackBuffers[i])));
+
+			// Create the descriptor at the target location in the heap
+			D3D12Globals::Device->CreateRenderTargetView(D3D12Globals::BackBuffers[i], nullptr, cpuHandle);
+			eastl::wstring rtName = L"BackBuffer RenderTarget ";
+			rtName += eastl::to_wstring(i);
+
+			D3D12Globals::BackBuffers[i]->SetName(rtName.c_str());
+
+			// Create the command allocator
+			DXAssert(D3D12Globals::Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&D3D12Globals::CommandAllocators[i])));
+
+			eastl::wstring commandAllocatorName = L"CommandAllocator ";
+			commandAllocatorName += eastl::to_wstring(i);
+
+			D3D12Globals::CommandAllocators[i]->SetName(commandAllocatorName.c_str());
+		}
+
+		// Create the command list.
+		DXAssert(D3D12Globals::Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12Globals::CommandAllocators[D3D12Utility::CurrentFrameIndex], nullptr, IID_PPV_ARGS(&D3D12Globals::GraphicsCmdList)));
+		D3D12Globals::GraphicsCmdList->SetName(L"Main GFX Cmd List");
+	}
 
 }
 

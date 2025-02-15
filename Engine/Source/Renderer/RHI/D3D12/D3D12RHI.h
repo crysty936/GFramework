@@ -11,6 +11,9 @@ namespace D3D12Globals
 	extern ID3D12Device* Device;
 	extern IDXGISwapChain3* SwapChain;
 	extern ID3D12CommandQueue* GraphicsCommandQueue;
+	extern ID3D12Resource* BackBuffers[D3D12Utility::NumFramesInFlight];
+	extern ID3D12CommandAllocator* CommandAllocators[D3D12Utility::NumFramesInFlight];
+	extern ID3D12GraphicsCommandList* GraphicsCmdList;
 
 	// Descriptor Heaps
 	// TODO: Implement non-shader visible descriptor heaps that will be copied over into main heap when drawing

@@ -104,11 +104,19 @@ for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
 		{
 			D3D12_DEPTH_STENCIL_DESC& desc = DepthStates[uint8_t(EDepthState::WriteEnabled)];
 			desc.DepthEnable = true;
-			desc.StencilEnable = FALSE;
+			desc.StencilEnable = false;
 			desc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 			desc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 		}
 
+		// AlwaysFail_WriteDisabled
+		{
+			D3D12_DEPTH_STENCIL_DESC& desc = DepthStates[uint8_t(EDepthState::AlwaysFail_WriteDisabled)];
+			desc.DepthEnable = true;
+			desc.StencilEnable = false;
+			desc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+			desc.DepthFunc = D3D12_COMPARISON_FUNC_NEVER;
+		}
 	}
 
 }

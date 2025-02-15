@@ -26,6 +26,7 @@ enum class EDepthState : uint8_t
 {
 	Disabled,
 	WriteEnabled,
+	AlwaysFail_WriteDisabled,
 	Count
 };
 

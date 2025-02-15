@@ -11,6 +11,7 @@
 #include "Scene/Scene.h"
 #include "imgui.h"
 #include "Renderer/Drawable/ShapesUtils/BasicShapesData.h"
+#include "Core/AppCore.h"
 
 struct LightingConstantBuffer
 {
@@ -28,6 +29,7 @@ ID3D12RootSignature* m_LightingRootSignature;
 ID3D12PipelineState* m_LightingPipelineState;
 
 
+eastl::shared_ptr<D3D12RenderTarget2D> LightingTarget;
 
 // TODO: Convert to compute
 eastl::shared_ptr<D3D12IndexBuffer> ScreenQuadIndexBuffer = nullptr;
@@ -45,6 +47,11 @@ DeferredLighting::~DeferredLighting()
 
 void DeferredLighting::Init()
 {
+	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
+	const WindowProperties& props = mainWindow.GetProperties();
+
+	LightingTarget = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"FinalLighting", ERHITexturePrecision::UnsignedByte, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
+
 	// Final lighting root signature
 	{
 		D3D12_ROOT_PARAMETER1 rootParameters[3] = {};
@@ -209,6 +216,8 @@ void DeferredLighting::RenderLighting(ID3D12GraphicsCommandList* inCmdList, Scen
 
 	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[1];
 	renderTargets[0] = currentBackbufferRTDescriptor;
+	
+	//renderTargets[0] = LightingTarget->RTV;;
 
 	inCmdList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
 
@@ -249,6 +258,26 @@ void DeferredLighting::RenderLighting(ID3D12GraphicsCommandList* inCmdList, Scen
 
 	inCmdList->DrawIndexedInstanced(ScreenQuadIndexBuffer->IndexCount, 1, 0, 0, 0);
 
+	//{
+	//	D3D12_TEXTURE_COPY_LOCATION dest = {};
+	//	dest.pResource = inDestResource;
+	//	dest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+	//	dest.PlacedFootprint = {};
+	//	dest.SubresourceIndex = 0;
+
+
+	//	D3D12_TEXTURE_COPY_LOCATION src = {};
+	//	src.pResource = inContext.Resource;
+	//	src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+	//	src.PlacedFootprint = layouts[0];
+	//	src.PlacedFootprint.Offset += inContext.ResourceOffset;
+
+	//	inCmdList->CopyBufferRegion()
+
+	//	inContext.CmdList->CopyTextureRegion(&dest, 0, 0, 0, &src, nullptr);
+	//	inCmdList->CopyTextureRegion()
+
+	//}
 
 }
 

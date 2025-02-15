@@ -236,47 +236,24 @@ const float CubeVertices[] = {
 // Skybox
 constexpr float SkyboxVertices[] = {
 	// positions          
-	-1.0f,  1.0f, -1.0f,
-	-1.0f, -1.0f, -1.0f,
-	 1.0f, -1.0f, -1.0f,
-	 1.0f, -1.0f, -1.0f,
-	 1.0f,  1.0f, -1.0f,
-	-1.0f,  1.0f, -1.0f,
+	-1.0f,   1.0f,  1.0f,    // Left Top Back
+	 1.0f,   1.0f,  1.0f,    // Right Top Back
+	 1.0f,  -1.0f,  1.0f,    // Right Bottom Back
+	-1.0f,  -1.0f,  1.0f,   // Left Bottom Back
+	 1.0f,   1.0f, -1.0f,   // Right Top Front
+	-1.0f,   1.0f, -1.0f,   // Left Top Front
+	-1.0f,  -1.0f, -1.0f,   // Left Bottom Front
+	 1.0f,  -1.0f, -1.0f,   // Right Bottom Front
+};
 
-	-1.0f, -1.0f,  1.0f,
-	-1.0f, -1.0f, -1.0f,
-	-1.0f,  1.0f, -1.0f,
-	-1.0f,  1.0f, -1.0f,
-	-1.0f,  1.0f,  1.0f,
-	-1.0f, -1.0f,  1.0f,
 
-	 1.0f, -1.0f, -1.0f,
-	 1.0f, -1.0f,  1.0f,
-	 1.0f,  1.0f,  1.0f,
-	 1.0f,  1.0f,  1.0f,
-	 1.0f,  1.0f, -1.0f,
-	 1.0f, -1.0f, -1.0f,
-
-	-1.0f, -1.0f,  1.0f,
-	-1.0f,  1.0f,  1.0f,
-	 1.0f,  1.0f,  1.0f,
-	 1.0f,  1.0f,  1.0f,
-	 1.0f, -1.0f,  1.0f,
-	-1.0f, -1.0f,  1.0f,
-
-	-1.0f,  1.0f, -1.0f,
-	 1.0f,  1.0f, -1.0f,
-	 1.0f,  1.0f,  1.0f,
-	 1.0f,  1.0f,  1.0f,
-	-1.0f,  1.0f,  1.0f,
-	-1.0f,  1.0f, -1.0f,
-
-	-1.0f, -1.0f, -1.0f,
-	-1.0f, -1.0f,  1.0f,
-	 1.0f, -1.0f, -1.0f,
-	 1.0f, -1.0f, -1.0f,
-	-1.0f, -1.0f,  1.0f,
-	 1.0f, -1.0f,  1.0f
+constexpr uint32_t SkyboxIndices[] = {
+	0, 1, 2, 2, 3, 0, // Front
+	1, 4, 7, 7, 2, 1, // Right
+	4, 5, 6, 6, 7, 4, // Back
+	5, 0, 3, 3, 6, 5, // Left
+	5, 4, 1, 1, 0, 5, // Top
+	3, 2, 7, 7, 6, 3, // Bottom
 };
 
 const float* BasicShapesData::GetSkyboxVertices()
@@ -291,27 +268,7 @@ int32_t BasicShapesData::GetSkyboxVerticesCount()
 
 int32_t BasicShapesData::GetSkyboxIndicesCount()
 {
-	return 36;
-
-	// TODO: Add the indices of the cube to get rid of Draw Arrays
-	return sizeof(SkyboxVertices) / sizeof(uint32_t);
+	return sizeof(SkyboxIndices) / sizeof(uint32_t);
 }
 // ~Skybox
 
-
-// const float GLClipCubeVertices[] = {
-// 
-// 	// Vertices		
-// 
-// 	// Front face
-// 	-1.f, -1.f,  1.f,
-// 	-1.f, -1.f, -1.f,
-// 	-1.f,  1.f,  1.f,
-// 	-1.f,  1.f, -1.f,
-// 
-// 	// Back face
-// 	 1.f, -1.f,  1.f,
-// 	 1.f, -1.f, -1.f,
-// 	 1.f,  1.f,  1.f,
-// 	 1.f,  1.f, -1.f,
-// };
