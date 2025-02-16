@@ -3,10 +3,10 @@
 #include "EASTL/vector.h"
 #include "EASTL/shared_ptr.h"
 
-struct DeferredLighting
+struct DeferredLightingPass
 {
-	DeferredLighting();
-	~DeferredLighting();
+	DeferredLightingPass();
+	~DeferredLightingPass();
 
 
 	void Init();

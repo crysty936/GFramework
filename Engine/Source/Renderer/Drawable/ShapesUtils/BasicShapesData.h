@@ -40,5 +40,6 @@ namespace BasicShapesData
 	// Skybox
 	const float* GetSkyboxVertices();
 	int32_t GetSkyboxVerticesCount();
+	const uint32_t* GetSkyboxIndices();
 	int32_t GetSkyboxIndicesCount();
 }

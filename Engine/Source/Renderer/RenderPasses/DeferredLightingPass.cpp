@@ -1,4 +1,4 @@
-#include "DeferredLighting.h"
+#include "DeferredLightingPass.h"
 #include "Renderer/RHI/D3D12/D3D12Resources.h"
 #include "Renderer/RHI/D3D12/D3D12RHI.h"
 #include "Renderer/RHI/Resources/RHITexture.h"
@@ -32,17 +32,17 @@ ID3D12PipelineState* m_LightingPipelineState;
 eastl::shared_ptr<D3D12IndexBuffer> ScreenQuadIndexBuffer = nullptr;
 eastl::shared_ptr<D3D12VertexBuffer> ScreenQuadVertexBuffer = nullptr;
 
-DeferredLighting::DeferredLighting()
+DeferredLightingPass::DeferredLightingPass()
 {
 
 }
 
-DeferredLighting::~DeferredLighting()
+DeferredLightingPass::~DeferredLightingPass()
 {
 
 }
 
-void DeferredLighting::Init()
+void DeferredLightingPass::Init()
 {
 	// Final lighting root signature
 	{
@@ -182,7 +182,7 @@ void DeferredLighting::Init()
 
 }
 
-void DeferredLighting::Execute(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget)
+void DeferredLightingPass::Execute(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget)
 {
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -193,7 +193,7 @@ void DeferredLighting::Execute(ID3D12GraphicsCommandList* inCmdList, SceneTextur
 }
 
 
-void DeferredLighting::RenderLighting(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget)
+void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget)
 {
 	PIXMarker Marker(inCmdList, "Render Deferred Lighting");
 

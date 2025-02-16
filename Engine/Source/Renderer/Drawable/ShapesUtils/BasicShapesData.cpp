@@ -266,6 +266,12 @@ int32_t BasicShapesData::GetSkyboxVerticesCount()
 	return sizeof(SkyboxVertices) / sizeof(float);
 }
 
+const uint32_t* BasicShapesData::GetSkyboxIndices()
+{
+	return SkyboxIndices;
+}
+
+
 int32_t BasicShapesData::GetSkyboxIndicesCount()
 {
 	return sizeof(SkyboxIndices) / sizeof(uint32_t);

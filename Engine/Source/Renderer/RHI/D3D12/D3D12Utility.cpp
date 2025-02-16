@@ -109,6 +109,15 @@ for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
 			desc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 		}
 
+		// Enabled
+		{
+			D3D12_DEPTH_STENCIL_DESC& desc = DepthStates[uint8_t(EDepthState::WriteDisabled)];
+			desc.DepthEnable = true;
+			desc.StencilEnable = false;
+			desc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+			desc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+		}
+
 		// AlwaysFail_WriteDisabled
 		{
 			D3D12_DEPTH_STENCIL_DESC& desc = DepthStates[uint8_t(EDepthState::AlwaysFail_WriteDisabled)];
@@ -204,6 +213,23 @@ void D3D12Utility::BindTempDescriptorTable(uint32_t inRootParamIdx, ID3D12Graphi
 	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = CreateTempDescriptorTable(inCmdList, inHandles);
 
 	inCmdList->SetComputeRootDescriptorTable(inRootParamIdx, gpuHandle);
+}
+
+void D3D12Utility::CopyTexture(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inDest, ID3D12Resource* inSrc)
+{
+	D3D12_TEXTURE_COPY_LOCATION dest = {};
+	dest.pResource = inDest;
+	dest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+	dest.PlacedFootprint = {};
+	dest.SubresourceIndex = 0;
+
+	D3D12_TEXTURE_COPY_LOCATION src = {};
+	src.pResource = inSrc;
+	src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+	src.PlacedFootprint = {};
+	dest.SubresourceIndex = 0;
+
+	inCmdList->CopyTextureRegion(&dest, 0, 0, 0, &src, nullptr);
 }
 
 void D3D12Utility::MakeTextureReadable(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource)

@@ -22,7 +22,8 @@
 #include "glm/gtc/type_ptr.inl"
 #include "Renderer/RenderPasses/DeferredBasePass.h"
 #include "Renderer/RenderPasses/BindlessDecalsPass.h"
-#include "Renderer/RenderPasses/DeferredLighting.h"
+#include "Renderer/RenderPasses/DeferredLightingPass.h"
+#include "Renderer/RenderPasses/Skybox.h"
 
 // Windows includes
 #ifndef WIN32_LEAN_AND_MEAN
@@ -75,7 +76,8 @@ struct ShaderMaterial
 
 DeferredBasePass DeferredBasePassCommand;
 BindlessDecalsPass BindlessDecalsPassCommmand;
-DeferredLighting DeferredLightingCommand;
+DeferredLightingPass DeferredLightingPassCommand;
+SkyboxPass SkyboxPassCommand;
 
 void AppModeBase::Init()
 {
@@ -94,12 +96,13 @@ void AppModeBase::CreateInitialResources()
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
 
-	LightingTarget = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"FinalLighting", ERHITexturePrecision::UnsignedByte, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
+	LightingTarget = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"FinalLighting", ERHITexturePrecision::UnsignedByte, ETextureState::Render_Target, ERHITextureFilter::Nearest);
 
 	// Init Render Passes
 	DeferredBasePassCommand.Init();
 	BindlessDecalsPassCommmand.Init();
-	DeferredLightingCommand.Init();
+	DeferredLightingPassCommand.Init();
+	SkyboxPassCommand.Init();
 
 	D3D12Globals::GlobalMaterialsBuffer.Init(1024, sizeof(ShaderMaterial));
 
@@ -286,8 +289,11 @@ void AppModeBase::ExecutePasses()
 		D3D12Utility::TransitionResource(D3D12Globals::GraphicsCmdList, D3D12Globals::BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		SceneTextures& sceneTextures = DeferredBasePassCommand.GBufferTextures;
 
-		DeferredLightingCommand.Execute(D3D12Globals::GraphicsCmdList, DeferredBasePassCommand.GBufferTextures, *LightingTarget);
+
+		DeferredLightingPassCommand.Execute(D3D12Globals::GraphicsCmdList, DeferredBasePassCommand.GBufferTextures, *LightingTarget);
 	}
+
+	SkyboxPassCommand.Execute(D3D12Globals::GraphicsCmdList, *LightingTarget, DeferredBasePassCommand.GBufferTextures);
 
 	// Copy lighting output to backbuffer
 	{
@@ -295,19 +301,14 @@ void AppModeBase::ExecutePasses()
 		D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Utility::CurrentFrameIndex, 0);
 		D3D12Globals::GraphicsCmdList->ClearRenderTargetView(currentBackbufferRTDescriptor, D3D12Utility::ClearColor, 0, nullptr);
 
-		D3D12_TEXTURE_COPY_LOCATION dest = {};
-		dest.pResource = D3D12Globals::BackBuffers[D3D12Utility::CurrentFrameIndex];
-		dest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		dest.PlacedFootprint = {};
-		dest.SubresourceIndex = 0;
+		D3D12Utility::TransitionResource(D3D12Globals::GraphicsCmdList, LightingTarget->Texture->Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
+		D3D12Utility::TransitionResource(D3D12Globals::GraphicsCmdList, D3D12Globals::BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_DEST);
 
-		D3D12_TEXTURE_COPY_LOCATION src = {};
-		src.pResource = LightingTarget->Texture->Resource;
-		src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		src.PlacedFootprint = {};
-		dest.SubresourceIndex = 0;
+		D3D12Utility::CopyTexture(D3D12Globals::GraphicsCmdList, D3D12Globals::BackBuffers[D3D12Utility::CurrentFrameIndex], LightingTarget->Texture->Resource);
 
-		D3D12Globals::GraphicsCmdList->CopyTextureRegion(&dest, 0, 0, 0, &src, nullptr);
+		D3D12Utility::TransitionResource(D3D12Globals::GraphicsCmdList, LightingTarget->Texture->Resource, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		D3D12Utility::TransitionResource(D3D12Globals::GraphicsCmdList, D3D12Globals::BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
 	}
 
 	// Setup scene hierarchy draws
