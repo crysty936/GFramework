@@ -28,9 +28,6 @@ static_assert((sizeof(LightingConstantBuffer) % 256) == 0, "Constant Buffer size
 ID3D12RootSignature* m_LightingRootSignature;
 ID3D12PipelineState* m_LightingPipelineState;
 
-
-eastl::shared_ptr<D3D12RenderTarget2D> LightingTarget;
-
 // TODO: Convert to compute
 eastl::shared_ptr<D3D12IndexBuffer> ScreenQuadIndexBuffer = nullptr;
 eastl::shared_ptr<D3D12VertexBuffer> ScreenQuadVertexBuffer = nullptr;
@@ -47,11 +44,6 @@ DeferredLighting::~DeferredLighting()
 
 void DeferredLighting::Init()
 {
-	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
-	const WindowProperties& props = mainWindow.GetProperties();
-
-	LightingTarget = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"FinalLighting", ERHITexturePrecision::UnsignedByte, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
-
 	// Final lighting root signature
 	{
 		D3D12_ROOT_PARAMETER1 rootParameters[3] = {};
@@ -190,34 +182,30 @@ void DeferredLighting::Init()
 
 }
 
-void DeferredLighting::Execute(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures)
+void DeferredLighting::Execute(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget)
 {
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.GBufferRoughness->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-	RenderLighting(inCmdList, inSceneTextures);
+	RenderLighting(inCmdList, inSceneTextures, inTarget);
 }
 
 
-void DeferredLighting::RenderLighting(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures)
+void DeferredLighting::RenderLighting(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget)
 {
 	PIXMarker Marker(inCmdList, "Render Deferred Lighting");
 
 	// Draw screen quad
 
-	// Backbuffers are the first 2 RTVs in the Global Heap
-	D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Utility::CurrentFrameIndex, 0);
-	inCmdList->ClearRenderTargetView(currentBackbufferRTDescriptor, D3D12Utility::ClearColor, 0, nullptr);
+	inCmdList->ClearRenderTargetView(inTarget.RTV, D3D12Utility::ClearColor, 0, nullptr);
 
 	inCmdList->SetGraphicsRootSignature(m_LightingRootSignature);
 	inCmdList->SetPipelineState(m_LightingPipelineState);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[1];
-	renderTargets[0] = currentBackbufferRTDescriptor;
-	
-	//renderTargets[0] = LightingTarget->RTV;;
+	renderTargets[0] = inTarget.RTV;
 
 	inCmdList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
 
@@ -245,8 +233,6 @@ void DeferredLighting::RenderLighting(ID3D12GraphicsCommandList* inCmdList, Scen
 	}
 
 	inCmdList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(inSceneTextures.GBufferAlbedo->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
-
-
 	inCmdList->SetGraphicsRootDescriptorTable(2, D3D12Globals::GlobalSRVHeap.GetGPUHandle(inSceneTextures.MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
 
 	inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -257,27 +243,5 @@ void DeferredLighting::RenderLighting(ID3D12GraphicsCommandList* inCmdList, Scen
 	inCmdList->IASetIndexBuffer(&ibView);
 
 	inCmdList->DrawIndexedInstanced(ScreenQuadIndexBuffer->IndexCount, 1, 0, 0, 0);
-
-	//{
-	//	D3D12_TEXTURE_COPY_LOCATION dest = {};
-	//	dest.pResource = inDestResource;
-	//	dest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-	//	dest.PlacedFootprint = {};
-	//	dest.SubresourceIndex = 0;
-
-
-	//	D3D12_TEXTURE_COPY_LOCATION src = {};
-	//	src.pResource = inContext.Resource;
-	//	src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-	//	src.PlacedFootprint = layouts[0];
-	//	src.PlacedFootprint.Offset += inContext.ResourceOffset;
-
-	//	inCmdList->CopyBufferRegion()
-
-	//	inContext.CmdList->CopyTextureRegion(&dest, 0, 0, 0, &src, nullptr);
-	//	inCmdList->CopyTextureRegion()
-
-	//}
-
 }
 

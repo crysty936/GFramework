@@ -59,6 +59,8 @@ UINT64 m_FlushGPUFenceValue = 0;
 uint64_t CurrentCPUFrame = 0;
 uint64_t CurrentGPUFrame = 0;
 
+eastl::shared_ptr<D3D12RenderTarget2D> LightingTarget;
+
 AppModeBase::~AppModeBase()
 {
 	FlushGPU();
@@ -88,6 +90,11 @@ void AppModeBase::Init()
 void AppModeBase::CreateInitialResources()
 {
 	BENCH_SCOPE("Create Resources");
+
+	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
+	const WindowProperties& props = mainWindow.GetProperties();
+
+	LightingTarget = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"FinalLighting", ERHITexturePrecision::UnsignedByte, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
 
 	// Init Render Passes
 	DeferredBasePassCommand.Init();
@@ -279,10 +286,31 @@ void AppModeBase::ExecutePasses()
 		D3D12Utility::TransitionResource(D3D12Globals::GraphicsCmdList, D3D12Globals::BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		SceneTextures& sceneTextures = DeferredBasePassCommand.GBufferTextures;
 
-		DeferredLightingCommand.Execute(D3D12Globals::GraphicsCmdList, DeferredBasePassCommand.GBufferTextures);
+		DeferredLightingCommand.Execute(D3D12Globals::GraphicsCmdList, DeferredBasePassCommand.GBufferTextures, *LightingTarget);
 	}
 
-	// Draw scene hierarchy
+	// Copy lighting output to backbuffer
+	{
+		// Backbuffers are the first 2 RTVs in the Global Heap
+		D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Utility::CurrentFrameIndex, 0);
+		D3D12Globals::GraphicsCmdList->ClearRenderTargetView(currentBackbufferRTDescriptor, D3D12Utility::ClearColor, 0, nullptr);
+
+		D3D12_TEXTURE_COPY_LOCATION dest = {};
+		dest.pResource = D3D12Globals::BackBuffers[D3D12Utility::CurrentFrameIndex];
+		dest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+		dest.PlacedFootprint = {};
+		dest.SubresourceIndex = 0;
+
+		D3D12_TEXTURE_COPY_LOCATION src = {};
+		src.pResource = LightingTarget->Texture->Resource;
+		src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+		src.PlacedFootprint = {};
+		dest.SubresourceIndex = 0;
+
+		D3D12Globals::GraphicsCmdList->CopyTextureRegion(&dest, 0, 0, 0, &src, nullptr);
+	}
+
+	// Setup scene hierarchy draws
 	if (GEngine->IsImguiEnabled())
 	{
 		ImGui::Begin("Scene");
@@ -405,6 +433,13 @@ void AppModeBase::ImGuiRenderDrawData()
 	// Set the imgui descriptor heap
 	ID3D12DescriptorHeap* imguiHeaps[] = { m_imguiCbvSrvHeap };
 	D3D12Globals::GraphicsCmdList->SetDescriptorHeaps(1, imguiHeaps);
+
+	// ImGui doesn't change render targets bindings, so we have to specifically set where we want to render
+	// Backbuffers are the first 2 RTVs in the Global Heap
+	D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Utility::CurrentFrameIndex, 0);
+	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[1];
+	renderTargets[0] = currentBackbufferRTDescriptor;
+	D3D12Globals::GraphicsCmdList->OMSetRenderTargets(1, renderTargets, false, nullptr);
 
 	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), D3D12Globals::GraphicsCmdList);
 }
