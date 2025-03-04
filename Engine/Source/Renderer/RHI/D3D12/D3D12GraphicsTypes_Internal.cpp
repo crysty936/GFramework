@@ -34,7 +34,10 @@ void D3D12DescriptorHeap::Init(bool inShaderVisible, uint32_t inNumPersistent, D
 	for (uint32_t i = 0; i < NumHeaps; ++i)
 	{
 		CPUStart[i] = Heaps[i]->GetCPUDescriptorHandleForHeapStart();
-		GPUStart[i] = Heaps[i]->GetGPUDescriptorHandleForHeapStart();
+		if (inShaderVisible)
+		{
+			GPUStart[i] = Heaps[i]->GetGPUDescriptorHandleForHeapStart();
+		}
 	}
 }
 

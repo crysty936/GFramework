@@ -99,7 +99,7 @@ set_target_properties(	assimp imgui EASTL EAStdC EAAssert EAThread DirectXTex zl
 						FOLDER "External")		  
 						
 						
-# Set 3DTest as Startup Project
+# Set as Startup Project
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT GFramework)
 
 												
