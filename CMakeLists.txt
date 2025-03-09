@@ -37,6 +37,10 @@ list(APPEND extra_libs imgui)
 add_subdirectory(External/DirectXTex)
 list(APPEND extra_libs DirectXTex)
 
+#Add Hosek Sky
+add_subdirectory(External/HosekSkyModel)
+list(APPEND extra_libs HosekSky)
+
 # Rendering API's libs
 list(APPEND extra_libs d3d11.lib)
 list(APPEND extra_libs d3dcompiler.lib)
@@ -94,7 +98,7 @@ target_include_directories(GFramework PUBLIC
 # Stop it from creating unnecessary Project
 set(CMAKE_SUPPRESS_REGENERATION true)
 
-set_target_properties(	assimp imgui EASTL EAStdC EAAssert EAThread DirectXTex zlibstatic
+set_target_properties(	assimp imgui EASTL EAStdC EAAssert EAThread DirectXTex HosekSky zlibstatic
 						PROPERTIES
 						FOLDER "External")		  
 						

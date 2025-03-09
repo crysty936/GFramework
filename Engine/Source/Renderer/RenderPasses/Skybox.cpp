@@ -11,6 +11,8 @@
 #include "Math/MathUtils.h"
 #include "Renderer/Drawable/ShapesUtils/BasicShapesData.h"
 #include "DeferredBasePass.h"
+#include "ArHosekSkyModel.h"
+
 #include <d3d12.h>
 
 // Constant Buffer
@@ -30,6 +32,15 @@ ID3D12PipelineState* m_SkyboxPipelineState;
 
 eastl::shared_ptr<D3D12IndexBuffer> SkyboxIndexBuffer = nullptr;
 eastl::shared_ptr<D3D12VertexBuffer> SkyboxVertexBuffer = nullptr;
+
+
+void SkyboxPass::InitSkyModel()
+{
+
+
+
+}
+
 
 void SkyboxPass::Init()
 {
