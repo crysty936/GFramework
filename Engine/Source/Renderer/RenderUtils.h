@@ -9,4 +9,7 @@ namespace RenderUtils
 {
 	eastl::array<glm::vec3, 8> GenerateSpaceCorners(const glm::mat4& SpaceToProjectionSpace, const float MinZ = 0.f, const float MaxZ = 1.f);
 	glm::vec3 GetProjectionCenter(const glm::mat4& inProj);
+
+	uint32_t ConvertToRGBA8(const glm::vec4& inColor);
+
 }

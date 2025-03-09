@@ -22,6 +22,15 @@ struct SkyboxConstantBuffer
 // 256 byte aligned
 ConstantBuffer<SkyboxConstantBuffer> SceneBuffer : register(b0);
 
+struct CubemapIndexBuffer
+{
+    uint CubemapIdx;
+};
+
+// 256 byte aligned
+ConstantBuffer<CubemapIndexBuffer> CubemapIdxContainer : register(b0);
+
+
 SamplerState g_sampler : register(s0);
 
 PSInput VSMain(float4 position : POSITION)
@@ -40,8 +49,41 @@ PSInput VSMain(float4 position : POSITION)
     return result;
 }
 
+#define TOLERANCE 0.1f
+
+bool IsAroundOne(const float InVal)
+{
+    return abs(InVal) > (1.f - TOLERANCE) && abs(InVal) < (1.f + TOLERANCE);
+    //return abs(InVal) == 1.f;
+    //return abs(InVal) > .9f;
+}
+
+bool IsBoxEdge(const float3 InTexCoord)
+{
+    const bool xyAround1 = IsAroundOne(InTexCoord.x) && IsAroundOne(InTexCoord.y);
+    const bool yzAround1 = IsAroundOne(InTexCoord.y) && IsAroundOne(InTexCoord.z);
+    const bool xzAround1 = IsAroundOne(InTexCoord.x) && IsAroundOne(InTexCoord.z);
+
+    const bool IsEdge = xyAround1 || xzAround1 || yzAround1;
+
+    return IsEdge;
+}
+
+
 PSOutput PSMain(PSInput input)
 {
+    PSOutput output;
+    const bool IsEdge = IsBoxEdge(input.CubemapUV);
+    if (IsEdge)
+    {
+        output.Color = float4(0.f, 0.f, 0.f, 1.f);
+
+        return output;
+    }
+
+    TextureCube cubeMap = TexCubeTable[CubemapIdxContainer.CubemapIdx];
+    float3 color = cubeMap.Sample(g_sampler, normalize(input.CubemapUV)).xyz;
+    
 //     float2 uv = input.uv;
 // 
 //     PSOutput output;
@@ -51,8 +93,8 @@ PSOutput PSMain(PSInput input)
 //         discard;
 //     }
 
-    PSOutput output;
-    output.Color = float4(1.f, 0.f, 0.f, 1.f);
+    //output.Color = float4(0.f, 1.f, 0.f, 1.f);
+    output.Color = float4(color, 1.f);
 
     return output;
 }

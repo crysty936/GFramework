@@ -12,6 +12,7 @@
 #include "Renderer/Drawable/ShapesUtils/BasicShapesData.h"
 #include "DeferredBasePass.h"
 #include "ArHosekSkyModel.h"
+#include "glm/ext/scalar_constants.hpp"
 
 #include <d3d12.h>
 
@@ -34,9 +35,45 @@ eastl::shared_ptr<D3D12IndexBuffer> SkyboxIndexBuffer = nullptr;
 eastl::shared_ptr<D3D12VertexBuffer> SkyboxVertexBuffer = nullptr;
 
 
-void SkyboxPass::InitSkyModel()
+void SkyboxPass::InitSkyModel(ID3D12GraphicsCommandList* inCmdList)
 {
+	if (bInitialized && SunDirection == SunDirectionCache && GroundAlbedo == GroundAlbedoCache && Turbidity == TurbidityCache)
+	{
+		return;
+	}
 
+	bInitialized = true;
+	SunDirectionCache = SunDirection;
+	GroundAlbedoCache = GroundAlbedo;
+	TurbidityCache = Turbidity;
+
+	const glm::vec3 sunDirNormalized = glm::normalize(SunDirectionCache);
+
+	// Theta is angle between top and vector
+	const float thetaSpherical = glm::acos(glm::dot(sunDirNormalized, glm::vec3(0.f, 1.f, 0.f))); // Basically acos(y).
+
+	// Elevation is angle between bottom plane(xz) or horizon and vector. 90 degrees - theta
+	const float elevation = (glm::pi<float>() / 2.f) - thetaSpherical; // pi/2 radians - theta radians
+
+	StateR = arhosek_rgb_skymodelstate_alloc_init(Turbidity, GroundAlbedo.x, elevation);
+	StateG = arhosek_rgb_skymodelstate_alloc_init(Turbidity, GroundAlbedo.y, elevation);
+	StateB = arhosek_rgb_skymodelstate_alloc_init(Turbidity, GroundAlbedo.z, elevation);
+
+
+
+	const uint32_t test[6] = {
+		RenderUtils::ConvertToRGBA8(glm::vec4(1.f, 0.f, 0.f, 1.f)),
+		RenderUtils::ConvertToRGBA8(glm::vec4(0.f, 1.f, 0.f, 1.f)),
+		RenderUtils::ConvertToRGBA8(glm::vec4(0.f, 0.f, 1.f, 1.f)),
+
+		RenderUtils::ConvertToRGBA8(glm::vec4(1.f, 1.f, 0.f, 1.f)),
+		RenderUtils::ConvertToRGBA8(glm::vec4(0.f, 1.f, 1.f, 1.f)),
+		RenderUtils::ConvertToRGBA8(glm::vec4(1.f, 1.f, 1.f, 1.f)),
+	};
+
+	
+
+	Cubemap = D3D12RHI::Get()->CreateTexture2D(1, 1, false, inCmdList, L"Skybox Cubemap", &test[0], true);
 
 
 }
@@ -58,14 +95,35 @@ void SkyboxPass::Init()
 
 	// Skybox Pass signature
 	{
-		D3D12_ROOT_PARAMETER1 rootParameters[1];
+		D3D12_ROOT_PARAMETER1 rootParameters[3];
+
+		// Main CBV_SRV_UAV heap
+		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+		D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
+		rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		rangesPS[0].NumDescriptors = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+		rangesPS[0].BaseShaderRegister = 0;
+		rangesPS[0].RegisterSpace = 0;
+		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+		rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
+
+		rootParameters[0].DescriptorTable.pDescriptorRanges = &rangesPS[0];
+		rootParameters[0].DescriptorTable.NumDescriptorRanges = _countof(rangesPS);
 
 		// Constant Buffer
-		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-		rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
-		rootParameters[0].Descriptor.RegisterSpace = 0;
-		rootParameters[0].Descriptor.ShaderRegister = 0;
+		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+		rootParameters[1].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[1].Descriptor.RegisterSpace = 0;
+		rootParameters[1].Descriptor.ShaderRegister = 0;
+
+		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		rootParameters[2].Constants.RegisterSpace = 0;
+		rootParameters[2].Constants.ShaderRegister = 0;
+		rootParameters[2].Constants.Num32BitValues = 1;
 
 		//////////////////////////////////////////////////////////////////////////
 
@@ -90,12 +148,10 @@ void SkyboxPass::Init()
 			| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
 			| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
 			| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-		//| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.NumParameters = _countof(rootParameters);
 		rootSignatureDesc.pParameters = &rootParameters[0];
-		//rootSignatureDesc.NumParameters = 0;
 		rootSignatureDesc.NumStaticSamplers = 1;
 		rootSignatureDesc.pStaticSamplers = &sampler;
 		rootSignatureDesc.Flags = rootSignatureFlags;
@@ -157,6 +213,16 @@ void SkyboxPass::Execute(ID3D12GraphicsCommandList* inCmdList, D3D12RenderTarget
 {
 	PIXMarker Marker(inCmdList, "Skybox");
 
+	ImGui::Begin("Skybox");
+
+	ImGui::SliderFloat("Turbidity", &Turbidity, 0.f, 1.f);
+	ImGui::DragFloat3("Sun Dir", &SunDirection.x, 0.05f, -360.f, 360.f);
+	ImGui::DragFloat3("GroundAlbedo", &GroundAlbedo.x, 0.05f, 0.f, 1.f);
+
+	ImGui::End();
+
+	InitSkyModel(inCmdList);
+
 	D3D12Utility::TransitionResource(inCmdList, inGBuffer.MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_READ);
 
 	// Populate Command List
@@ -183,7 +249,9 @@ void SkyboxPass::Execute(ID3D12GraphicsCommandList* inCmdList, D3D12RenderTarget
 		MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constantBufferData));
 		memcpy(cBufferMap.CPUAddress, &constantBufferData, sizeof(constantBufferData));
 
-		inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
+		inCmdList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
+		inCmdList->SetGraphicsRootConstantBufferView(1, cBufferMap.GPUAddress);
+		inCmdList->SetGraphicsRoot32BitConstant(2, Cubemap->SRVIndex, 0);
 
 		inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 

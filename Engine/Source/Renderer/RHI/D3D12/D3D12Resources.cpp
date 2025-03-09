@@ -381,7 +381,7 @@ void D3D12RHI::UpdateTexture2D(eastl::shared_ptr<D3D12Texture2D>& inTexture, con
 	D3D12Upload::ResourceUploadEnd(uploadcontext);
 }
 
-eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2D(const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList, const uint32_t* inData)
+eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2D(const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList, const eastl::wstring& inName, const uint32_t* inData, const bool bIsCubemap)
 {
 	eastl::shared_ptr<D3D12Texture2D> newTexture = eastl::make_shared<D3D12Texture2D>();
 
@@ -394,7 +394,7 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2D(const uint32_t inWid
 	textureDesc.Width = inWidth;
 	textureDesc.Height = inHeight;
 	textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-	textureDesc.DepthOrArraySize = 1;
+	textureDesc.DepthOrArraySize = bIsCubemap ? 6 : 1;
 	textureDesc.SampleDesc.Count = 1;
 	textureDesc.SampleDesc.Quality = 0;
 	textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -407,13 +407,13 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2D(const uint32_t inWid
 		nullptr,
 		IID_PPV_ARGS(&texResource)));
 
-	texResource->SetName(L"Raw Data Texture");
+	texResource->SetName(inName.c_str());
 
 	// Describe and create a SRV for the texture.
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.Format = textureDesc.Format;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.ViewDimension = bIsCubemap ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = 1u;
 
 	D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalSRVHeap.AllocatePersistent();
@@ -738,6 +738,6 @@ D3D12Texture2DCPUWritable::D3D12Texture2DCPUWritable(const uint32_t inWidth, con
 {
 	for (uint32_t i = 0; i < D3D12Utility::NumFramesInFlight; ++i)
 	{
-		Textures[i] = D3D12RHI::Get()->CreateTexture2D(inWidth, inHeight, inSRGB, inCommandList, inData);
+		Textures[i] = D3D12RHI::Get()->CreateTexture2D(inWidth, inHeight, inSRGB, inCommandList, L"CPUWritable Texture", inData);
 	}
 }

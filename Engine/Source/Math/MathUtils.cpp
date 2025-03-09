@@ -5,8 +5,8 @@
 
 using vec4i = glm::vec<4, uint8_t>;
 
-https://marcodiiga.github.io/encoding-normalized-floats-to-rgba8-vectors
-https://www.h-schmidt.net/FloatConverter/IEEE754.html
+//https://marcodiiga.github.io/encoding-normalized-floats-to-rgba8-vectors
+//https://www.h-schmidt.net/FloatConverter/IEEE754.html
 // Works only for 0..1 floats
 // For use mostly in shaders
 // What this basically does is isolate parts of the mantissa and store them in the different channels of the 8 bit RGBA.
@@ -16,6 +16,7 @@ https://www.h-schmidt.net/FloatConverter/IEEE754.html
 // sign(1 bit) exp(8 bit) mantissa(23 bits).
 // By multiplying by 256, we get 25.6. 0 10000011 1001 1001 1001 1001 1001 101
 // Mantissa stays the same. But, the first 4 bits of the mantissa, 1001 only add integer values to the final result now, so if we use fract, we basically isolate the last parts of the mantissa, and how much they add in that "* 256 space"
+// From the point we use fract onward, it's not really about the bits themselves but about the value
 // First multiplication by 256 remove first 4 bits of the mantissa, second removes next 8, third removes next 8, leaving the final 3.
 // So we first multiply by 256 * 256 * 256, we have basically "shifted" so that we only have the last part of the mantissa affecting the fractional value. 
 // This "leftover" mantissa will add fractional values only between 0..1, thus being convertable to a 0..255 8 bit by multiplying it with 256, and back to get the value again.

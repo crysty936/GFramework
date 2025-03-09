@@ -47,5 +47,15 @@ glm::vec3 RenderUtils::GetProjectionCenter(const glm::mat4& inProj)
 	return center;
 }
 
+uint32_t RenderUtils::ConvertToRGBA8(const glm::vec4& inColor)
+{
+	uint8_t r = (uint8_t)(inColor.r * 255.0f);
+	uint8_t g = (uint8_t)(inColor.g * 255.0f);
+	uint8_t b = (uint8_t)(inColor.b * 255.0f);
+	uint8_t a = (uint8_t)(inColor.a * 255.0f);
+
+	uint32_t result = (a << 24) | (b << 16) | (g << 8) | r;
+	return result;
+}
 
 

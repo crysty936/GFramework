@@ -119,10 +119,10 @@ void AppModeBase::CreateInitialResources()
 	//currentScene.AddObject(model);
 
 	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza2/Sponza.fbx", "Sponza");
-	eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza/Sponza.gltf", "Sponza");
-	model->Rotate(90.f, glm::vec3(0.f, 1.f, 0.f));
-	model->Move(glm::vec3(0.f, -1.f, -5.f));
-	model->Init(D3D12Globals::GraphicsCmdList);
+	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza/Sponza.gltf", "Sponza");
+	//model->Rotate(90.f, glm::vec3(0.f, 1.f, 0.f));
+	//model->Move(glm::vec3(0.f, -1.f, -5.f));
+	//model->Init(D3D12Globals::GraphicsCmdList);
 
 	//eastl::shared_ptr<AssimpModel3D> model = eastl::make_shared<AssimpModel3D>("../Data/Models/Floor/scene.gltf", "Floor Model");
 	//model->SetScale(glm::vec3(0.05f, 0.05f, 0.05f));
@@ -135,23 +135,23 @@ void AppModeBase::CreateInitialResources()
 	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Shiba/scene.gltf", "Shiba");
 	//model->Init(D3D12Globals::GraphicsCmdList);
 	
-	currentScene.AddObject(model);
+	//currentScene.AddObject(model);
 
 	// Setup the materials for this model and upload to the mat buffer, hacky
-	{
-		eastl::vector<ShaderMaterial> shaderMats;
-		for (const MeshMaterial& mat : model->Materials)
-		{
-			ShaderMaterial newShaderMat;
-			newShaderMat.AlbedoMapIndex = mat.AlbedoMap != nullptr ? mat.AlbedoMap->SRVIndex : -1;
-			newShaderMat.NormalMapIndex = mat.NormalMap != nullptr ? mat.NormalMap->SRVIndex : -1;
-			newShaderMat.MRMapIndex = mat.MRMap != nullptr ? mat.MRMap->SRVIndex : -1;
+	//{
+	//	eastl::vector<ShaderMaterial> shaderMats;
+	//	for (const MeshMaterial& mat : model->Materials)
+	//	{
+	//		ShaderMaterial newShaderMat;
+	//		newShaderMat.AlbedoMapIndex = mat.AlbedoMap != nullptr ? mat.AlbedoMap->SRVIndex : -1;
+	//		newShaderMat.NormalMapIndex = mat.NormalMap != nullptr ? mat.NormalMap->SRVIndex : -1;
+	//		newShaderMat.MRMapIndex = mat.MRMap != nullptr ? mat.MRMap->SRVIndex : -1;
 
-			shaderMats.push_back(newShaderMat);
-		}
+	//		shaderMats.push_back(newShaderMat);
+	//	}
 
-		D3D12Globals::GlobalMaterialsBuffer.UploadDataAllFrames(&shaderMats[0], sizeof(ShaderMaterial) * shaderMats.size());
-	}
+	//	D3D12Globals::GlobalMaterialsBuffer.UploadDataAllFrames(&shaderMats[0], sizeof(ShaderMaterial) * shaderMats.size());
+	//}
 
 	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
 

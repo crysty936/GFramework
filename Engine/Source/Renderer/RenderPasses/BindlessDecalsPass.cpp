@@ -83,8 +83,6 @@ static_assert((sizeof(ShaderDecal) % 16) == 0, "Structs in Structured Buffers ha
 BindlessDecalsPass::BindlessDecalsPass() = default;
 BindlessDecalsPass::~BindlessDecalsPass() = default;
 
-
-
 void BindlessDecalsPass::Init()
 {
 	// Decal Pass Signature
