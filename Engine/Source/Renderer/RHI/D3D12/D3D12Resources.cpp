@@ -154,84 +154,104 @@ D3D12_VERTEX_BUFFER_VIEW D3D12VertexBuffer::VBView() const
 	return outView;
 }
 
-
-void UploadTextureRaw(ID3D12Resource* inDestResource, const uint32_t* inRawData, UploadContext& inContext, const uint32_t inWidth, const uint32_t inHeight)
+void UploadTexture(ID3D12Resource* inDestResource, const uint32_t inWidth, const uint32_t inHeight, const DXGI_FORMAT inTexFormat, const int32_t inNumMips, const void* inData, const UploadContext& inContext, const bool bIsCubemap = false)
 {
-	const uint32_t numMips = 1u;
-	uint32_t NumSubresources = numMips;
+	const uint32_t numMips = (uint32_t)inNumMips;
+	const uint64_t arraySize = bIsCubemap ? 6u : 1u; // Use texture array size when creating texture arrays
+
+	uint32_t NumSubresources = arraySize * numMips;
 
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = static_cast<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(_alloca(sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT) * NumSubresources));
 	ASSERT(layouts != nullptr);
 
-	uint64_t* rowSize = (uint64_t*)(_alloca(sizeof(uint64_t) * NumSubresources));
-	ASSERT(rowSize != nullptr);
-
-	uint32_t* numRows = (uint32_t*)(_alloca(sizeof(uint32_t) * NumSubresources));
-	ASSERT(numRows != nullptr);
-
-	uint64_t requiredSize = 0;
-
 	const D3D12_RESOURCE_DESC DestDesc = inDestResource->GetDesc();
 
+	uint64_t requiredSize = 0;
+	uint64_t* rowSize = (uint64_t*)(_alloca(sizeof(uint64_t) * NumSubresources));
+	uint32_t* numRows = (uint32_t*)(_alloca(sizeof(uint32_t) * NumSubresources));
 	D3D12Globals::Device->GetCopyableFootprints(&DestDesc, 0, NumSubresources, 0, layouts, numRows, rowSize, &requiredSize);
 
 	ID3D12Resource* uploadBuffer = inContext.Resource;
-
 	const D3D12_RESOURCE_DESC uploadBufferDesc = uploadBuffer->GetDesc();
 
-	const bool isCopyValid =
-		uploadBufferDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER &&
-		uploadBufferDesc.Width >= requiredSize + layouts[0].Offset &&
-		requiredSize <= size_t(-1) &&
-		(DestDesc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER || (NumSubresources == 1));
+	const bool bIsRightDimensionFormat = uploadBufferDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
+	const bool bIsSmallerThanWidth = uploadBufferDesc.Width >= requiredSize + layouts[0].Offset;
+	const bool bIsValidSize = requiredSize <= size_t(-1);
+	const bool bIsDestRightFormat = (DestDesc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER || (NumSubresources == 1));
+
+	const bool isCopyValid = bIsRightDimensionFormat && bIsSmallerThanWidth & bIsValidSize && bIsDestRightFormat;
 
 	ASSERT(isCopyValid);
 
-	uint32_t* uploadMem = reinterpret_cast<uint32_t*>(inContext.CPUAddress);
+	uint8_t* uploadMem = reinterpret_cast<uint8_t*>(inContext.CPUAddress);
+	const uint8_t* srcMem = reinterpret_cast<const uint8_t*>(inData);
+	const uint64_t srcTexelSize = DirectX::BitsPerPixel(inTexFormat) / 8;
 
 	// Copy to the staging upload heap
+	// Go through all array elements, eg. different textures in an array or different slices of a cubemap
+	for (uint32_t arrayIdx = 0; arrayIdx < arraySize; ++arrayIdx)
 	{
-		ASSERT(rowSize[0] <= size_t(-1));
+		uint64_t mipWidth = inWidth;
 
-		const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& mipSubresourceLayout = layouts[0];
-		const uint64_t subResourceHeight = numRows[0];
-		const uint64_t subResourcePitch = mipSubresourceLayout.Footprint.RowPitch;
-		const uint64_t subResourceDepth = mipSubresourceLayout.Footprint.Depth;
-
-		ASSERT(mipSubresourceLayout.Offset == 0); // We don't take offset into consideration so make sure it's 0
-
-		uint32_t* dstSubresourceMem = uploadMem;
-
-		const uint32_t* srcSubImageTexels = inRawData;
-		const uint64_t rowPitch = inWidth * 4; // Width size in bytes
-
-		for (uint64_t y = 0; y < subResourceHeight; ++y)
+		// Each array element has its own mips
+		// Each mip is a subresource
+		for (uint64_t mipIdx = 0; mipIdx < numMips; ++mipIdx)
 		{
-			memcpy(dstSubresourceMem, srcSubImageTexels, glm::min(subResourcePitch, rowPitch));
-			dstSubresourceMem += (subResourcePitch / 4);
-			srcSubImageTexels += (inWidth);
+			ASSERT(rowSize[mipIdx] <= size_t(-1));
+
+			const uint64_t subResourceIdx = mipIdx + (arrayIdx * numMips);
+			const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& subresourceLayout = layouts[subResourceIdx];
+			const uint64_t subResourceHeight = numRows[subResourceIdx];
+			const uint64_t subResourcePitch = subresourceLayout.Footprint.RowPitch;
+			const uint64_t subResourceDepth = subresourceLayout.Footprint.Depth;
+
+			// Pitch is equal to the size of a row in bytes
+			const uint64_t srcPitch = mipWidth * srcTexelSize;
+
+			// Each subresource has an offset in the memory, 
+			uint8_t* dstSubresourceMem = uploadMem + subresourceLayout.Offset;
+
+			// Go through all cubemap sides, if present
+			for (uint64_t z = 0; z < subResourceDepth; ++z)
+			{
+				// Copy row by row
+				for (uint64_t y = 0; y < subResourceHeight; ++y)
+				{
+					// Minimum size for a texture row in D3D12 is given by D3D12_TEXTURE_DATA_PITCH_ALIGNMENT, which is 256
+					// Data pitch might be smaller or not a multiple of this, which is why we step through the rows separately
+					memcpy(dstSubresourceMem, srcMem, glm::min(subResourcePitch, srcPitch));
+
+					dstSubresourceMem += subResourcePitch;
+					srcMem += srcPitch;
+				}
+			}
+
+			// Next mip width
+			mipWidth = glm::max(mipWidth / 2, 1ull);
 		}
+
 	}
 
-	// Copy to the upload buffer
+	for (uint32_t i = 0; i < NumSubresources; ++i)
 	{
 		D3D12_TEXTURE_COPY_LOCATION dest = {};
 		dest.pResource = inDestResource;
 		dest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
 		dest.PlacedFootprint = {};
-		dest.SubresourceIndex = 0;
+		dest.SubresourceIndex = i;
 
 
 		D3D12_TEXTURE_COPY_LOCATION src = {};
 		src.pResource = inContext.Resource;
 		src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-		src.PlacedFootprint = layouts[0];
+		src.PlacedFootprint = layouts[i];
 		src.PlacedFootprint.Offset += inContext.ResourceOffset;
 
 		inContext.CmdList->CopyTextureRegion(&dest, 0, 0, 0, &src, nullptr);
 	}
 }
 
+// TODO: Add proper format/array/cubemap support based on above method
 void UploadTexture(ID3D12Resource* inDestResource, DirectX::ScratchImage& inRes, UploadContext& inContext)
 {
 	const uint32_t numMips = (uint32_t)(inRes.GetImageCount());
@@ -257,11 +277,12 @@ void UploadTexture(ID3D12Resource* inDestResource, DirectX::ScratchImage& inRes,
 
 	const D3D12_RESOURCE_DESC uploadBufferDesc = uploadBuffer->GetDesc();
 
-	const bool isCopyValid =
-		uploadBufferDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER &&
-		uploadBufferDesc.Width >= requiredSize + layouts[0].Offset &&
-		requiredSize <= size_t(-1) &&
-		(DestDesc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER || (NumSubresources == 1));
+	const bool bIsRightDimensionFormat = uploadBufferDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
+	const bool bIsSmallerThanWidth = uploadBufferDesc.Width >= requiredSize + layouts[0].Offset;
+	const bool bIsValidSize = requiredSize <= size_t(-1);
+	const bool bIsDestRightFormat = (DestDesc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER || (NumSubresources == 1));
+
+	const bool isCopyValid = bIsRightDimensionFormat && bIsSmallerThanWidth & bIsValidSize && bIsDestRightFormat;
 
 	ASSERT(isCopyValid);
 
@@ -290,7 +311,6 @@ void UploadTexture(ID3D12Resource* inDestResource, DirectX::ScratchImage& inRes,
 			for (uint64_t y = 0; y < subResourceHeight; ++y)
 			{
 				const uint8_t* accessTexels = srcSubImageTexels + glm::min(subResourcePitch, currentSubImage->rowPitch);
-				uint8_t accessTexel = *accessTexels;
 				memcpy(dstSubresourceMem, srcSubImageTexels, glm::min(subResourcePitch, currentSubImage->rowPitch));
 				dstSubresourceMem += subResourcePitch;
 				srcSubImageTexels += currentSubImage->rowPitch;
@@ -387,10 +407,12 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2D(const uint32_t inWid
 
 	ID3D12Resource* texResource;
 
+	const DXGI_FORMAT texFormat = inSRGB ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+
 	// Describe and create the Texture on GPU(Default Heap)
 	D3D12_RESOURCE_DESC textureDesc = {};
 	textureDesc.MipLevels = 1u;
-	textureDesc.Format = inSRGB ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+	textureDesc.Format = texFormat;
 	textureDesc.Width = inWidth;
 	textureDesc.Height = inHeight;
 	textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
@@ -435,7 +457,8 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2D(const uint32_t inWid
 		UploadContext uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
 
 		// Add buffer regions commands to Cmdlist
-		UploadTextureRaw(texResource, inData, uploadcontext, inWidth, inHeight);
+		//UploadTextureRaw(texResource, inData, uploadcontext, inWidth, inHeight);
+		UploadTexture(texResource, inWidth, inHeight, texFormat, 1, inData, uploadcontext, bIsCubemap);
 
 
 		D3D12Utility::TransitionResource(uploadcontext.CmdList, texResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
@@ -487,10 +510,12 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 		finalImage = &mipMapRes;
 	}
 
+	const DXGI_FORMAT texFormat = inSRGB ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+
 	// Describe and create the Texture on GPU(Default Heap)
 	D3D12_RESOURCE_DESC textureDesc = {};
 	textureDesc.MipLevels = (uint16_t)finalImage->GetImageCount();
-	textureDesc.Format = inSRGB ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+	textureDesc.Format = texFormat;
 	textureDesc.Width = (uint32_t)dxMetadata.width;
 	textureDesc.Height = (uint32_t)dxMetadata.height;
 	textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;

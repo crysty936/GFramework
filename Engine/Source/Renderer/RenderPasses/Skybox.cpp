@@ -73,7 +73,7 @@ void SkyboxPass::InitSkyModel(ID3D12GraphicsCommandList* inCmdList)
 
 	
 
-	Cubemap = D3D12RHI::Get()->CreateTexture2D(1, 1, false, inCmdList, L"Skybox Cubemap", &test[0], true);
+	Cubemap = D3D12RHI::Get()->CreateTexture2D(1, 1, false, inCmdList, L"Skybox Cubemap", &test[0], true); // Something is probably broken with cubemap creation/data copying
 
 
 }
@@ -128,10 +128,11 @@ void SkyboxPass::Init()
 		//////////////////////////////////////////////////////////////////////////
 
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_ANISOTROPIC;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		//sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 		sampler.MipLODBias = 0;
 		sampler.MaxAnisotropy = 16;
 		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
