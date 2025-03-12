@@ -396,7 +396,7 @@ void D3D12RHI::UpdateTexture2D(eastl::shared_ptr<D3D12Texture2D>& inTexture, con
 	D3D12Globals::Device->GetCopyableFootprints(&textureDesc, 0, 1, 0, nullptr, nullptr, nullptr, &uploadBufferSize);
 
 	UploadContext uploadcontext = D3D12Upload::ResourceUploadBegin(uploadBufferSize);
-	UploadTextureRaw(texResource, inData, uploadcontext, textureDesc.Width, textureDesc.Height);
+	UploadTexture(texResource, textureDesc.Width, textureDesc.Height, DXGI_FORMAT_R8G8B8A8_UNORM, 1, inData, uploadcontext);
 
 	D3D12Upload::ResourceUploadEnd(uploadcontext);
 }
