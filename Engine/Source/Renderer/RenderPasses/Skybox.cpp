@@ -1,4 +1,5 @@
 #include "Skybox.h"
+#include "glm/common.hpp"
 #include "Renderer/RHI/D3D12/D3D12RHI.h"
 #include "Renderer/Drawable/Drawable.h"
 #include "Renderer/RHI/D3D12/D3D12GraphicsTypes_Internal.h"
@@ -12,16 +13,18 @@
 #include "Renderer/Drawable/ShapesUtils/BasicShapesData.h"
 #include "DeferredBasePass.h"
 #include "ArHosekSkyModel.h"
-#include "glm/ext/scalar_constants.hpp"
+//#include "glm/ext/scalar_constants.hpp"
 
 #include <d3d12.h>
+#include <DirectXPackedVector.h>
 
 // Constant Buffer
 struct SkyboxConstantBuffer
 {
 	glm::mat4 Projection;
 	glm::mat4 View;
-	float padding[32];
+	float SkyOnlyExposure;
+	float padding[31];
 };
 static_assert((sizeof(SkyboxConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
@@ -34,6 +37,72 @@ ID3D12PipelineState* m_SkyboxPipelineState;
 eastl::shared_ptr<D3D12IndexBuffer> SkyboxIndexBuffer = nullptr;
 eastl::shared_ptr<D3D12VertexBuffer> SkyboxVertexBuffer = nullptr;
 
+
+glm::vec3 XYZToDirection(const uint64_t inX, const uint64_t inY, const uint64_t inZ, const uint64_t inWidth, const uint64_t inHeight)
+{
+	// Move coordinate to pixel center, remap to 0..1, remap to -1..1
+	const float u = ((inX + 0.5f) / float(inWidth)) * 2.0f - 1.0f;
+	float v = ((inY + 0.5f) / float(inHeight)) * 2.0f - 1.0f;
+	// D3D12 v goes top to bottom
+	v *= -1.0f;
+
+	glm::vec3 dir = glm::vec3(0.0f, 0.0f, 0.0f);
+
+	// https://en.wikipedia.org/wiki/Cube_mapping#/media/File:Cube_map.svg
+	// v is already reversed so it goes exactly like in the illustration
+	switch (inZ)
+	{
+	case 0:
+		dir = glm::normalize(glm::vec3(1.0f, v, -u));
+		break;
+	case 1:
+		dir = glm::normalize(glm::vec3(-1.0f, v, u));
+		break;
+	case 2:
+		dir = glm::normalize(glm::vec3(u, 1.0f, -v));
+		break;
+	case 3:
+		dir = glm::normalize(glm::vec3(u, -1.0f, v));
+		break;
+	case 4:
+		dir = glm::normalize(glm::vec3(u, v, 1.0f));
+		break;
+	case 5:
+		dir = glm::normalize(glm::vec3(-u, v, -1.0f));
+		break;
+	}
+
+
+	return dir;
+
+
+}
+
+float AngleBetween(const glm::vec3& inDir1, const glm::vec3& inDir2)
+{
+	return glm::acos(glm::max<float>(0.00001f, glm::dot(inDir1, inDir2)));
+}
+
+DirectX::PackedVector::XMHALF4 ToHalf4(const glm::vec4 inFloat)
+{
+	DirectX::PackedVector::XMHALF4 res(inFloat.x, inFloat.y, inFloat.z, inFloat.w);
+	//DirectX::PackedVector::XMStoreHalf4(&res, DirectX::XMVectorSet(x, y, z, w));
+
+	return res;
+}
+
+//struct half4
+//{
+//	uint16_t x;
+//	uint16_t y;
+//	uint16_t z;
+//	uint16_t w;
+//
+//	half4(float x, float y, float z, float w)
+//	{
+//		DirectX::PackedVector::XMStoreHalf4(reinterpret_cast<DirectX::PackedVector::XMHALF4*>(this), DirectX::XMVectorSet(x, y, z, w));
+//	}
+//};
 
 void SkyboxPass::InitSkyModel(ID3D12GraphicsCommandList* inCmdList)
 {
@@ -55,27 +124,58 @@ void SkyboxPass::InitSkyModel(ID3D12GraphicsCommandList* inCmdList)
 	// Elevation is angle between bottom plane(xz) or horizon and vector. 90 degrees - theta
 	const float elevation = (glm::pi<float>() / 2.f) - thetaSpherical; // pi/2 radians - theta radians
 
+	if (StateR)
+	{
+		arhosekskymodelstate_free(StateR);
+		arhosekskymodelstate_free(StateG);
+		arhosekskymodelstate_free(StateB);
+
+		StateR = nullptr;
+		StateG = nullptr;
+		StateB = nullptr;
+	}
+
 	StateR = arhosek_rgb_skymodelstate_alloc_init(Turbidity, GroundAlbedo.x, elevation);
 	StateG = arhosek_rgb_skymodelstate_alloc_init(Turbidity, GroundAlbedo.y, elevation);
 	StateB = arhosek_rgb_skymodelstate_alloc_init(Turbidity, GroundAlbedo.z, elevation);
 
+	const uint64_t cubemapRes = 128;
+	const uint64_t numTexels = cubemapRes * cubemapRes * 6;
 
+	eastl::vector<glm::vec4> texels(numTexels);
 
-	const uint32_t test[6] = {
-		RenderUtils::ConvertToRGBA8(glm::vec4(1.f, 0.f, 0.f, 1.f)),
-		RenderUtils::ConvertToRGBA8(glm::vec4(0.f, 1.f, 0.f, 1.f)),
-		RenderUtils::ConvertToRGBA8(glm::vec4(0.f, 0.f, 1.f, 1.f)),
+	for (uint64_t z = 0; z < 6; ++z)
+	{
+		for (uint64_t y = 0; y < cubemapRes; ++y)
+		{
+			for (uint64_t x = 0; x < cubemapRes; ++x)
+			{
+				const glm::vec3 dir = XYZToDirection(x, y, z, cubemapRes, cubemapRes);
+				glm::vec3 radiance;
 
-		RenderUtils::ConvertToRGBA8(glm::vec4(1.f, 1.f, 0.f, 1.f)),
-		RenderUtils::ConvertToRGBA8(glm::vec4(0.f, 1.f, 1.f, 1.f)),
-		RenderUtils::ConvertToRGBA8(glm::vec4(1.f, 1.f, 1.f, 1.f)),
-	};
+				//https://cgg.mff.cuni.cz/projects/SkylightModelling/HosekWilkie_SkylightModel_SIGGRAPH2012_Preprint.pdf
+				// Section 5.1
+				// Theta is angle between sample dir and zenith
+				// Gamma is angle between sample dir and solar point, or solar dir
 
-	
+				const float sampleTheta = AngleBetween(dir, glm::vec3(0.f, 1.f, 0.f));
+				const float sampleGamma = AngleBetween(dir, sunDirNormalized);
 
-	Cubemap = D3D12RHI::Get()->CreateTexture2D(1, 1, false, inCmdList, L"Skybox Cubemap", &test[0], true); // Something is probably broken with cubemap creation/data copying
+				radiance.x = float(arhosek_tristim_skymodel_radiance(StateR, sampleTheta, sampleGamma, 0));
+				radiance.y = float(arhosek_tristim_skymodel_radiance(StateG, sampleTheta, sampleGamma, 1));
+				radiance.z = float(arhosek_tristim_skymodel_radiance(StateB, sampleTheta, sampleGamma, 2));
 
+				// Standard luminous efficacy of 683 lm/W to bring radiance to rendering units
+				radiance *= 683.f;
 
+				const uint64_t texelIdx = (z * cubemapRes * cubemapRes) + (y * cubemapRes) + x;
+				texels[texelIdx] =  glm::vec4(radiance, 1.f);
+
+			}
+		}
+	}
+
+	Cubemap = D3D12RHI::Get()->CreateTexture2D(cubemapRes, cubemapRes, DXGI_FORMAT_R32G32B32A32_FLOAT, inCmdList, L"Skybox Cubemap", texels.data(), true);
 }
 
 
@@ -114,22 +214,22 @@ void SkyboxPass::Init()
 
 		// Constant Buffer
 		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 		rootParameters[1].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 		rootParameters[1].Descriptor.RegisterSpace = 0;
 		rootParameters[1].Descriptor.ShaderRegister = 0;
 
 		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-		rootParameters[2].Constants.RegisterSpace = 0;
+		rootParameters[2].Constants.RegisterSpace = 1;
 		rootParameters[2].Constants.ShaderRegister = 0;
 		rootParameters[2].Constants.Num32BitValues = 1;
 
 		//////////////////////////////////////////////////////////////////////////
 
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-		//sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		//sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -216,9 +316,10 @@ void SkyboxPass::Execute(ID3D12GraphicsCommandList* inCmdList, D3D12RenderTarget
 
 	ImGui::Begin("Skybox");
 
-	ImGui::SliderFloat("Turbidity", &Turbidity, 0.f, 1.f);
+	ImGui::SliderFloat("Turbidity", &Turbidity, 0.f, 32.f);
 	ImGui::DragFloat3("Sun Dir", &SunDirection.x, 0.05f, -360.f, 360.f);
 	ImGui::DragFloat3("GroundAlbedo", &GroundAlbedo.x, 0.05f, 0.f, 1.f);
+	ImGui::SliderFloat("Sky Exposure", &SkyExposure, -32.f, 32.f);
 
 	ImGui::End();
 
@@ -246,6 +347,7 @@ void SkyboxPass::Execute(ID3D12GraphicsCommandList* inCmdList, D3D12RenderTarget
 		// All matrices sent to HLSL need to be converted to row-major(what D3D uses) from column-major(what glm uses)
 		constantBufferData.Projection = glm::transpose(currentScene.GetMainCameraProj());
 		constantBufferData.View = glm::transpose(currentScene.GetMainCameraLookAt());
+		constantBufferData.SkyOnlyExposure = SkyExposure;
 
 		MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constantBufferData));
 		memcpy(cBufferMap.CPUAddress, &constantBufferData, sizeof(constantBufferData));

@@ -401,18 +401,16 @@ void D3D12RHI::UpdateTexture2D(eastl::shared_ptr<D3D12Texture2D>& inTexture, con
 	D3D12Upload::ResourceUploadEnd(uploadcontext);
 }
 
-eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2D(const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList, const eastl::wstring& inName, const uint32_t* inData, const bool bIsCubemap)
+eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2D(const uint32_t inWidth, const uint32_t inHeight, const DXGI_FORMAT inFormat, ID3D12GraphicsCommandList* inCommandList, const eastl::wstring& inName, const void* inData, const bool bIsCubemap)
 {
 	eastl::shared_ptr<D3D12Texture2D> newTexture = eastl::make_shared<D3D12Texture2D>();
 
 	ID3D12Resource* texResource;
 
-	const DXGI_FORMAT texFormat = inSRGB ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
-
 	// Describe and create the Texture on GPU(Default Heap)
 	D3D12_RESOURCE_DESC textureDesc = {};
 	textureDesc.MipLevels = 1u;
-	textureDesc.Format = texFormat;
+	textureDesc.Format = inFormat;
 	textureDesc.Width = inWidth;
 	textureDesc.Height = inHeight;
 	textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
@@ -458,7 +456,7 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2D(const uint32_t inWid
 
 		// Add buffer regions commands to Cmdlist
 		//UploadTextureRaw(texResource, inData, uploadcontext, inWidth, inHeight);
-		UploadTexture(texResource, inWidth, inHeight, texFormat, 1, inData, uploadcontext, bIsCubemap);
+		UploadTexture(texResource, inWidth, inHeight, inFormat, 1, inData, uploadcontext, bIsCubemap);
 
 
 		D3D12Utility::TransitionResource(uploadcontext.CmdList, texResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
@@ -759,10 +757,10 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 	return newDB;
 }
 
-D3D12Texture2DCPUWritable::D3D12Texture2DCPUWritable(const uint32_t inWidth, const uint32_t inHeight, const bool inSRGB, ID3D12GraphicsCommandList* inCommandList, const uint32_t* inData)
+D3D12Texture2DCPUWritable::D3D12Texture2DCPUWritable(const uint32_t inWidth, const uint32_t inHeight, const DXGI_FORMAT inFormat, ID3D12GraphicsCommandList* inCommandList, const uint32_t* inData)
 {
 	for (uint32_t i = 0; i < D3D12Utility::NumFramesInFlight; ++i)
 	{
-		Textures[i] = D3D12RHI::Get()->CreateTexture2D(inWidth, inHeight, inSRGB, inCommandList, L"CPUWritable Texture", inData);
+		Textures[i] = D3D12RHI::Get()->CreateTexture2D(inWidth, inHeight, inFormat, inCommandList, L"CPUWritable Texture", inData);
 	}
 }

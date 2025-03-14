@@ -17,6 +17,7 @@ struct SkyboxConstantBuffer
 {
     float4x4 Projection;
     float4x4 View;
+    float SkyOnlyExposure;
 };
 
 // 256 byte aligned
@@ -28,7 +29,10 @@ struct CubemapIndexBuffer
 };
 
 // 256 byte aligned
-ConstantBuffer<CubemapIndexBuffer> CubemapIdxContainer : register(b0);
+ConstantBuffer<CubemapIndexBuffer> CubemapIdxContainer : register(b0, space1);
+
+static const float FP16Scale = 0.0009765625f;
+static const float FP16Max = 65000.0f;
 
 
 SamplerState g_sampler : register(s0);
@@ -83,7 +87,15 @@ PSOutput PSMain(PSInput input)
 
     TextureCube cubeMap = TexCubeTable[CubemapIdxContainer.CubemapIdx];
     float3 color = cubeMap.Sample(g_sampler, normalize(input.CubemapUV)).xyz;
-    
+    //float3 color = float3(1.f, 0.f, 0.f);
+
+    //color *= exp2(SceneBuffer.SkyOnlyExposure) / FP16Scale;
+
+    color *= exp2(SceneBuffer.SkyOnlyExposure);
+
+    // reinhard tone mapping
+    //color = color / (color + 1.f);
+
 //     float2 uv = input.uv;
 // 
 //     PSOutput output;
@@ -94,6 +106,8 @@ PSOutput PSMain(PSInput input)
 //     }
 
     //output.Color = float4(0.f, 1.f, 0.f, 1.f);
+
+    //color = clamp(color, 0.f, FP16Max);
     output.Color = float4(color, 1.f);
 
     return output;

@@ -21,12 +21,14 @@ private:
 
 	eastl::shared_ptr<class D3D12Texture2D> Cubemap;
 	
-	glm::vec3 SunDirection;
-	glm::vec3 GroundAlbedo;
+	glm::vec3 SunDirection = glm::vec3(0.25f, 0.95f, -0.15f);
+	glm::vec3 GroundAlbedo = glm::vec3(0.25f, 0.25f, 0.25f);
 	glm::vec3 SunDirectionCache;
 	glm::vec3 GroundAlbedoCache;
-	float Turbidity = 0.f;
+	float Turbidity = 2.f;
 	float TurbidityCache = 0.f;
+
+	float SkyExposure = -14.f;
 
 	bool bInitialized = false;
 };
