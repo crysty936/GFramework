@@ -125,7 +125,7 @@ void AppModeBase::CreateInitialResources()
 	currentScene.AddObject(model);
 #endif
 
-#if 0
+#if 1
 #define ANY_MODEL_LOADED
 	//eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza2/Sponza.fbx", "Sponza");
 	eastl::shared_ptr<AssimpModel3D> model= eastl::make_shared<AssimpModel3D>("../Data/Models/Sponza/Sponza.gltf", "Sponza");
@@ -174,7 +174,8 @@ void AppModeBase::CreateInitialResources()
 	}
 #endif
 
-	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 10.f);
+	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 21.f);
+	currentScene.GetCurrentCamera()->Move(EMovementDirection::Up, 15.f);
 
 	DXAssert(D3D12Globals::GraphicsCmdList->Close());
 	ID3D12CommandList* ppCommandLists[] = { D3D12Globals::GraphicsCmdList };

@@ -7,7 +7,9 @@ enum class EMovementDirection
 	Forward,
 	Back,
 	Left,
-	Right
+	Right,
+	Down,
+	Up
 };
 
 class Camera : public Entity

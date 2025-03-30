@@ -165,7 +165,7 @@ void SkyboxPass::InitSkyModel(ID3D12GraphicsCommandList* inCmdList)
 				radiance.y = float(arhosek_tristim_skymodel_radiance(StateG, sampleTheta, sampleGamma, 1));
 				radiance.z = float(arhosek_tristim_skymodel_radiance(StateB, sampleTheta, sampleGamma, 2));
 
-				// Standard luminous efficacy of 683 lm/W to bring radiance to rendering units
+				// Convert radiometric units to photometric using standard luminous efficacy of 683 lm/W
 				radiance *= 683.f;
 
 				const uint64_t texelIdx = (z * cubemapRes * cubemapRes) + (y * cubemapRes) + x;

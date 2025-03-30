@@ -146,6 +146,7 @@ PSOutput PSMain(PSInput input)
 		float3 N = wsNormal;
 		float3 V = fragToViewW;
 
+		// Direction towards the light source
 		float3 L = -ConstBuffer.LightDir.xyz;
 
 		// Halfway vector

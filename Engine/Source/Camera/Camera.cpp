@@ -66,6 +66,12 @@ void Camera::Move(EMovementDirection inDirection, const float inSpeed)
 		case EMovementDirection::Left:
 			movementVector -= right * inSpeed;
 			break;
+		case EMovementDirection::Down:
+			movementVector -= up * inSpeed;
+			break;
+		case EMovementDirection::Up:
+			movementVector += up * inSpeed;
+			break;
 		default:
 			break;
 		}
