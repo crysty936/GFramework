@@ -24,8 +24,9 @@
 #include "Renderer/RenderPasses/DeferredBasePass.h"
 #include "Renderer/RenderPasses/BindlessDecalsPass.h"
 #include "Renderer/RenderPasses/DeferredLightingPass.h"
-#include "Renderer/RenderPasses/Skybox.h"
+#include "Renderer/RenderPasses/SkyboxPass.h"
 #include "Renderer/DrawDebugHelpers.h"
+#include "Renderer/RenderPasses/ShadowPass.h"
 
 // Windows includes
 #ifndef WIN32_LEAN_AND_MEAN
@@ -78,6 +79,7 @@ struct ShaderMaterial
 
 DebugPrimitivesPass DebugPrimitivesPassCommand;
 DeferredBasePass DeferredBasePassCommand;
+ShadowPass ShadowDepthsPass;
 BindlessDecalsPass BindlessDecalsPassCommmand;
 DeferredLightingPass DeferredLightingPassCommand;
 SkyboxPass SkyboxPassCommand;
@@ -104,6 +106,7 @@ void AppModeBase::CreateInitialResources()
 	// Init Render Passes
 	DebugPrimitivesPassCommand.Init();
 	DeferredBasePassCommand.Init();
+	ShadowDepthsPass.Init();
 	BindlessDecalsPassCommmand.Init();
 	DeferredLightingPassCommand.Init();
 	SkyboxPassCommand.Init();
@@ -307,6 +310,7 @@ void AppModeBase::ExecutePasses()
 	DrawDebugHelpers::DrawDebugPoint({ 0.f, 1.f, 0.f }, 0.5f, glm::vec3(0.f, 0.f, 1.f));
 	DrawDebugHelpers::DrawDebugLine({ 0.f, 0.5f, 0.f }, { 0.f, 1.f, 0.f }, glm::vec3(0.f, 0.f, 1.f));
 
+	// TODO: Fix transition to remove hack
 	static bool doOnce = false;
 	if (!doOnce)
 	{
@@ -314,8 +318,16 @@ void AppModeBase::ExecutePasses()
 		doOnce = true;
 	}
 
+	// TODO: Move this to an entity in the scene
+	static glm::vec3 LightDir = glm::vec3(1.f, -1.f, 0.f);
+	ImGui::DragFloat3("Light Direction", &LightDir.x, 0.05f, -1.f, 1.f);
+
+	const glm::vec3 normLightDir = glm::normalize(LightDir);
+	ShadowDepthsPass.Execute(D3D12Globals::GraphicsCmdList, normLightDir);
 	DeferredBasePassCommand.Execute(D3D12Globals::GraphicsCmdList);
+
 	BindlessDecalsPassCommmand.Execute(D3D12Globals::GraphicsCmdList, DeferredBasePassCommand.GBufferTextures);
+
 
 	{
 		//D3D12_CPU_DESCRIPTOR_HANDLE currentBackbufferRTDescriptor = D3D12Globals::GlobalRTVHeap.GetCPUHandle(D3D12Utility::CurrentFrameIndex, 0);
@@ -323,7 +335,7 @@ void AppModeBase::ExecutePasses()
 		SceneTextures& sceneTextures = DeferredBasePassCommand.GBufferTextures;
 
 
-		DeferredLightingPassCommand.Execute(D3D12Globals::GraphicsCmdList, DeferredBasePassCommand.GBufferTextures, *LightingTarget);
+		DeferredLightingPassCommand.Execute(D3D12Globals::GraphicsCmdList, DeferredBasePassCommand.GBufferTextures, *LightingTarget, normLightDir);
 	}
 
 	SkyboxPassCommand.Execute(D3D12Globals::GraphicsCmdList, *LightingTarget, DeferredBasePassCommand.GBufferTextures);

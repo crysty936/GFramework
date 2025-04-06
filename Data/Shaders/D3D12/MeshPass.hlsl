@@ -31,10 +31,9 @@ StructuredBuffer<ShaderMaterial> MaterialsBuffer : register(t0, space100);
 // 256 byte aligned
 struct SceneConstantBuffer
 {
-    float4x4 Model;
-    float4x4 Projection;
-    float4x4 View;
+    float4x4 LocalToClip;
     float4x4 LocalToWorldRotationOnly;
+    uint Padding[32];
 };
 
 struct MatIndexBuffer
@@ -50,9 +49,7 @@ SamplerState g_sampler : register(s0);
 
 PSInput VSMain(float4 position : POSITION, float3 VertexNormal : NORMAL, float2 uv : TEXCOORD, float3 tangent : TANGENT, float3 bitangent : BITANGENT)
 {
-    float4x4 mvp = mul(SceneBuffer.Model, SceneBuffer.View);
-    mvp = mul(mvp, SceneBuffer.Projection);
-    const float4 clipPos = mul(position, mvp);
+    const float4 clipPos = mul(position, SceneBuffer.LocalToClip);
     
     const float3x3 LocalToWorldRotationOnly3x3 = ToFloat3x3(SceneBuffer.LocalToWorldRotationOnly);
 

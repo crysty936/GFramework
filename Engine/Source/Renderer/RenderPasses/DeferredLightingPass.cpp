@@ -172,18 +172,18 @@ void DeferredLightingPass::Init()
 
 }
 
-void DeferredLightingPass::Execute(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget)
+void DeferredLightingPass::Execute(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir)
 {
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.GBufferRoughness->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-	RenderLighting(inCmdList, inSceneTextures, inTarget);
+	RenderLighting(inCmdList, inSceneTextures, inTarget, inLightDir);
 }
 
 
-void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget)
+void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir)
 {
 	PIXMarker Marker(inCmdList, "Render Deferred Lighting");
 
@@ -203,9 +203,6 @@ void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, 
 	const Scene& currentScene = sManager.GetCurrentScene();
 	const eastl::shared_ptr<Camera>& currentCamera = currentScene.GetCurrentCamera();
 
-	static glm::vec3 LightDir = glm::vec3(1.f, -1.f, 0.f);
-	ImGui::DragFloat3("Light Direction", &LightDir.x, 0.05f, -1.f, 1.f);
-
 	{
 		LightingConstantBuffer lightingConstantBufferData;
 
@@ -213,7 +210,7 @@ void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, 
 		lightingConstantBufferData.ViewInv = glm::transpose(glm::inverse(currentScene.GetMainCameraLookAt()));
 		lightingConstantBufferData.Proj = glm::transpose(currentScene.GetMainCameraProj());
 
-		lightingConstantBufferData.LightDir = glm::vec4(glm::normalize(LightDir), 0.f);
+		lightingConstantBufferData.LightDir = glm::vec4(inLightDir, 0.f);
 		lightingConstantBufferData.ViewPos = glm::vec4(currentCamera->GetAbsoluteTransform().Translation, 0.f);
 
 		// Use temp buffer in main constant buffer

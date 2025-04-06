@@ -1,4 +1,4 @@
-#include "Skybox.h"
+#include "SkyboxPass.h"
 #include "glm/common.hpp"
 #include "Renderer/RHI/D3D12/D3D12RHI.h"
 #include "Renderer/Drawable/Drawable.h"

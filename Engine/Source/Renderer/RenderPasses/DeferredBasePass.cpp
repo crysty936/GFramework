@@ -15,10 +15,9 @@
 // Constant Buffer
 struct MeshConstantBuffer
 {
-	glm::mat4 Model;
-	glm::mat4 Projection;
-	glm::mat4 View;
+	glm::mat4 LocalToClip;
 	glm::mat4 LocalToWorldRotationOnly;
+	uint32_t Padding[32];
 };
 static_assert((sizeof(MeshConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
@@ -296,10 +295,10 @@ void DeferredBasePass::Init()
 
 }
 
-uint64_t TestNrMeshesToDraw = uint64_t(-1);
-uint64_t NrMeshesDrawn = 0;
+static uint64_t TestNrMeshesToDraw = uint64_t(-1);
+static uint64_t NrMeshesDrawn = 0;
 
-void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl::vector<TransformObjPtr>& inChildNodes, const Scene& inCurrentScene, const eastl::vector<MeshMaterial>& inMaterials)
+static void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl::vector<TransformObjPtr>& inChildNodes, const Scene& inCurrentScene, const eastl::vector<MeshMaterial>& inMaterials)
 {
 	for (const TransformObjPtr& child : inChildNodes)
 	{
@@ -328,9 +327,7 @@ void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl:
 				MeshConstantBuffer constantBufferData;
 
 				// All matrices sent to HLSL need to be converted to row-major(what D3D uses) from column-major(what glm uses)
-				constantBufferData.Model = glm::transpose(modelMatrix);
-				constantBufferData.Projection = glm::transpose(inCurrentScene.GetMainCameraProj());
-				constantBufferData.View = glm::transpose(inCurrentScene.GetMainCameraLookAt());
+				constantBufferData.LocalToClip = glm::transpose(inCurrentScene.GetMainCameraProj() * inCurrentScene.GetMainCameraLookAt() * modelMatrix);
 				constantBufferData.LocalToWorldRotationOnly = glm::transpose(absTransform.GetRotationOnlyMatrix());
 
 				MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constantBufferData));

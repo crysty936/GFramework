@@ -74,9 +74,13 @@ bool IsBoxEdge(const float3 InTexCoord)
 }
 
 
+#define DISPLAY_CUBE_EDGES 0
+
 PSOutput PSMain(PSInput input)
 {
     PSOutput output;
+
+#if DISPLAY_CUBE_EDGES
     const bool IsEdge = IsBoxEdge(input.CubemapUV);
     if (IsEdge)
     {
@@ -84,13 +88,10 @@ PSOutput PSMain(PSInput input)
 
         return output;
     }
+#endif
 
     TextureCube cubeMap = TexCubeTable[CubemapIdxContainer.CubemapIdx];
     float3 color = cubeMap.Sample(g_sampler, normalize(input.CubemapUV)).xyz;
-    //float3 color = float3(1.f, 0.f, 0.f);
-
-    //color *= exp2(SceneBuffer.SkyOnlyExposure) / FP16Scale;
-
     color *= exp2(SceneBuffer.SkyOnlyExposure);
 
     // reinhard tone mapping
