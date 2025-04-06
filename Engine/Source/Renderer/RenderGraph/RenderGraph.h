@@ -2,9 +2,6 @@
 #include <utility>
 #include "EASTL/vector.h"
 
-
-
-
 struct RenderPassBase
 {
 	RenderPassBase() = default;

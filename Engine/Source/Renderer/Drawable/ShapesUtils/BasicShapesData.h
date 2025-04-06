@@ -20,6 +20,7 @@ namespace BasicShapesData
 	int32_t GetSquareIndicesCount();
 
 	// Quad
+	const float* GetSimpleQuadVertices();
 	const float* GetQuadVertices();
 	const uint32_t* GetQuadIndices();
 	int32_t GetQuadVerticesCount();

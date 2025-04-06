@@ -106,7 +106,7 @@ public:
 	eastl::shared_ptr<class D3D12DepthBuffer> CreateDepthBuffer(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName, const ETextureState inInitialState = ETextureState::Render_Target);
 
 	struct ID3D12RootSignature* CreateRootSignature(D3D12_VERSIONED_ROOT_SIGNATURE_DESC& inDesc);
-	CompiledShaderResult CompileGraphicsShaderFromFile(const eastl::string& inFilePath);
+	CompiledShaderResult CompileGraphicsShaderFromFile(const eastl::string& inFilePath, const eastl::string& inVSEntry = "VSMain", const eastl::string& inPSEntry = "PSMain");
 	CompiledShaderResult CompileComputeShaderFromFile(const eastl::string& inFilePath);
 
 

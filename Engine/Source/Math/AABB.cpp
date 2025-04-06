@@ -30,7 +30,7 @@ AABB& AABB::operator+=(const AABB& inAABB)
 	return *this;
 }
 
-eastl::array<glm::vec3, 8> AABB::GetVertices() const
+vectorInline<glm::vec3, 8> AABB::GetVertices() const
 {
 	// Use a unit cube
 	const glm::vec3 verts[8] = {
@@ -47,7 +47,7 @@ eastl::array<glm::vec3, 8> AABB::GetVertices() const
 		glm::vec3(-1,-1,-1) // 7 right bottom back
 	};
 
-	eastl::array<glm::vec3, 8> worldPoints;
+	vectorInline<glm::vec3, 8> worldPoints;
 	glm::vec3 boxCenter, boxExtent;
 	GetCenterAndExtent(boxCenter, boxExtent);
 

@@ -28,18 +28,6 @@ ID3D12RootSignature* m_GBufferBasicObjectsRootSignature;
 ID3D12PipelineState* m_MainMeshPassPipelineState;
 ID3D12PipelineState* m_BasicObjectsPipelineState;
 
-DeferredBasePass::DeferredBasePass()
-{
-
-}
-
-DeferredBasePass::~DeferredBasePass()
-{
-
-}
-
-
-
 void DeferredBasePass::Init()
 {
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();

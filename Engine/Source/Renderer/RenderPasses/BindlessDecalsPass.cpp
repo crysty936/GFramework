@@ -448,10 +448,10 @@ void BindlessDecalsPass::ComputeTiledBinning(ID3D12GraphicsCommandList* inCmdLis
 		uint32_t values[4] = {};
 		inCmdList->ClearUnorderedAccessViewUint(gpuHandle, uavHandles[0], m_DecalsTiledBinningBuffer.Resource, values, 0, nullptr);
 
-		// 		float floatValues[4] = {};
-		// 		inCmdList->ClearRenderTargetView(m_DebugRT->RTV, floatValues, 0, nullptr);
+		// float floatValues[4] = {};
+		// inCmdList->ClearRenderTargetView(m_DebugRT->RTV, floatValues, 0, nullptr);
 
-				//inCmdList->ClearUnorderedAccessViewFloat(gpuHandle, uavHandles[1], m_DebugRT->Texture->Resource, floatValues, 0, nullptr);
+		// inCmdList->ClearUnorderedAccessViewFloat(gpuHandle, uavHandles[1], m_DebugRT->Texture->Resource, floatValues, 0, nullptr);
 
 	}
 
@@ -465,10 +465,10 @@ void BindlessDecalsPass::ComputeTiledBinning(ID3D12GraphicsCommandList* inCmdLis
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
-	// 
+
 	// 	glm::vec<2, uint32_t> binningComputeGroupCounts = glm::vec<2, uint32_t>(
-	// 		MathUtils::DivideAndRoundUp(props.Width, 64),
-	// 		MathUtils::DivideAndRoundUp(props.Height, 64));
+	// 	MathUtils::DivideAndRoundUp(props.Width, 64),
+	// 	MathUtils::DivideAndRoundUp(props.Height, 64));
 
 	{
 		DecalTilingConstantBuffer tilingConstBufferData;
@@ -480,7 +480,6 @@ void BindlessDecalsPass::ComputeTiledBinning(ID3D12GraphicsCommandList* inCmdLis
 		static int32_t debugFlag = 1;
 		static float debugValue = 1.f;
 		static glm::vec3 debugRot; // Degrees
-
 
 		ImGui::SliderInt("Debug Flag", &debugFlag, 0, 1);
 		ImGui::SliderFloat("Debug Value", &debugValue, -1.f, 1.f);

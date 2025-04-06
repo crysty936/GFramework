@@ -13,9 +13,9 @@ struct SceneTextures
 
 struct DeferredBasePass
 {
-	DeferredBasePass();
-	~DeferredBasePass();
 
+	DeferredBasePass() = default;
+	~DeferredBasePass() = default;
 
 	void Init();
 	void Execute(struct ID3D12GraphicsCommandList* inCmdList);

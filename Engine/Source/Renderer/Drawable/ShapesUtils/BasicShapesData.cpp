@@ -36,6 +36,20 @@ int32_t BasicShapesData::GetTriangleIndicesCount()
 
 // ~Triangle
 
+// Simple Quad, no UVs, no Normals
+// To be used for screen quads
+const float SimpleQuadVertices[] = {
+ 1.f,  1.f, 0.0f, // top right
+-1.f,  1.f, 0.0f, // top left 
+ 1.f, -1.f, 0.0f, // bottom right
+-1.f, -1.f, 0.0f, // bottom left
+};
+
+const float* BasicShapesData::GetSimpleQuadVertices()
+{
+	return SimpleQuadVertices;
+}
+
 // Quad
 // To be used for screen quads
 const float QuadVertices[] = {
@@ -49,6 +63,8 @@ const uint32_t QuadIndices[] = {
 	0, 1, 2,   // first triangle
 	1, 3, 2    // second triangle
 };
+
+
 
 const float* BasicShapesData::GetQuadVertices()
 {

@@ -32,16 +32,6 @@ ID3D12PipelineState* m_LightingPipelineState;
 eastl::shared_ptr<D3D12IndexBuffer> ScreenQuadIndexBuffer = nullptr;
 eastl::shared_ptr<D3D12VertexBuffer> ScreenQuadVertexBuffer = nullptr;
 
-DeferredLightingPass::DeferredLightingPass()
-{
-
-}
-
-DeferredLightingPass::~DeferredLightingPass()
-{
-
-}
-
 void DeferredLightingPass::Init()
 {
 	// Final lighting root signature

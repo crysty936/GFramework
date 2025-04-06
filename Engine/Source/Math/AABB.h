@@ -4,6 +4,7 @@
 #include "EASTL/array.h"
 #include "EASTL/vector.h"
 #include "glm/ext/vector_float3.hpp"
+#include "Utils/InlineVector.h"
 
 struct AABB
 {
@@ -24,7 +25,7 @@ struct AABB
 		outCenter = Min + outExtent;
 	}
 
-	eastl::array<glm::vec3, 8> GetVertices() const;
+	vectorInline<glm::vec3, 8> GetVertices() const;
 
 	void DebugDraw() const;
 

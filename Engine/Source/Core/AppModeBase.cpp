@@ -20,10 +20,12 @@
 #include "Renderer/Model/3D/Assimp/AssimpModel3D.h"
 #include "Math/MathUtils.h"
 #include "glm/gtc/type_ptr.inl"
+#include "Renderer/RenderPasses/DebugPrimitivesPass.h"
 #include "Renderer/RenderPasses/DeferredBasePass.h"
 #include "Renderer/RenderPasses/BindlessDecalsPass.h"
 #include "Renderer/RenderPasses/DeferredLightingPass.h"
 #include "Renderer/RenderPasses/Skybox.h"
+#include "Renderer/DrawDebugHelpers.h"
 
 // Windows includes
 #ifndef WIN32_LEAN_AND_MEAN
@@ -74,6 +76,7 @@ struct ShaderMaterial
 	uint32_t MRMapIndex;
 };
 
+DebugPrimitivesPass DebugPrimitivesPassCommand;
 DeferredBasePass DeferredBasePassCommand;
 BindlessDecalsPass BindlessDecalsPassCommmand;
 DeferredLightingPass DeferredLightingPassCommand;
@@ -99,6 +102,7 @@ void AppModeBase::CreateInitialResources()
 	LightingTarget = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"FinalLighting", ERHITexturePrecision::UnsignedByte, ETextureState::Render_Target, ERHITextureFilter::Nearest);
 
 	// Init Render Passes
+	DebugPrimitivesPassCommand.Init();
 	DeferredBasePassCommand.Init();
 	BindlessDecalsPassCommmand.Init();
 	DeferredLightingPassCommand.Init();
@@ -174,8 +178,9 @@ void AppModeBase::CreateInitialResources()
 	}
 #endif
 
-	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 21.f);
-	currentScene.GetCurrentCamera()->Move(EMovementDirection::Up, 15.f);
+	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 3.f);
+	//currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 21.f);
+	//currentScene.GetCurrentCamera()->Move(EMovementDirection::Up, 15.f);
 
 	DXAssert(D3D12Globals::GraphicsCmdList->Close());
 	ID3D12CommandList* ppCommandLists[] = { D3D12Globals::GraphicsCmdList };
@@ -296,6 +301,8 @@ void AppModeBase::BeginFrame()
 
 void AppModeBase::ExecutePasses()
 {
+	DrawDebugHelpers::DrawDebugPoint({ 0.f, 1.f, 0.f });
+
 	static bool doOnce = false;
 	if (!doOnce)
 	{
@@ -316,6 +323,9 @@ void AppModeBase::ExecutePasses()
 	}
 
 	SkyboxPassCommand.Execute(D3D12Globals::GraphicsCmdList, *LightingTarget, DeferredBasePassCommand.GBufferTextures);
+
+
+	DebugPrimitivesPassCommand.Execute(D3D12Globals::GraphicsCmdList, *LightingTarget);
 
 	// Copy lighting output to backbuffer
 	{

@@ -6,7 +6,7 @@
 #include "Scene/SceneManager.h"
 #include "Scene/Scene.h"
 
-eastl::array<glm::vec3, 8> RenderUtils::GenerateSpaceCorners(const glm::mat4& SpaceToProjectionSpace, const float MinZ, const float MaxZ)
+vectorInline<glm::vec3, 8> RenderUtils::GenerateSpaceCorners(const glm::mat4& SpaceToProjectionSpace, const float MinZ, const float MaxZ)
 {
 	const glm::vec3 ProjectionSpaceCorners[8] =
 	{
@@ -21,7 +21,7 @@ eastl::array<glm::vec3, 8> RenderUtils::GenerateSpaceCorners(const glm::mat4& Sp
 	};
 
 	const glm::mat4 ProjectionToSpace = glm::inverse(SpaceToProjectionSpace);
-	eastl::array<glm::vec3, 8> SpaceCorners;
+	vectorInline<glm::vec3, 8> SpaceCorners;
 
 	for (int i = 0; i < 8; ++i)
 	{
@@ -35,7 +35,7 @@ eastl::array<glm::vec3, 8> RenderUtils::GenerateSpaceCorners(const glm::mat4& Sp
 
 glm::vec3 RenderUtils::GetProjectionCenter(const glm::mat4& inProj)
 {
-	eastl::array<glm::vec3, 8> projCorners = GenerateSpaceCorners(inProj);
+	vectorInline<glm::vec3, 8> projCorners = GenerateSpaceCorners(inProj);
 
 	glm::vec3 center = glm::vec3(0, 0, 0);
 	for (const glm::vec3& v : projCorners)

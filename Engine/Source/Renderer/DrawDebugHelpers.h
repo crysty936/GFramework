@@ -22,9 +22,6 @@ struct DebugPoint
 class DrawDebugManager
 {
 
-public:
-	static void Draw();
-
 private:
 	static DrawDebugManager& Get()
 	{
@@ -35,10 +32,11 @@ private:
 
 	void AddDebugPoint(const glm::vec3& inPoint, const glm::vec3& inColor, const float inSize, const bool inPersistent);
 	void AddDebugLine(const DebugLine& inLine);
+	void ClearDebugData();
 
 private:
-	
-	void ClearDebugData();
+	inline const eastl::vector<DebugPoint>& GetDebugPoints() { return DebugPoints; }
+	inline const eastl::vector<DebugLine>& GetDebugLines() { return DebugLines; }
 
 private:
 	eastl::vector<DebugPoint> DebugPoints;
@@ -47,6 +45,7 @@ private:
 	friend class ForwardRenderer;
 	friend class DeferredRenderer;
 	friend struct DrawDebugHelpers;
+	friend struct DebugPrimitivesPass;
 };
 
 struct DrawDebugHelpers
@@ -55,8 +54,20 @@ struct DrawDebugHelpers
 	static void DrawDebugLine(const DebugLine& inLine);
 	static void DrawDebugLine(const glm::vec3& inStart, const glm::vec3& inEnd, const glm::vec3& inColor);
 	static void DrawProjectionPoints(const glm::mat4& inProj);
-	static void DrawLinesArray(const eastl::vector<glm::vec3>& inLinesPoints, const glm::vec3& inColor = glm::vec3(0.5f, 0.5f, 0.f));
-	static void DrawBoxArray(eastl::array<glm::vec3, 8> inArray, const bool inDrawSides = true, const glm::vec3& inColor = glm::vec3(0.5f, 0.5f, 0.f));
 	static void DrawProjection(const glm::mat4& inProj);
+	static void DrawBoxArray(vectorInline<glm::vec3, 8> inArray, const bool inDrawSides = true, const glm::vec3& inColor = glm::vec3(0.5f, 0.5f, 0.f));
+
+	template<typename VecAllocator>
+	static void DrawLinesArray(const eastl::vector<glm::vec3, VecAllocator>& inLinesPoints, const glm::vec3& inColor = glm::vec3(0.5f, 0.5f, 0.f));
 };
 
+
+template<typename VecAllocator>
+static void DrawDebugHelpers::DrawLinesArray(const eastl::vector<glm::vec3, VecAllocator>& inLinesPoints, const glm::vec3& inColor)
+{
+	for (int32_t vertexIndex = 0; vertexIndex < inLinesPoints.size(); vertexIndex++)
+	{
+		int32_t nextVertexIndex = (vertexIndex + 1) % inLinesPoints.size();
+		DrawDebugLine({ inLinesPoints[vertexIndex], inLinesPoints[nextVertexIndex], inColor });
+	}
+}

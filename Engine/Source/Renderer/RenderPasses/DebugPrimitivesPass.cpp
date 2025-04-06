@@ -1,0 +1,173 @@
+#include "DebugPrimitivesPass.h"
+#include "Renderer/RHI/D3D12/D3D12Resources.h"
+#include "Renderer/RHI/D3D12/D3D12RHI.h"
+#include "Renderer/RHI/Resources/RHITexture.h"
+#include <d3d12.h>
+#include "Window/WindowsWindow.h"
+#include "Window/WindowProperties.h"
+#include "Core/AppCore.h"
+#include "Entity/TransformObject.h"
+#include "Renderer/Model/3D/Model3D.h"
+#include "Scene/Scene.h"
+#include "Scene/SceneManager.h"
+#include "Renderer/RHI/D3D12/D3D12Utility.h"
+#include "glm/ext/matrix_transform.hpp"
+#include "glm/gtc/quaternion.hpp"
+#include "Renderer/DrawDebugHelpers.h"
+
+// Constant Buffer
+struct PointConstantBuffer
+{
+	glm::mat4 Projection;
+	glm::mat4 View;
+	float Padding[32];
+};
+static_assert((sizeof(PointConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
+
+struct DebugPointInstanceData
+{
+	glm::mat4 Model;
+	glm::vec4 Color;
+};
+static_assert((sizeof(DebugPointInstanceData) % 16) == 0, "Structs in Structured Buffers have to be 16-byte aligned");
+
+ID3D12RootSignature* m_DebugPrimitivesQuadPointsRootSignature;
+ID3D12PipelineState* m_DebugPrimitivesQuadPointsPipelineState;
+D3D12StructuredBuffer m_PointsBuffer;
+
+#define MAX_POINTS_NR 1024
+
+void DebugPrimitivesPass::Init()
+{
+	m_PointsBuffer.Init(MAX_POINTS_NR, sizeof(DebugPointInstanceData));
+
+	// Debug Point Quads Root Signature
+	{
+		D3D12_ROOT_PARAMETER1 rootParameters[2];
+
+		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[0].Descriptor.RegisterSpace = 0;
+		rootParameters[0].Descriptor.ShaderRegister = 0;
+
+		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[1].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
+		rootParameters[1].Descriptor.RegisterSpace = 0;
+		rootParameters[1].Descriptor.ShaderRegister = 0;
+
+		// Allow input layout and deny uneccessary access to certain pipeline stages.
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+			| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
+			| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
+			| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+
+		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+		rootSignatureDesc.NumParameters = _countof(rootParameters);
+		rootSignatureDesc.pParameters = &rootParameters[0];
+		rootSignatureDesc.NumStaticSamplers = 0;
+		rootSignatureDesc.Flags = rootSignatureFlags;
+
+		D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedRootSignatureDesc = {};
+		versionedRootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+		versionedRootSignatureDesc.Desc_1_1 = rootSignatureDesc;
+
+		m_DebugPrimitivesQuadPointsRootSignature = D3D12RHI::Get()->CreateRootSignature(versionedRootSignatureDesc);
+		m_DebugPrimitivesQuadPointsRootSignature->SetName(L"Debug Quad Points Root Signature");
+	}
+
+	// Debug Point Quads PSO
+	{
+		eastl::string fullPath = "../Data/Shaders/D3D12/"; ;
+		fullPath += "DebugDraw.hlsl";
+
+		CompiledShaderResult meshShaderPair = D3D12RHI::Get()->CompileGraphicsShaderFromFile(fullPath, "VSMainPoints", "PSMainPoints");
+
+		// shader bytecodes
+		D3D12_SHADER_BYTECODE vsByteCode;
+		vsByteCode.pShaderBytecode = meshShaderPair.VSByteCode->GetBufferPointer();
+		vsByteCode.BytecodeLength = meshShaderPair.VSByteCode->GetBufferSize();
+
+		D3D12_SHADER_BYTECODE psByteCode;
+		psByteCode.pShaderBytecode = meshShaderPair.PSByteCode->GetBufferPointer();
+		psByteCode.BytecodeLength = meshShaderPair.PSByteCode->GetBufferSize();
+
+		// Describe and create the graphics pipeline state object (PSO).
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.pRootSignature = m_DebugPrimitivesQuadPointsRootSignature;
+		psoDesc.VS = vsByteCode;
+		psoDesc.PS = psByteCode;
+		psoDesc.RasterizerState = D3D12Utility::GetRasterizerState(ERasterizerState::Disabled);
+		psoDesc.BlendState = D3D12Utility::GetBlendState(EBlendState::Disabled);
+		psoDesc.DepthStencilState = D3D12Utility::GetDepthState(EDepthState::WriteDisabled);
+		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.SampleDesc.Count = 1;
+
+		DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_DebugPrimitivesQuadPointsPipelineState)));
+		m_DebugPrimitivesQuadPointsPipelineState->SetName(L"Debug Point Quads Pipeline State");
+	}
+}
+
+void DebugPrimitivesPass::Execute(struct ID3D12GraphicsCommandList* inCmdList, const D3D12RenderTarget2D& inTarget)
+{
+	PIXMarker Marker(inCmdList, "Render Debug Primitives");
+
+	// Generate buffer data
+	DrawDebugManager& manager = DrawDebugManager::Get();
+	const eastl::vector<DebugPoint>& debugPoints = manager.GetDebugPoints();
+
+	eastl::vector<DebugPointInstanceData> pointsInstanceData;
+	for (uint32_t i = 0; i < debugPoints.size(); ++i)
+	{
+		DebugPointInstanceData newPoint = {};
+
+		const DebugPoint& pointDataSource = debugPoints[i];
+
+		glm::mat4 instanceMat(1.f);
+		instanceMat = glm::translate(instanceMat, pointDataSource.Location);
+		instanceMat = glm::scale(instanceMat, 0.1f * glm::vec3(pointDataSource.Size, pointDataSource.Size, pointDataSource.Size));
+		newPoint.Model = glm::transpose(instanceMat);
+		newPoint.Color = glm::vec4(pointDataSource.Color, 1.f);
+
+		pointsInstanceData.push_back(newPoint);
+	}
+
+	if (pointsInstanceData.size() > 0)
+	{
+		m_PointsBuffer.UploadDataAllFrames(&pointsInstanceData[0], sizeof(DebugPointInstanceData) * pointsInstanceData.size());
+	}
+
+	manager.ClearDebugData();
+
+	// Populate Command List
+
+	inCmdList->SetGraphicsRootSignature(m_DebugPrimitivesQuadPointsRootSignature);
+	inCmdList->SetPipelineState(m_DebugPrimitivesQuadPointsPipelineState);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[1];
+	renderTargets[0] = inTarget.RTV;
+
+	inCmdList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
+
+	SceneManager& sManager = SceneManager::Get();
+	const Scene& currentScene = sManager.GetCurrentScene();
+
+	PointConstantBuffer constBuffer;
+	constBuffer.Projection = glm::transpose(currentScene.GetMainCameraProj());
+	constBuffer.View = glm::transpose(currentScene.GetMainCameraLookAt());
+
+	// Use temp buffer in main constant buffer
+	MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constBuffer));
+	memcpy(cBufferMap.CPUAddress, &constBuffer, sizeof(constBuffer));
+	inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
+	inCmdList->SetGraphicsRootShaderResourceView(1, m_PointsBuffer.GetCurrentGPUAddress());
+
+	inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	inCmdList->DrawIndexedInstanced(6, 2, 0, 0, 0);
+}

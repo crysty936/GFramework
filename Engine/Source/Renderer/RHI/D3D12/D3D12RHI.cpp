@@ -388,10 +388,10 @@ IDxcBlob* CompileWithRetry(const eastl::string& inFilePath, const eastl::string&
 	return compiledShaderBlob;
 }
 
-CompiledShaderResult D3D12RHI::CompileGraphicsShaderFromFile(const eastl::string& inFilePath)
+CompiledShaderResult D3D12RHI::CompileGraphicsShaderFromFile(const eastl::string& inFilePath, const eastl::string& inVSEntry, const eastl::string& inPSEntry)
 {
-	IDxcBlob* vsBlob = CompileWithRetry(inFilePath, "VSMain", L"vs_6_5");
-	IDxcBlob* psBlob = CompileWithRetry(inFilePath, "PSMain", L"ps_6_5");
+	IDxcBlob* vsBlob = CompileWithRetry(inFilePath, inVSEntry, L"vs_6_5");
+	IDxcBlob* psBlob = CompileWithRetry(inFilePath, inPSEntry, L"ps_6_5");
 
 
 	return { vsBlob, psBlob };
