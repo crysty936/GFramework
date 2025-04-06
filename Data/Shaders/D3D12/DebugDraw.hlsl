@@ -57,3 +57,33 @@ float4 PSMainPoints(InterpolantsVSToPS input) : SV_Target0
 {
     return input.Color;
 }
+
+
+struct PackedDebugLineInstanceData
+{
+	float3 Position[2];
+	uint Color;
+	uint Padding;
+};
+
+StructuredBuffer<PackedDebugLineInstanceData> LinesBuffer : register(t0);
+
+InterpolantsVSToPS VSMainLines(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
+{
+    const PackedDebugLineInstanceData instanceData = LinesBuffer[instanceId];
+    float4 position = float4(instanceData.Position[vertexId], 1.f);
+
+    const float4x4 vp = mul(SceneBuffer.View, SceneBuffer.Projection);
+    const float4 clipPos = mul(position, vp);
+
+    InterpolantsVSToPS result;
+    result.Position = clipPos;
+    result.Color = RGBA8_UNORM::Unpack(instanceData.Color);
+
+    return result;
+}
+
+float4 PSMainLines  (InterpolantsVSToPS input) : SV_Target0
+{
+    return input.Color;
+}

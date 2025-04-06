@@ -52,7 +52,7 @@ struct DrawDebugHelpers
 {
 	static void DrawDebugPoint(const glm::vec3& inPoint, const float inSize = 1.f, const glm::vec3& inColor = glm::vec3(1.f, 1.f, 0.f), const bool inPersistent = false);
 	static void DrawDebugLine(const DebugLine& inLine);
-	static void DrawDebugLine(const glm::vec3& inStart, const glm::vec3& inEnd, const glm::vec3& inColor);
+	static void DrawDebugLine(const glm::vec3& inStart, const glm::vec3& inEnd, const glm::vec3& inColor = glm::vec3(1.f, 1.f, 0.f));
 	static void DrawProjectionPoints(const glm::mat4& inProj);
 	static void DrawProjection(const glm::mat4& inProj);
 	static void DrawBoxArray(vectorInline<glm::vec3, 8> inArray, const bool inDrawSides = true, const glm::vec3& inColor = glm::vec3(0.5f, 0.5f, 0.f));

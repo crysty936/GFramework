@@ -301,9 +301,11 @@ void AppModeBase::BeginFrame()
 
 void AppModeBase::ExecutePasses()
 {
-	DrawDebugHelpers::DrawDebugPoint({ 0.f, 0.f, 0.f });
-	DrawDebugHelpers::DrawDebugPoint({ 0.f, 4.f, 0.f }, 1.f, glm::vec3(1.f, 0.f, 0.f));
-	DrawDebugHelpers::DrawDebugPoint({ 0.f, 8.f, 0.f }, 1.f, glm::vec3(0.f, 0.f, 1.f));
+	DrawDebugHelpers::DrawDebugPoint({ 0.f, 0.f, 0.f }, 0.5f);
+	DrawDebugHelpers::DrawDebugPoint({ 0.f, 0.5f, 0.f }, 0.5f, glm::vec3(1.f, 0.f, 0.f));
+	DrawDebugHelpers::DrawDebugLine({ 0.f, 0.f, 0.f }, { 0.f, 0.5f, 0.f });
+	DrawDebugHelpers::DrawDebugPoint({ 0.f, 1.f, 0.f }, 0.5f, glm::vec3(0.f, 0.f, 1.f));
+	DrawDebugHelpers::DrawDebugLine({ 0.f, 0.5f, 0.f }, { 0.f, 1.f, 0.f }, glm::vec3(0.f, 0.f, 1.f));
 
 	static bool doOnce = false;
 	if (!doOnce)
@@ -326,8 +328,7 @@ void AppModeBase::ExecutePasses()
 
 	SkyboxPassCommand.Execute(D3D12Globals::GraphicsCmdList, *LightingTarget, DeferredBasePassCommand.GBufferTextures);
 
-
-	DebugPrimitivesPassCommand.Execute(D3D12Globals::GraphicsCmdList, *LightingTarget);
+	DebugPrimitivesPassCommand.Execute(D3D12Globals::GraphicsCmdList, *DeferredBasePassCommand.GBufferTextures.MainDepthBuffer, *LightingTarget);
 
 	// Copy lighting output to backbuffer
 	{
