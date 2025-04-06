@@ -20,26 +20,29 @@ struct PointConstantBuffer
 {
 	glm::mat4 Projection;
 	glm::mat4 View;
-	float Padding[32];
+	uint32_t Padding[32];
 };
 static_assert((sizeof(PointConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
-struct DebugPointInstanceData
+struct PackedPointData
 {
-	glm::mat4 Model;
-	glm::vec4 Color;
+	glm::vec3 Translation;
+	float Scale;
+	uint32_t Color;
+	uint32_t Padding[3];
 };
-static_assert((sizeof(DebugPointInstanceData) % 16) == 0, "Structs in Structured Buffers have to be 16-byte aligned");
+static_assert((sizeof(PackedPointData) % 16) == 0, "Structs in Structured Buffers have to be 16-byte aligned");
 
 ID3D12RootSignature* m_DebugPrimitivesQuadPointsRootSignature;
 ID3D12PipelineState* m_DebugPrimitivesQuadPointsPipelineState;
 D3D12StructuredBuffer m_PointsBuffer;
+//D3D12RawBuffer m_PackedPointsBuffer;
 
 #define MAX_POINTS_NR 1024
 
 void DebugPrimitivesPass::Init()
 {
-	m_PointsBuffer.Init(MAX_POINTS_NR, sizeof(DebugPointInstanceData));
+	m_PointsBuffer.Init(MAX_POINTS_NR, sizeof(PackedPointData));
 
 	// Debug Point Quads Root Signature
 	{
@@ -122,52 +125,51 @@ void DebugPrimitivesPass::Execute(struct ID3D12GraphicsCommandList* inCmdList, c
 	DrawDebugManager& manager = DrawDebugManager::Get();
 	const eastl::vector<DebugPoint>& debugPoints = manager.GetDebugPoints();
 
-	eastl::vector<DebugPointInstanceData> pointsInstanceData;
-	for (uint32_t i = 0; i < debugPoints.size(); ++i)
+	if (debugPoints.size() > 0)
 	{
-		DebugPointInstanceData newPoint = {};
+		eastl::vector<PackedPointData> pointsInstanceData;
+		for (uint32_t i = 0; i < debugPoints.size(); ++i)
+		{
+			PackedPointData newPoint = {};
 
-		const DebugPoint& pointDataSource = debugPoints[i];
+			const DebugPoint& pointDataSource = debugPoints[i];
 
-		glm::mat4 instanceMat(1.f);
-		instanceMat = glm::translate(instanceMat, pointDataSource.Location);
-		instanceMat = glm::scale(instanceMat, 0.1f * glm::vec3(pointDataSource.Size, pointDataSource.Size, pointDataSource.Size));
-		newPoint.Model = glm::transpose(instanceMat);
-		newPoint.Color = glm::vec4(pointDataSource.Color, 1.f);
+			newPoint.Translation = pointDataSource.Location;
+			newPoint.Scale = 0.1f * pointDataSource.Size;
+			newPoint.Color = RenderUtils::ConvertToRGBA8(glm::vec4(pointDataSource.Color, 1.f));
 
-		pointsInstanceData.push_back(newPoint);
+			pointsInstanceData.push_back(newPoint);
+		}
+
+		m_PointsBuffer.UploadDataAllFrames(&pointsInstanceData[0], sizeof(PackedPointData) * pointsInstanceData.size());
+
+		manager.ClearDebugData();
+
+		// Populate Command List
+
+		inCmdList->SetGraphicsRootSignature(m_DebugPrimitivesQuadPointsRootSignature);
+		inCmdList->SetPipelineState(m_DebugPrimitivesQuadPointsPipelineState);
+
+		D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[1];
+		renderTargets[0] = inTarget.RTV;
+
+		inCmdList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
+
+		SceneManager& sManager = SceneManager::Get();
+		const Scene& currentScene = sManager.GetCurrentScene();
+
+		PointConstantBuffer constBuffer;
+		constBuffer.Projection = glm::transpose(currentScene.GetMainCameraProj());
+		constBuffer.View = glm::transpose(currentScene.GetMainCameraLookAt());
+
+		// Use temp buffer in main constant buffer
+		MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constBuffer));
+		memcpy(cBufferMap.CPUAddress, &constBuffer, sizeof(constBuffer));
+		inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
+		inCmdList->SetGraphicsRootShaderResourceView(1, m_PointsBuffer.GetCurrentGPUAddress());
+
+		inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		inCmdList->DrawIndexedInstanced(6, pointsInstanceData.size(), 0, 0, 0);
 	}
 
-	if (pointsInstanceData.size() > 0)
-	{
-		m_PointsBuffer.UploadDataAllFrames(&pointsInstanceData[0], sizeof(DebugPointInstanceData) * pointsInstanceData.size());
-	}
-
-	manager.ClearDebugData();
-
-	// Populate Command List
-
-	inCmdList->SetGraphicsRootSignature(m_DebugPrimitivesQuadPointsRootSignature);
-	inCmdList->SetPipelineState(m_DebugPrimitivesQuadPointsPipelineState);
-
-	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[1];
-	renderTargets[0] = inTarget.RTV;
-
-	inCmdList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
-
-	SceneManager& sManager = SceneManager::Get();
-	const Scene& currentScene = sManager.GetCurrentScene();
-
-	PointConstantBuffer constBuffer;
-	constBuffer.Projection = glm::transpose(currentScene.GetMainCameraProj());
-	constBuffer.View = glm::transpose(currentScene.GetMainCameraLookAt());
-
-	// Use temp buffer in main constant buffer
-	MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constBuffer));
-	memcpy(cBufferMap.CPUAddress, &constBuffer, sizeof(constBuffer));
-	inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
-	inCmdList->SetGraphicsRootShaderResourceView(1, m_PointsBuffer.GetCurrentGPUAddress());
-
-	inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	inCmdList->DrawIndexedInstanced(6, 2, 0, 0, 0);
 }

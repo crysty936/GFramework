@@ -1,5 +1,5 @@
-#include "DescriptorTables.hlsl"
 #include "Utils.hlsl"
+#include "Packing.hlsl"
 
 // VetexID = 0, 1, 2, 2, 3, 0
 static const float4 Quad[] =
@@ -24,32 +24,31 @@ struct SceneConstantBuffer
     float4x4 View;
 };
 
-struct DebugPointInstanceData
+struct PackedDebugPointInstanceData
 {
-	float4x4 Model;
-	float4 Color;
+	float3 Translation;
+    float Scale;
+	uint Color;
+	uint Padding[3];
 };
 
 // 256 byte aligned
 ConstantBuffer<SceneConstantBuffer> SceneBuffer : register(b0);
 // 16 byte aligned
-StructuredBuffer<DebugPointInstanceData> PointsBuffer : register(t0);
+StructuredBuffer<PackedDebugPointInstanceData> PointsBuffer : register(t0);
 
 InterpolantsVSToPS VSMainPoints(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
 {
     float4 position = Quad[vertexId];
-    DebugPointInstanceData instanceData = PointsBuffer[instanceId];
+    const PackedDebugPointInstanceData instanceData = PointsBuffer[instanceId];
+    position.xyz = (position.xyz * instanceData.Scale) + instanceData.Translation;
     
-    //const float4 worldPos = mul(position, SceneBuffer.Model);
-    //const float4 clipPos = mul(mul(worldPos, SceneBuffer.View), SceneBuffer.Projection);
-
-    const float4x4 mv = mul(instanceData.Model, SceneBuffer.View);
-    const float4x4 mvp = mul(mv, SceneBuffer.Projection);
-    const float4 clipPos = mul(position, mvp);
+    const float4x4 vp = mul(SceneBuffer.View, SceneBuffer.Projection);
+    const float4 clipPos = mul(position, vp);
 
     InterpolantsVSToPS result;
     result.Position = clipPos;
-    result.Color = instanceData.Color;
+    result.Color = RGBA8_UNORM::Unpack(instanceData.Color);
 
     return result;
 }

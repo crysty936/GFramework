@@ -301,7 +301,9 @@ void AppModeBase::BeginFrame()
 
 void AppModeBase::ExecutePasses()
 {
-	DrawDebugHelpers::DrawDebugPoint({ 0.f, 1.f, 0.f });
+	DrawDebugHelpers::DrawDebugPoint({ 0.f, 0.f, 0.f });
+	DrawDebugHelpers::DrawDebugPoint({ 0.f, 4.f, 0.f }, 1.f, glm::vec3(1.f, 0.f, 0.f));
+	DrawDebugHelpers::DrawDebugPoint({ 0.f, 8.f, 0.f }, 1.f, glm::vec3(0.f, 0.f, 1.f));
 
 	static bool doOnce = false;
 	if (!doOnce)
