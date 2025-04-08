@@ -28,10 +28,6 @@ static_assert((sizeof(LightingConstantBuffer) % 256) == 0, "Constant Buffer size
 ID3D12RootSignature* m_LightingRootSignature;
 ID3D12PipelineState* m_LightingPipelineState;
 
-// TODO: Convert to compute
-eastl::shared_ptr<D3D12IndexBuffer> ScreenQuadIndexBuffer = nullptr;
-eastl::shared_ptr<D3D12VertexBuffer> ScreenQuadVertexBuffer = nullptr;
-
 void DeferredLightingPass::Init()
 {
 	// Final lighting root signature
@@ -154,22 +150,6 @@ void DeferredLightingPass::Init()
 
 		DXAssert(D3D12Globals::Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_LightingPipelineState)));
 	}
-
-
-
-	// Create screen quad data
-	ScreenQuadIndexBuffer = D3D12RHI::Get()->CreateIndexBuffer(BasicShapesData::GetQuadIndices(), BasicShapesData::GetQuadIndicesCount());
-
-	// Create the vertex buffer.
-	{
-		VertexInputLayout vbLayout;
-		vbLayout.Push<float>(3, VertexInputType::Position);
-		vbLayout.Push<float>(2, VertexInputType::TexCoords);
-
-		ScreenQuadVertexBuffer = D3D12RHI::Get()->CreateVertexBuffer(vbLayout, BasicShapesData::GetQuadVertices(), BasicShapesData::GetQuadVerticesCount(), ScreenQuadIndexBuffer);
-	}
-
-
 }
 
 void DeferredLightingPass::Execute(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir)
@@ -183,6 +163,7 @@ void DeferredLightingPass::Execute(ID3D12GraphicsCommandList* inCmdList, SceneTe
 }
 
 
+// TODO: Convert to compute
 void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir)
 {
 	PIXMarker Marker(inCmdList, "Render Deferred Lighting");
@@ -224,11 +205,6 @@ void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, 
 
 	inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	const D3D12_VERTEX_BUFFER_VIEW vbView = ScreenQuadVertexBuffer->VBView();
-	const D3D12_INDEX_BUFFER_VIEW ibView = ScreenQuadIndexBuffer->IBView();
-	inCmdList->IASetVertexBuffers(0, 1, &vbView);
-	inCmdList->IASetIndexBuffer(&ibView);
-
-	inCmdList->DrawIndexedInstanced(ScreenQuadIndexBuffer->IndexCount, 1, 0, 0, 0);
+	inCmdList->DrawIndexedInstanced(3, 1, 0, 0, 0);
 }
 

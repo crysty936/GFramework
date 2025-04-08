@@ -98,16 +98,19 @@ float3 CalcDirLight(float2 inTexCoords, float3 lightDir, float3 normal, float3 v
 	return (ambient + diffuse + specular);
 }
 
-PSInput VSMain(float4 position : POSITION, float2 uv : TEXCOORD)
+PSInput VSMain(uint VertexId : SV_VertexID)
 {
     PSInput result;
 
-    result.uv = uv;
-    // Inverse y to simulate opengl like uv space
-    result.uv.y = 1 - uv.y;
+	// start top left, clockwise
+	// p0 (-1,  1)	uv: (0, 0)
+	// p1 (3,   1)	uv: (2, 0)
+	// p2 (-1, -3)	uv: (0, 2)
+	float2 uv = float2((VertexId << 1) & 2, VertexId & 2);
+	float4 pos = float4(uv * float2(2, -2) + float2(-1, 1), 0, 1);
 
-    result.position = position;    
-    //result.position.x += offset;
+    result.uv = uv;
+    result.position = pos;    
 
     return result;
 }
