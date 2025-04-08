@@ -3,28 +3,13 @@
 #include "Controller/ControllerBase.h"
 #include "Editor/Editor.h"
 #include "Window/WindowsWindow.h"
-#include "EAStdC/EADateTime.h"
 #include "Utils/PathUtils.h"
 #include "imgui.h"
+#include "Utils/Utils.h"
 
 static const AddPluginHelper<RenderDocPlugin> AddPlugin("RenderDocPlugin");
 
 static int32_t NumFramesToCapture = 1;
-
-eastl::string GetTimeString()
-{
-	time_t rawtime;
-	struct tm* timeinfo = nullptr;
-	char buffer[80];
-
-	time(&rawtime);
-	timeinfo = localtime(&rawtime);
-
-	EA::StdC::Strftime(buffer, sizeof(buffer), "%d-%m-%H-%M-%S", timeinfo);
-	eastl::string str(buffer);
-
-	return str;
-}
 
 void RenderDocPlugin::Init()
 {
@@ -83,7 +68,7 @@ void RenderDocPlugin::Init()
 	}
 
 	// Final member in the path is the file name for all RenderDoc files coming from this instance
-	eastl::string capturesOutputPath = directoryOutputPath + "\\" + GetTimeString();
+	eastl::string capturesOutputPath = directoryOutputPath + "\\" + Utils::GetTimeString();
 	PathUtils::NormalizeDirectory(capturesOutputPath);
 
 	RenderDocAPI->SetLogFilePathTemplate(capturesOutputPath.c_str());

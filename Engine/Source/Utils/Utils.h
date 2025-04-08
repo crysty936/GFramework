@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "Core/EngineUtils.h"
+#include "EASTL/string.h"
 
 namespace Utils
 {
@@ -10,4 +11,7 @@ namespace Utils
 
 		return ((inNum + inAlignment - 1) / inAlignment) * inAlignment;
 	}
+
+	eastl::string GetTimeString();
+
 }
