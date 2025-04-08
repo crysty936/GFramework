@@ -26,6 +26,9 @@ public:
 	void OnMouseScrollChanged(const float inNewY);
 	glm::mat4 GetLookAt();
 	inline glm::mat4 GetProjectionMat() const { return ProjMatCache; }
+	float GetNear() const;
+	float GetFar() const;
+	float GetFOV() const;
 
 private:
 	void OnMousePosChanged(const float inNewYaw, const float inNewPitch);

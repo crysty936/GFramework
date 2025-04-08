@@ -27,7 +27,7 @@ vectorInline<glm::vec3, 8> RenderUtils::GenerateSpaceCorners(const glm::mat4& Sp
 	{
 		const glm::vec3& currentCorner = ProjectionSpaceCorners[i];
 		const glm::vec4 worldPos = ProjectionToSpace * glm::vec4(currentCorner.x, currentCorner.y, currentCorner.z, 1.f);
-		SpaceCorners[i] = worldPos / worldPos.w;
+		SpaceCorners.push_back(worldPos / worldPos.w);
 	}
 
 	return SpaceCorners;
@@ -57,5 +57,3 @@ uint32_t RenderUtils::ConvertToRGBA8(const glm::vec4& inColor)
 	uint32_t result = (a << 24) | (b << 16) | (g << 8) | r;
 	return result;
 }
-
-

@@ -16,13 +16,12 @@
 #include "Renderer/DrawDebugHelpers.h"
 
 // Constant Buffer
-struct PointConstantBuffer
+struct DebugConstants
 {
-	glm::mat4 Projection;
-	glm::mat4 View;
-	uint32_t Padding[32];
+	glm::mat4 WorldToClip;
+	uint32_t Padding[48];
 };
-static_assert((sizeof(PointConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
+static_assert((sizeof(DebugConstants) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
 struct PackedDebugPointInstanceData
 {
@@ -171,6 +170,21 @@ void DebugPrimitivesPass::Execute(struct ID3D12GraphicsCommandList* inCmdList, c
 	// Generate buffer data
 	DrawDebugManager& manager = DrawDebugManager::Get();
 	const eastl::vector<DebugPoint>& debugPoints = manager.GetDebugPoints();
+	ASSERT(debugPoints.size() < MAX_NR_POINTS);
+
+	SceneManager& sManager = SceneManager::Get();
+	const Scene& currentScene = sManager.GetCurrentScene();
+
+	glm::mat4 projection = currentScene.GetMainCameraProj();
+
+	// Convert projection to infinite
+	projection[2][2] = 1.0f;
+	projection[3][2] = -2.0f * currentScene.GetCurrentCamera()->GetNear();
+
+	DebugConstants constData;
+	constData.WorldToClip = glm::transpose(projection * currentScene.GetMainCameraLookAt());
+
+	MapResult constBuffer{};
 
 	if (debugPoints.size() > 0)
 	{
@@ -192,7 +206,6 @@ void DebugPrimitivesPass::Execute(struct ID3D12GraphicsCommandList* inCmdList, c
 
 		m_PointsBuffer.UploadDataAllFrames(&pointsInstanceData[0], sizeof(PackedDebugPointInstanceData) * pointsInstanceData.size());
 
-
 		// Populate Command List
 
 		inCmdList->SetGraphicsRootSignature(m_DebugPrimitivesQuadPointsRootSignature);
@@ -203,17 +216,11 @@ void DebugPrimitivesPass::Execute(struct ID3D12GraphicsCommandList* inCmdList, c
 
 		inCmdList->OMSetRenderTargets(1, renderTargets, false, &inDepthBuffer.DSV);
 
-		SceneManager& sManager = SceneManager::Get();
-		const Scene& currentScene = sManager.GetCurrentScene();
-
-		PointConstantBuffer constBuffer;
-		constBuffer.Projection = glm::transpose(currentScene.GetMainCameraProj());
-		constBuffer.View = glm::transpose(currentScene.GetMainCameraLookAt());
-
 		// Use temp buffer in main constant buffer
-		MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constBuffer));
-		memcpy(cBufferMap.CPUAddress, &constBuffer, sizeof(constBuffer));
-		inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
+		constBuffer = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constData));
+		memcpy(constBuffer.CPUAddress, &constData, sizeof(constData));
+
+		inCmdList->SetGraphicsRootConstantBufferView(0, constBuffer.GPUAddress);
 		inCmdList->SetGraphicsRootShaderResourceView(1, m_PointsBuffer.GetCurrentGPUAddress());
 
 		inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -221,6 +228,8 @@ void DebugPrimitivesPass::Execute(struct ID3D12GraphicsCommandList* inCmdList, c
 	}
 
 	const eastl::vector<DebugLine>& debugLines = manager.GetDebugLines();
+	ASSERT(debugLines.size() < MAX_NR_LINES);
+
 	if (debugLines.size() > 0)
 	{
 		eastl::vector<PackedDebugLineInstanceData> linesInstanceData;
@@ -250,17 +259,14 @@ void DebugPrimitivesPass::Execute(struct ID3D12GraphicsCommandList* inCmdList, c
 
 		inCmdList->OMSetRenderTargets(1, renderTargets, false, &inDepthBuffer.DSV);
 
-		SceneManager& sManager = SceneManager::Get();
-		const Scene& currentScene = sManager.GetCurrentScene();
-
-		PointConstantBuffer constBuffer;
-		constBuffer.Projection = glm::transpose(currentScene.GetMainCameraProj());
-		constBuffer.View = glm::transpose(currentScene.GetMainCameraLookAt());
-
 		// Use temp buffer in main constant buffer
-		MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constBuffer));
-		memcpy(cBufferMap.CPUAddress, &constBuffer, sizeof(constBuffer));
-		inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
+		if (!constBuffer.CPUAddress)
+		{
+			constBuffer = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constData));
+		}
+		memcpy(constBuffer.CPUAddress, &constData, sizeof(constData));
+
+		inCmdList->SetGraphicsRootConstantBufferView(0, constBuffer.GPUAddress);
 		inCmdList->SetGraphicsRootShaderResourceView(1, m_LinesBuffer.GetCurrentGPUAddress());
 
 		inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);

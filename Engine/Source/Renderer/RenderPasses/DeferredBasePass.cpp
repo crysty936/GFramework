@@ -407,7 +407,7 @@ void DeferredBasePass::Execute(ID3D12GraphicsCommandList* inCmdList)
 
 		// Record commands
 		const eastl::vector<TransformObjPtr>& children = currModel->GetChildren();
-		DrawMeshNodesRecursively(inCmdList, children, currentScene, currModel->Materials);
+		//DrawMeshNodesRecursively(inCmdList, children, currentScene, currModel->Materials);
 	}
 
 }

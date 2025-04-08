@@ -20,8 +20,7 @@ struct InterpolantsVSToPS
 // 256 byte aligned
 struct SceneConstantBuffer
 {
-    float4x4 Projection;
-    float4x4 View;
+    float4x4 WorldToClip;
 };
 
 struct PackedDebugPointInstanceData
@@ -43,8 +42,7 @@ InterpolantsVSToPS VSMainPoints(uint vertexId : SV_VertexID, uint instanceId : S
     const PackedDebugPointInstanceData instanceData = PointsBuffer[instanceId];
     position.xyz = (position.xyz * instanceData.Scale) + instanceData.Translation;
     
-    const float4x4 vp = mul(SceneBuffer.View, SceneBuffer.Projection);
-    const float4 clipPos = mul(position, vp);
+    const float4 clipPos = mul(position, SceneBuffer.WorldToClip);
 
     InterpolantsVSToPS result;
     result.Position = clipPos;
@@ -73,8 +71,7 @@ InterpolantsVSToPS VSMainLines(uint vertexId : SV_VertexID, uint instanceId : SV
     const PackedDebugLineInstanceData instanceData = LinesBuffer[instanceId];
     float4 position = float4(instanceData.Position[vertexId], 1.f);
 
-    const float4x4 vp = mul(SceneBuffer.View, SceneBuffer.Projection);
-    const float4 clipPos = mul(position, vp);
+    const float4 clipPos = mul(position, SceneBuffer.WorldToClip);
 
     InterpolantsVSToPS result;
     result.Position = clipPos;

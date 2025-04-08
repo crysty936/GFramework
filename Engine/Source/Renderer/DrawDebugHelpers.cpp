@@ -60,6 +60,8 @@ void DrawDebugHelpers::DrawBoxArray(vectorInline<glm::vec3, 8> inArray, const bo
  	};
 
 	vectorInline<glm::vec3, 4> FaceVertices;
+	FaceVertices.resize(4);
+
  	for (int32_t faceCount = 0; faceCount < 6; faceCount++)
  	{
  		FaceVertices[0] = inArray[FaceVertexIndices[faceCount][0]];
@@ -87,68 +89,6 @@ void DrawDebugHelpers::DrawProjection(const glm::mat4& inProj)
 	vectorInline<glm::vec3, 8> projCorners = RenderUtils::GenerateSpaceCorners(inProj, 0.f, 1.f);
 	DrawBoxArray(projCorners, true, glm::vec3(1.f, 0.f, 0.f));
 }
-
-#if 0
-void DrawDebugManager::Draw()
-{
-	// Lines
-	{
-		const eastl::vector<DebugLine> debugLines = Get().DebugLines;
-
-		VertexInputLayout inputLayout;
-		// Vertex points
-		inputLayout.Push<float>(3, VertexInputType::Position);
-		inputLayout.Push<float>(3, VertexInputType::Undefined);
-		inputLayout.Push<float>(3, VertexInputType::Undefined);
-
-		const size_t linesSize = sizeof(DebugLine) * debugLines.size();
-
-		if (!DebugLinesBuffer)
-		{
-			DebugLinesBuffer = RHI::Get()->CreateVertexBuffer(inputLayout, debugLines.data(), linesSize);
-		}
-		else
-		{
-			RHI::Get()->ClearVertexBuffer(*DebugLinesBuffer);
-			RHI::Get()->UpdateVertexBufferData(*DebugLinesBuffer, debugLines.data(), linesSize);
-		}
-
-		MaterialsManager& matManager = MaterialsManager::Get();
-		bool materialExists = false;
-		eastl::shared_ptr<RenderMaterial> material = matManager.GetOrAddMaterial<RenderMaterial_Debug>("debug_lines_material", materialExists);
-
-		if (!materialExists)
-		{
-			eastl::vector<ShaderSourceInput> shaders = {
-			{ "DebugPrimitives/VS_Pos_Geometry_ManuallyWritten_DebugLine", EShaderType::Sh_Vertex },
-			{ "DebugPrimitives/GS_DebugLines", EShaderType::Sh_Geometry },
-			{ "DebugPrimitives/PS_DebugLine_Color", EShaderType::Sh_Fragment } };
-
-			material->Shader = RHI::Get()->CreateShaderFromPath(shaders, inputLayout);
-		}
-
-		constexpr bool useIndexBuffer = false;
-		RHI::Get()->BindVertexBuffer(*DebugLinesBuffer, useIndexBuffer);
-		RHI::Get()->BindShader(*material->Shader);
-
-		material->ResetUniforms();
-
-		material->SetUniformsValue(Renderer::Get().GetUniformsCache());
-		material->BindBuffers();
-
-		RHI::Get()->DrawPoints(static_cast<int32_t>(debugLines.size()));
-
-		RHI::Get()->UnbindVertexBuffer(*DebugLinesBuffer, useIndexBuffer);
-		material->UnbindBuffers();
-		RHI::Get()->UnbindShader(*material->Shader);
-	}
-	RHI::Get()->SetCullEnabled(true);
-
-	Get().ClearDebugData();
-
-
-}
-#endif
 
 void DrawDebugManager::ClearDebugData()
 {

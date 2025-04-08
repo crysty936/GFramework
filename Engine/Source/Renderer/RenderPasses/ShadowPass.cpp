@@ -11,6 +11,11 @@
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
 #include "Renderer/RHI/D3D12/D3D12Utility.h"
+#include "imgui.h"
+#include "Renderer/DrawDebugHelpers.h"
+#include "Math/AABB.h"
+#include "Math/MathUtils.h"
+#include "Utils/ImGuiUtils.h"
 
 // Constant Buffer
 struct MeshConstantBuffer
@@ -108,13 +113,13 @@ void ShadowPass::Init()
 uint64_t TestNrMeshesToDraw = uint64_t(-1);
 uint64_t NrMeshesDrawn = 0;
 
-void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl::vector<TransformObjPtr>& inChildNodes, const Scene& inCurrentScene, const eastl::vector<MeshMaterial>& inMaterials, const glm::mat4& inShadowMatrix)
+void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl::vector<TransformObjPtr>& inChildNodes, const Scene& inCurrentScene, const eastl::vector<MeshMaterial>& inMaterials, const glm::mat4& inToShadowClipMatrix)
 {
 	for (const TransformObjPtr& child : inChildNodes)
 	{
 		const TransformObject* childPtr = child.get();
 
-		DrawMeshNodesRecursively(inCmdList, childPtr->GetChildren(), inCurrentScene, inMaterials, inShadowMatrix);
+		DrawMeshNodesRecursively(inCmdList, childPtr->GetChildren(), inCurrentScene, inMaterials, inToShadowClipMatrix);
 
 		//if (NrMeshesDrawn >= TestNrMeshesToDraw)
 		//{
@@ -135,9 +140,8 @@ void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl:
 				MeshConstantBuffer constantBufferData;
 
 
-				const glm::mat4 Proj = glm::orthoLH_ZO(20, -20, 20, -20, 0, 100);
 				//constantBufferData.LocalToClip = glm::transpose(Proj * inCurrentScene.GetMainCameraLookAt() * modelMatrix);
-				constantBufferData.LocalToClip = glm::transpose(Proj * inShadowMatrix * modelMatrix);
+				constantBufferData.LocalToClip = glm::transpose(inToShadowClipMatrix * modelMatrix);
 				//constantBufferData.LocalToClip = glm::transpose(inCurrentScene.GetMainCameraProj() * inCurrentScene.GetMainCameraLookAt() * modelMatrix);
 
 				MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constantBufferData));
@@ -159,33 +163,103 @@ void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl:
 	}
 }
 
+glm::mat4 CreateCascadeMatrix(const glm::mat4& inCameraProj, const glm::mat4& inCameraView, const glm::vec3& inLightDir)
+{
+	const glm::mat4 worldToCameraClip = inCameraProj * inCameraView;
+	const glm::vec3 cameraProjCenter = RenderUtils::GetProjectionCenter(worldToCameraClip);
+
+	// Create tight shadow projection around camera frustum
+	AABB projBox;
+	vectorInline<glm::vec3, 8> cameraProjPoints = RenderUtils::GenerateSpaceCorners(worldToCameraClip);
+
+	// Point light at light dir relative to center of projection
+	const glm::mat4 lightView = MathUtils::BuildLookAt(inLightDir, cameraProjCenter);
+
+	for (const glm::vec3& point : cameraProjPoints)
+	{
+		const glm::vec4 lightSpacePoint = lightView * glm::vec4(point.x, point.y, point.z, 1.f);
+		projBox += glm::vec3(lightSpacePoint.x, lightSpacePoint.y, lightSpacePoint.z);
+	}
+
+	const glm::mat4 lightProjection = glm::orthoLH_ZO(projBox.Min.x, projBox.Max.x, projBox.Min.y, projBox.Max.y, projBox.Min.z, projBox.Max.z);
+
+	return lightProjection * lightView;
+}
+
+vectorInline<glm::mat4, NUM_CASCADES_MAX> ShadowPass::CreateCascadesMatrices(const glm::vec3& inLightDir, const Scene& inCurrentScene) const
+{
+	vectorInline<glm::mat4, NUM_CASCADES_MAX> cascades;
+	cascades.reserve(NumCascades);
+
+	const eastl::shared_ptr<Camera>& currentCamera = inCurrentScene.GetCurrentCamera();
+
+	const float cameraNear = currentCamera->GetNear();
+	const float cameraFar = currentCamera->GetFar();
+	const float cameraFOV = currentCamera->GetFOV();
+	eastl::vector<float> shadowCascadeFarPlanes = { cameraFar / 40.0f , cameraFar / 30.0f, cameraFar / 20.0f, cameraFar / 10.0f, cameraFar / 2.0f, cameraFar };
+
+	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
+	const WindowProperties& props = mainWindow.GetProperties();
+
+	const float windowWidth = static_cast<float>(props.Width);
+	const float windowHeight = static_cast<float>(props.Height);
+
+	for (int32_t i = 0; i < NumCascades; ++i)
+	{
+		const float cascadeNear = i == 0 ? cameraNear : shadowCascadeFarPlanes[i - 1];
+		const float cascadeFar = shadowCascadeFarPlanes[i];
+
+		const glm::mat4 cameraProj = glm::perspectiveLH_ZO(glm::radians(cameraFOV), windowWidth / windowHeight, cascadeNear, cascadeFar);
+
+		if (bUpdateShadowValues)
+		{
+			CachedCameraShadowMatrix = inCurrentScene.GetMainCameraLookAt();
+		}
+
+		if (bDrawCascadesCameraFrustums)
+		{
+			DrawDebugHelpers::DrawProjection(cameraProj * CachedCameraShadowMatrix);
+			DrawDebugHelpers::DrawProjectionPoints(cameraProj * CachedCameraShadowMatrix);
+		}
+
+		const glm::mat4 worldToLightClip = CreateCascadeMatrix(cameraProj, CachedCameraShadowMatrix, inLightDir);
+
+		if (bDrawCascadesProjection)
+		{
+			DrawDebugHelpers::DrawProjection(worldToLightClip);
+			DrawDebugHelpers::DrawProjectionPoints(worldToLightClip);
+		}
+
+		cascades.push_back(worldToLightClip);
+	}
+
+	return cascades;
+}
+
 
 void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& inLightDir)
 {
 	PIXMarker Marker(inCmdList, "Draw Depth Pass");
 
-	// Build shadow matrix
+	ImGuiUtils::ImGuiScope ImGuiShadow("Shadow");
+
+	ImGui::DragInt("Cascade Count", &NumCascades, 1.0f, 0, NUM_CASCADES_MAX);
+	ImGui::Checkbox("Update Shadow Matrix", &bUpdateShadowValues);
+	ImGui::Checkbox("Draw Cascades Projections", &bDrawCascadesProjection);
+	ImGui::Checkbox("Draw Cascades Camera Frustums", &bDrawCascadesCameraFrustums);
+
 	SceneManager& sManager = SceneManager::Get();
 	const Scene& currentScene = sManager.GetCurrentScene();
 
-	const eastl::shared_ptr<Camera>& currentCamera = currentScene.GetCurrentCamera();
-	const glm::vec3 cameraPosW = currentCamera->GetAbsoluteTransform().Translation;
-	const glm::vec3 shadowPosW = cameraPosW + (5.f * (-inLightDir));
+	vectorInline<glm::mat4, NUM_CASCADES_MAX> cascadeMatrices = CreateCascadesMatrices(inLightDir, currentScene);
 
-	const glm::vec3 z_axis = glm::normalize(inLightDir);
-	const glm::vec3 x_axis = glm::normalize(glm::cross(glm::vec3(0.f, 1.f, 0.f), z_axis));
-	const glm::vec3 y_axis = glm::normalize(glm::cross(z_axis, x_axis));
-
-	const glm::mat4 shadowMatrix(
-		glm::vec4(x_axis, 0),
-		glm::vec4(y_axis, 0),
-		glm::vec4(z_axis, 0),
-		glm::vec4(0, 0, 0, 1));
-
+	if (cascadeMatrices.size() == 0)
+	{
+		return;
+	}
 
 	D3D12Utility::TransitionResource(inCmdList, ShadowDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 	inCmdList->ClearDepthStencilView(ShadowDepthBuffer->DSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.f, 0, 0, nullptr);
-
 
 	D3D12Globals::GlobalConstantsBuffer.ClearUsedMemory();
 
@@ -224,7 +298,7 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& 
 
 		// Record commands
 		const eastl::vector<TransformObjPtr>& children = currModel->GetChildren();
-		DrawMeshNodesRecursively(inCmdList, children, currentScene, currModel->Materials, glm::transpose(shadowMatrix));
+		DrawMeshNodesRecursively(inCmdList, children, currentScene, currModel->Materials, cascadeMatrices[0]);
 	}
 
 	D3D12Utility::TransitionResource(inCmdList, ShadowDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);

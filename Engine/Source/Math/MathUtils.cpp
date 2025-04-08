@@ -1,7 +1,7 @@
 #include "Math/MathUtils.h"
 #include "glm/common.hpp"
 #include "glm/fwd.hpp"
-#include "glm/detail/func_geometric.inl"
+#include "glm/gtc/type_ptr.hpp"
 
 using vec4i = glm::vec<4, uint8_t>;
 
@@ -86,3 +86,92 @@ float UnpackFloatFromVec4i(const glm::vec4 value)
 
 	return(res);
 }
+
+glm::mat4 MathUtils::BuildLookAt(const glm::vec3& inEyeDirection, const glm::vec3& inEyePos, const glm::vec3& inUp)
+{
+	// 	//https://www.3dgep.com/understanding-the-view-matrix/
+
+	glm::vec3 right = glm::normalize(glm::cross(inUp, inEyeDirection));
+	//glm::vec3 right = glm::normalize(glm::cross(inEyeDirection, globalUp)); // For Opengl(right-handed)
+	glm::vec3 up = glm::normalize(glm::cross(inEyeDirection, right));
+	//glm::vec3 cameraUp = glm::normalize(glm::cross(right, inEyeDirection)); // For Opengl(right-handed)
+
+	// Rotate inversely related to camera
+//  	// Rotation Matrix
+//  	/**
+//  	* Normally this matrix would be like this:
+//  	  	float firstMatrixA[16] =
+//   		{
+//   			right.x,		right.y,		right.z,		0,
+//   			cameraUp.x,		cameraUp.y,		cameraUp.z,		0,
+//   			inEyeDirection.x,	inEyeDirection.y,	inEyeDirection.z,		0,
+//   			0,				0,				0,				1
+//   		};
+//  		
+//  		And we would need to do:
+//  		//rotationMatrix = glm::transpose(rotationMatrix);
+//  		Because it's transpose is equal to it's inverse because it the matrix
+//  		is orthonormalized
+//  
+//  		However, we can build it directly transposed
+//  	 */
+
+#define BUILD_SEPARATELY 0
+
+#if BUILD_SEPARATELY
+	float firstMatrixA[16] =
+	{
+		right.x,		up.x,		inEyeDirection.x,		0,
+		right.y,		up.y,		inEyeDirection.y,		0,
+		right.z,		up.z,		inEyeDirection.z,		0,
+		0,				0,				0,				1
+	};
+
+
+	glm::mat4 rotationMatrix = glm::mat4(1.f);
+	memcpy(glm::value_ptr(rotationMatrix), firstMatrixA, sizeof(glm::mat4));
+
+	// Move inversely related to camera
+//  
+//  	// Translation Matrix
+//  	// Position is negated so that camera is at origin
+//  	// 
+//  	// Translation inverse is equal to T(-v) T(v)^-1 == T(-v)
+// 
+// 	//Also, inverse of a TranslationRotation matrix (X)^-1 = (T(t) * R)^-1 = R^t * T(-t), so R^-1 * T^-1, open parantheses mean inverse of operations and inverse of each
+
+	float SecondMatrixA[16] =
+	{
+		1,		0,		0,		0,
+		0,		1,		0,		0,
+		0,		0,		1,		0,
+		-inEyePos.x,		-inEyePos.y,		-inEyePos.z,		1	// For D3D12
+		//-inEyePos.x,		-inEyePos.y,		inEyePos.z,		1	// For OpenGl(right-handed)
+	};
+
+	glm::mat4 translationMatrix = glm::mat4(1.f);
+	memcpy(glm::value_ptr(translationMatrix), SecondMatrixA, sizeof(glm::mat4));
+
+	glm::mat4 lookAt = rotationMatrix * translationMatrix;// In the shader it's pre-multiplied, meaning that it's first translated and then rotated with camera as center
+
+	return lookAt;
+#else
+	// Build result of multiplication straight away
+	float lookAt[16] =
+	{
+		right.x,								up.x,									inEyeDirection.x,									0,
+		right.y,								up.y,									inEyeDirection.y,									0,
+		right.z,								up.z,									inEyeDirection.z,									0,
+		-glm::dot(right, inEyePos),				-glm::dot(up, inEyePos),				-glm::dot(inEyeDirection, inEyePos),				1
+	};
+
+	glm::mat4 lookAtM = glm::mat4(1.f);
+	memcpy(glm::value_ptr(lookAtM), lookAt, sizeof(glm::mat4));
+
+	return lookAtM;
+#endif
+
+}
+
+
+
