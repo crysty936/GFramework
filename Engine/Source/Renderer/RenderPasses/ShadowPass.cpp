@@ -28,10 +28,12 @@ static_assert((sizeof(MeshConstantBuffer) % 256) == 0, "Constant Buffer size mus
 ID3D12RootSignature* m_ShadowPassRootSignature;
 ID3D12PipelineState* m_ShadowPassPSO;
 
+#define SHADOW_CASCADES_RESOLUTION 1024
+
 void ShadowPass::Init()
 {
 	// Textures
-	ShadowDepthBuffer = D3D12RHI::Get()->CreateDepthBuffer(1024, 1024, L"Shadow Depth Buffer", ETextureState::Shader_Resource);
+	ShadowDepthBuffer = D3D12RHI::Get()->CreateDepthBuffer(SHADOW_CASCADES_RESOLUTION, SHADOW_CASCADES_RESOLUTION, L"Shadow Depth Buffer", ETextureState::Shader_Resource, MAX_NUM_CASCADES);
 
 	// Root Signature
 	{
@@ -186,9 +188,9 @@ glm::mat4 CreateCascadeMatrix(const glm::mat4& inCameraProj, const glm::mat4& in
 	return lightProjection * lightView;
 }
 
-vectorInline<glm::mat4, NUM_CASCADES_MAX> ShadowPass::CreateCascadesMatrices(const glm::vec3& inLightDir, const Scene& inCurrentScene) const
+vectorInline<glm::mat4, MAX_NUM_CASCADES> ShadowPass::CreateCascadesMatrices(const glm::vec3& inLightDir, const Scene& inCurrentScene) const
 {
-	vectorInline<glm::mat4, NUM_CASCADES_MAX> cascades;
+	vectorInline<glm::mat4, MAX_NUM_CASCADES> cascades;
 	cascades.reserve(NumCascades);
 
 	const eastl::shared_ptr<Camera>& currentCamera = inCurrentScene.GetCurrentCamera();
@@ -243,65 +245,67 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& 
 
 	ImGuiUtils::ImGuiScope ImGuiShadow("Shadow");
 
-	ImGui::DragInt("Cascade Count", &NumCascades, 1.0f, 0, NUM_CASCADES_MAX);
+	ImGui::DragInt("Cascade Count", &NumCascades, 1.0f, 0, MAX_NUM_CASCADES);
 	ImGui::Checkbox("Update Shadow Matrix", &bUpdateShadowValues);
 	ImGui::Checkbox("Draw Cascades Projections", &bDrawCascadesProjection);
 	ImGui::Checkbox("Draw Cascades Camera Frustums", &bDrawCascadesCameraFrustums);
 
+	D3D12Globals::GlobalConstantsBuffer.ClearUsedMemory();
 	SceneManager& sManager = SceneManager::Get();
 	const Scene& currentScene = sManager.GetCurrentScene();
 
-	vectorInline<glm::mat4, NUM_CASCADES_MAX> cascadeMatrices = CreateCascadesMatrices(inLightDir, currentScene);
+	vectorInline<glm::mat4, MAX_NUM_CASCADES> cascadeMatrices = CreateCascadesMatrices(inLightDir, currentScene);
 
 	if (cascadeMatrices.size() == 0)
 	{
 		return;
 	}
-
-	D3D12Utility::TransitionResource(inCmdList, ShadowDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-	inCmdList->ClearDepthStencilView(ShadowDepthBuffer->DSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.f, 0, 0, nullptr);
-
-	D3D12Globals::GlobalConstantsBuffer.ClearUsedMemory();
-
-	// Populate Command List
-
 	inCmdList->SetGraphicsRootSignature(m_ShadowPassRootSignature);
 	inCmdList->SetPipelineState(m_ShadowPassPSO);
 
+	//TODO: Change these depending on the cascade resolution
 	static D3D12_VIEWPORT viewport;
-	viewport.Width = static_cast<float>(1024);
-	viewport.Height = static_cast<float>(1024);
+	viewport.Width = static_cast<float>(SHADOW_CASCADES_RESOLUTION);
+	viewport.Height = static_cast<float>(SHADOW_CASCADES_RESOLUTION);
 	viewport.MinDepth = 0.f;
 	viewport.MaxDepth = 1.f;
-
 	D3D12Globals::GraphicsCmdList->RSSetViewports(1, &viewport);
-
-	// Handle RTs
-	inCmdList->OMSetRenderTargets(0, nullptr, false, &ShadowDepthBuffer->DSV);
-
-
-	// Draw meshes
-	NrMeshesDrawn = 0;
 
 	const eastl::vector<eastl::shared_ptr<TransformObject>>& objects = currentScene.GetAllObjects();
 
-	for (int32_t i = 0; i < objects.size(); ++i)
+	for (int32_t i = 0; i < NumCascades; ++i)
 	{
-		// TODO: Possibly replace with RenderCommand self registration because this way it needs to be recursive and casting
-		const eastl::shared_ptr<TransformObject>& currObj = objects[i];
-		const eastl::shared_ptr<Model3D> currModel = eastl::dynamic_shared_pointer_cast<Model3D>(currObj);
+		D3D12Utility::TransitionResource(inCmdList, ShadowDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE, i);
+		inCmdList->ClearDepthStencilView(ShadowDepthBuffer->ArrayDSVs[i], D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.f, 0, 0, nullptr);
 
-		if (currModel.get() == nullptr)
+		//// Populate Command List
+
+
+		// Handle RTs
+		inCmdList->OMSetRenderTargets(0, nullptr, false, &ShadowDepthBuffer->ArrayDSVs[i]);
+
+		// Draw meshes
+		NrMeshesDrawn = 0;
+
+
+		for (int32_t i = 0; i < objects.size(); ++i)
 		{
-			continue;
+			// TODO: Possibly replace with RenderCommand self registration because this way it needs to be recursive and casting
+			const eastl::shared_ptr<TransformObject>& currObj = objects[i];
+			const eastl::shared_ptr<Model3D> currModel = eastl::dynamic_shared_pointer_cast<Model3D>(currObj);
+
+			if (currModel.get() == nullptr)
+			{
+				continue;
+			}
+
+			// Record commands
+			const eastl::vector<TransformObjPtr>& children = currModel->GetChildren();
+			DrawMeshNodesRecursively(inCmdList, children, currentScene, currModel->Materials, cascadeMatrices[0]);
 		}
 
-		// Record commands
-		const eastl::vector<TransformObjPtr>& children = currModel->GetChildren();
-		DrawMeshNodesRecursively(inCmdList, children, currentScene, currModel->Materials, cascadeMatrices[0]);
+		D3D12Utility::TransitionResource(inCmdList, ShadowDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, i);
 	}
-
-	D3D12Utility::TransitionResource(inCmdList, ShadowDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();

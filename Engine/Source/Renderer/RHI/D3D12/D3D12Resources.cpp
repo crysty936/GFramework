@@ -126,7 +126,8 @@ eastl::shared_ptr<class D3D12VertexBuffer> D3D12RHI::CreateVertexBuffer(const Ve
 
 D3D12IndexBuffer::D3D12IndexBuffer()
 	: RHIIndexBuffer()
-{}
+{
+}
 
 D3D12_INDEX_BUFFER_VIEW D3D12IndexBuffer::IBView() const
 {
@@ -140,7 +141,8 @@ D3D12_INDEX_BUFFER_VIEW D3D12IndexBuffer::IBView() const
 
 D3D12VertexBuffer::D3D12VertexBuffer()
 	: RHIVertexBuffer()
-{}
+{
+}
 
 D3D12_VERTEX_BUFFER_VIEW D3D12VertexBuffer::VBView() const
 {
@@ -677,14 +679,14 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 	return newRT;
 }
 
-eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName, const ETextureState inInitialState)
+eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName, const ETextureState inInitialState, const int32_t inArraySize)
 {
 	eastl::shared_ptr<D3D12DepthBuffer> newDB = eastl::make_shared<D3D12DepthBuffer>();
 	eastl::unique_ptr<D3D12Texture2D> ownedTexture = eastl::make_unique<D3D12Texture2D>();
 
 	// Based on DXGI_FORMAT_D32_FLOAT
-	DXGI_FORMAT texFormat = DXGI_FORMAT_R32_TYPELESS;
-	DXGI_FORMAT srvFormat = DXGI_FORMAT_R32_FLOAT;
+	const DXGI_FORMAT texFormat = DXGI_FORMAT_R32_TYPELESS;
+	const DXGI_FORMAT srvFormat = DXGI_FORMAT_R32_FLOAT;
 
 	D3D12_RESOURCE_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
@@ -692,7 +694,7 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 	textureDesc.Width = uint32_t(inWidth);
 	textureDesc.Height = uint32_t(inHeight);
 	textureDesc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-	textureDesc.DepthOrArraySize = 1;
+	textureDesc.DepthOrArraySize = inArraySize;
 	textureDesc.SampleDesc.Count = 1;
 	textureDesc.SampleDesc.Quality = 0;
 	textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -708,13 +710,56 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 	const D3D12_RESOURCE_STATES initState = TexStateToD3D12ResState(inInitialState);
 	DXAssert(D3D12Globals::Device->CreateCommittedResource(&D3D12Utility::GetDefaultHeapProps(), D3D12_HEAP_FLAG_NONE, &textureDesc, initState, &clearValue, IID_PPV_ARGS(&ownedTexture->Resource)));
 
+	// These need to be updated for MSAA
+
+	// Create SRV
+	{
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Format = srvFormat;
+
+		if (inArraySize == 1)
+		{
+			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+			srvDesc.Texture2D.MipLevels = 1;
+			srvDesc.Texture2D.MostDetailedMip = 0;
+			srvDesc.Texture2D.PlaneSlice = 0;
+			srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+		}
+		else if (inArraySize > 1)
+		{
+			srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+			srvDesc.Texture2DArray.MipLevels = 1;
+			srvDesc.Texture2DArray.MostDetailedMip = 0;
+			srvDesc.Texture2DArray.PlaneSlice = 0;
+			srvDesc.Texture2DArray.ResourceMinLODClamp = 0.0f;
+			srvDesc.Texture2DArray.ArraySize = inArraySize;
+		}
+
+		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalSRVHeap.AllocatePersistent();
+		ownedTexture->SRVIndex = descAllocation.Index;
+		for (uint32_t i = 0; i < D3D12Globals::GlobalSRVHeap.NumHeaps; ++i)
+		{
+			D3D12Globals::Device->CreateShaderResourceView(ownedTexture->Resource, &srvDesc, descAllocation.CPUHandle[i]);
+		}
+	}
+
 	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
 	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
 	dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
 
-	// Needs to be changed for MSAA
-	dsvDesc.Texture2D.MipSlice = 0;
-	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+	// Create Main DSV which includes all underlying array elements, if more than one exists
+	if (inArraySize == 1)
+	{
+		dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+		dsvDesc.Texture2D.MipSlice = 0;
+	}
+	else if (inArraySize > 1)
+	{
+		dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+		dsvDesc.Texture2DArray.MipSlice = 0;
+		dsvDesc.Texture2DArray.ArraySize = uint32_t(inArraySize);
+	}
 
 	{
 		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalDSVHeap.AllocatePersistent();
@@ -731,21 +776,22 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 	//	D3D12Globals::Device->CreateDepthStencilView(ownedTexture->Resource, &dsvDesc, descAllocation.CPUHandle);
 	//}
 
-	// Create SRV
-	{
-		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.Format = srvFormat;
-		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		srvDesc.Texture2D.MipLevels = 1;
 
-		D3D12DescHeapAllocationDesc descAllocation = D3D12Globals::GlobalSRVHeap.AllocatePersistent();
-		ownedTexture->SRVIndex = descAllocation.Index;
-		for (uint32_t i = 0; i < D3D12Globals::GlobalSRVHeap.NumHeaps; ++i)
+	// Create DSV for each array element
+	if (inArraySize > 1)
+	{
+		newDB->ArrayDSVs.reserve(inArraySize);
+		dsvDesc.Texture2DArray.ArraySize = 1;
+
+		for (int32_t i = 0; i < inArraySize; ++i)
 		{
-			D3D12Globals::Device->CreateShaderResourceView(ownedTexture->Resource, &srvDesc, descAllocation.CPUHandle[i]);
+			dsvDesc.Texture2DArray.FirstArraySlice = uint32_t(i);
+			D3D12_CPU_DESCRIPTOR_HANDLE newDSVDescr = D3D12Globals::GlobalDSVHeap.AllocatePersistent().CPUHandle[0];
+			newDB->ArrayDSVs.push_back(newDSVDescr);
+			D3D12Globals::Device->CreateDepthStencilView(ownedTexture->Resource, &dsvDesc, newDSVDescr);
 		}
 	}
+
 
 	ownedTexture->Resource->SetName(inName.c_str());
 

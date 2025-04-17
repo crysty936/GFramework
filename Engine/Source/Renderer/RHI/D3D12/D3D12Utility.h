@@ -68,7 +68,7 @@ namespace D3D12Utility
 	D3D12_HEAP_PROPERTIES& GetUploadHeapProps();
 
 	void UAVBarrier(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource);
-	void TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter);
+	void TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter, uint32_t inSubresourceIdx = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 	D3D12_GPU_DESCRIPTOR_HANDLE CreateTempDescriptorTable(ID3D12GraphicsCommandList* inCmdList, const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& inHandles);
 	void BindTempDescriptorTable(uint32_t inRootParamIdx, ID3D12GraphicsCommandList* inCmdList, const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& inHandles);
 	void CopyTexture(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inDest, ID3D12Resource* inSrc);

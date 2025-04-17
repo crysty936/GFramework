@@ -166,7 +166,7 @@ D3D12_HEAP_PROPERTIES& D3D12Utility::GetUploadHeapProps()
 }
 
 
-D3D12_RESOURCE_BARRIER MakeTransitionBarrier(ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter)
+D3D12_RESOURCE_BARRIER MakeTransitionBarrier(ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter, uint32_t inSubresourceIdx)
 {
 	D3D12_RESOURCE_BARRIER barrier = {};
 	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -189,9 +189,9 @@ void D3D12Utility::UAVBarrier(ID3D12GraphicsCommandList* inCmdList, ID3D12Resour
 	inCmdList->ResourceBarrier(1, &barrier);
 }
 
-void D3D12Utility::TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter)
+void D3D12Utility::TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter, uint32_t inSubresourceIdx)
 {
-	D3D12_RESOURCE_BARRIER barrier = MakeTransitionBarrier(inResource, inStateBefore, inStateAfter);
+	D3D12_RESOURCE_BARRIER barrier = MakeTransitionBarrier(inResource, inStateBefore, inStateAfter, inSubresourceIdx);
 
 	inCmdList->ResourceBarrier(1, &barrier);
 }

@@ -180,6 +180,7 @@ void DebugPrimitivesPass::Execute(struct ID3D12GraphicsCommandList* inCmdList, c
 	// Convert projection to infinite
 	projection[2][2] = 1.0f;
 	projection[3][2] = -2.0f * currentScene.GetCurrentCamera()->GetNear();
+	// TODO: This messes up the depth occlusion because result is different than standard perspective.
 
 	DebugConstants constData;
 	constData.WorldToClip = glm::transpose(projection * currentScene.GetMainCameraLookAt());

@@ -6,7 +6,7 @@
 #include "glm/ext/matrix_float4x4.hpp"
 #include "Utils/InlineVector.h"
 
-#define NUM_CASCADES_MAX 6
+#define MAX_NUM_CASCADES 6
 
 class ShadowPass
 {
@@ -20,7 +20,7 @@ public:
 	eastl::shared_ptr<class D3D12DepthBuffer> ShadowDepthBuffer;
 
 private:
-	vectorInline<glm::mat4, NUM_CASCADES_MAX> CreateCascadesMatrices(const glm::vec3& inLightDir, const class Scene& inCurrentScene) const;
+	vectorInline<glm::mat4, MAX_NUM_CASCADES> CreateCascadesMatrices(const glm::vec3& inLightDir, const class Scene& inCurrentScene) const;
 
 private:
 	int32_t NumCascades = 4;
