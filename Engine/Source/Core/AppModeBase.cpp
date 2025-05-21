@@ -108,7 +108,7 @@ void AppModeBase::CreateInitialResources()
 	DeferredBasePassCommand.Init();
 	ShadowDepthsPass.Init();
 	BindlessDecalsPassCommmand.Init();
-	DeferredLightingPassCommand.Init();
+	DeferredLightingPassCommand.Init(DeferredBasePassCommand.GBufferTextures);
 	SkyboxPassCommand.Init();
 
 	D3D12Globals::GlobalMaterialsBuffer.Init(1024, sizeof(ShaderMaterial));

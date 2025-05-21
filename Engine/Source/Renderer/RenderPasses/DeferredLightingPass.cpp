@@ -25,14 +25,14 @@ struct LightingConstantBuffer
 };
 static_assert((sizeof(LightingConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
-ID3D12RootSignature* m_LightingRootSignature;
-ID3D12PipelineState* m_LightingPipelineState;
+static ID3D12RootSignature* m_LightingRootSignature;
+static ID3D12PipelineState* m_LightingPipelineState;
 
-void DeferredLightingPass::Init()
+void DeferredLightingPass::Init(SceneTextures& inSceneTextures)
 {
 	// Final lighting root signature
 	{
-		D3D12_ROOT_PARAMETER1 rootParameters[3] = {};
+		D3D12_ROOT_PARAMETER1 rootParameters[2] = {};
 
 		// Constant Buffer
 		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -45,33 +45,26 @@ void DeferredLightingPass::Init()
 		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-		D3D12_DESCRIPTOR_RANGE1 texturesRange[1];
+		D3D12_DESCRIPTOR_RANGE1 texturesRange[2];
 		texturesRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 		texturesRange[0].BaseShaderRegister = 0;
 		texturesRange[0].RegisterSpace = 0;
 		texturesRange[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
-		texturesRange[0].OffsetInDescriptorsFromTableStart = 0;
+		texturesRange[0].OffsetInDescriptorsFromTableStart = inSceneTextures.GBufferAlbedo->Texture->SRVIndex;
 
 		// GBuffer Albedo, GBuffer Normal and GBuffer Roughness
 		texturesRange[0].NumDescriptors = 3;
 
+		// Depth Buffer
+		texturesRange[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		texturesRange[1].BaseShaderRegister = 3;
+		texturesRange[1].RegisterSpace = 0;
+		texturesRange[1].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+		texturesRange[1].OffsetInDescriptorsFromTableStart = inSceneTextures.MainDepthBuffer->Texture->SRVIndex;
+		texturesRange[1].NumDescriptors = 1;
+
 		rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(texturesRange);
 		rootParameters[1].DescriptorTable.pDescriptorRanges = &texturesRange[0];
-
-		// Depth Buffer
-		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-		D3D12_DESCRIPTOR_RANGE1 depthBufferRange[1];
-		depthBufferRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		depthBufferRange[0].BaseShaderRegister = 3;
-		depthBufferRange[0].RegisterSpace = 0;
-		depthBufferRange[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
-		depthBufferRange[0].OffsetInDescriptorsFromTableStart = 0;
-		depthBufferRange[0].NumDescriptors = 1;
-
-		rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(depthBufferRange);
-		rootParameters[2].DescriptorTable.pDescriptorRanges = &depthBufferRange[0];
 
 		//////////////////////////////////////////////////////////////////////////
 
@@ -200,9 +193,7 @@ void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, 
 		inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
 	}
 
-	inCmdList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(inSceneTextures.GBufferAlbedo->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
-	inCmdList->SetGraphicsRootDescriptorTable(2, D3D12Globals::GlobalSRVHeap.GetGPUHandle(inSceneTextures.MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
-
+	inCmdList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(0, D3D12Utility::CurrentFrameIndex));
 	inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	inCmdList->DrawIndexedInstanced(3, 1, 0, 0, 0);

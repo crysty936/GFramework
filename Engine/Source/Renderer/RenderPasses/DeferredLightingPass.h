@@ -10,7 +10,7 @@ struct DeferredLightingPass
 	DeferredLightingPass() = default;
 	~DeferredLightingPass() = default;
 
-	void Init();
+	void Init(struct SceneTextures& inSceneTextures);
 	void Execute(struct ID3D12GraphicsCommandList* inCmdList, struct SceneTextures& inSceneTextures, const class D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir);
 
 private:
