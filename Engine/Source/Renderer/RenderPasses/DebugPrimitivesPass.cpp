@@ -19,7 +19,8 @@
 struct DebugConstants
 {
 	glm::mat4 WorldToClip;
-	uint32_t Padding[48];
+	glm::mat4 CameraToWorld;
+	uint32_t Padding[32];
 };
 static_assert((sizeof(DebugConstants) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
@@ -184,6 +185,7 @@ void DebugPrimitivesPass::Execute(struct ID3D12GraphicsCommandList* inCmdList, c
 
 	DebugConstants constData;
 	constData.WorldToClip = glm::transpose(projection * currentScene.GetMainCameraLookAt());
+	constData.CameraToWorld = glm::transpose(glm::inverse(currentScene.GetMainCameraLookAt()));
 
 	MapResult constBuffer{};
 

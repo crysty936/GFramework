@@ -4,8 +4,9 @@
 #include "EASTL/shared_ptr.h"
 #include "glm/fwd.hpp"
 
-struct DeferredLightingPass
+class DeferredLightingPass
 {
+public:
 
 	DeferredLightingPass() = default;
 	~DeferredLightingPass() = default;

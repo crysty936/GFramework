@@ -116,10 +116,13 @@ public:
 
 	static D3D12RHI* Get() { return Instance; }
 
-
+	inline const eastl::vector<eastl::shared_ptr<class D3D12Texture2D>> GetLiveTextures() { return LiveTextures; }
+	inline const eastl::vector<eastl::shared_ptr<class D3D12RenderTarget2D>> GetRTs() { return RenderTargets; }
 
 private:
 	eastl::vector<struct ID3D12Resource*> DeferredReleaseResources;
+	eastl::vector<eastl::shared_ptr<class D3D12Texture2D>> LiveTextures;
+	eastl::vector<eastl::shared_ptr<class D3D12RenderTarget2D>> RenderTargets;
 
 	inline static class D3D12RHI* Instance = nullptr;
 

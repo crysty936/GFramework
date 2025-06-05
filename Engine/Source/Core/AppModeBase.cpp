@@ -27,6 +27,7 @@
 #include "Renderer/RenderPasses/SkyboxPass.h"
 #include "Renderer/DrawDebugHelpers.h"
 #include "Renderer/RenderPasses/ShadowPass.h"
+#include "Renderer/RenderPasses/DebugTexturesPass.h"
 
 // Windows includes
 #ifndef WIN32_LEAN_AND_MEAN
@@ -83,6 +84,7 @@ ShadowPass ShadowDepthsPass;
 BindlessDecalsPass BindlessDecalsPassCommmand;
 DeferredLightingPass DeferredLightingPassCommand;
 SkyboxPass SkyboxPassCommand;
+DebugTexturePass DebugTexturesPassCommand;
 
 void AppModeBase::Init()
 {
@@ -110,6 +112,7 @@ void AppModeBase::CreateInitialResources()
 	BindlessDecalsPassCommmand.Init();
 	DeferredLightingPassCommand.Init(DeferredBasePassCommand.GBufferTextures);
 	SkyboxPassCommand.Init();
+	DebugTexturesPassCommand.Init();
 
 	D3D12Globals::GlobalMaterialsBuffer.Init(1024, sizeof(ShaderMaterial));
 
@@ -278,7 +281,7 @@ void AppModeBase::BeginFrame()
 
 	BindlessDecalsPassCommmand.UpdateBeforeExecute();
 
-	//ImGui::ShowDemoWindow();
+	ImGui::ShowDemoWindow();
 
 	// Set viewport and scissor region
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
@@ -317,9 +320,9 @@ void AppModeBase::ExecutePasses()
 	ImGui::DragFloat3("Light Direction", &LightDir.x, 0.05f, -1.f, 1.f);
 
 	const glm::vec3 origin = glm::vec3(0.0f, 0.0f, 0.0f);
-	DrawDebugHelpers::DrawDebugPoint(origin, 0.5f);
+	DrawDebugHelpers::DrawDebugPoint(origin, 2.f);
 	const glm::vec3 lineDirOffset = origin - glm::normalize(LightDir);
-	DrawDebugHelpers::DrawDebugPoint(lineDirOffset, 0.5f, glm::vec3(1.f, 0.f, 0.f));
+	DrawDebugHelpers::DrawDebugPoint(lineDirOffset, 1.f, glm::vec3(1.f, 0.f, 0.f));
 	DrawDebugHelpers::DrawDebugLine(origin, lineDirOffset);
 
 
@@ -342,6 +345,7 @@ void AppModeBase::ExecutePasses()
 	SkyboxPassCommand.Execute(D3D12Globals::GraphicsCmdList, *LightingTarget, DeferredBasePassCommand.GBufferTextures);
 
 	DebugPrimitivesPassCommand.Execute(D3D12Globals::GraphicsCmdList, *DeferredBasePassCommand.GBufferTextures.MainDepthBuffer, *LightingTarget);
+	DebugTexturesPassCommand.Execute(D3D12Globals::GraphicsCmdList, *LightingTarget);
 
 	// Copy lighting output to backbuffer
 	{

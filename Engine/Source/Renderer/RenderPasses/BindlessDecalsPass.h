@@ -3,11 +3,11 @@
 #include "EASTL/vector.h"
 
 
-struct BindlessDecalsPass
+class BindlessDecalsPass
 {
+public:
 	BindlessDecalsPass();
 	~BindlessDecalsPass();
-
 
 	void Init();
 	void Execute(struct ID3D12GraphicsCommandList* inCmdList, struct SceneTextures& inSceneTextures);

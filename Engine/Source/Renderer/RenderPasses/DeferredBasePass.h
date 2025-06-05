@@ -11,8 +11,9 @@ struct SceneTextures
 	eastl::shared_ptr<class D3D12DepthBuffer> MainDepthBuffer;
 };
 
-struct DeferredBasePass
+class DeferredBasePass
 {
+public:
 
 	DeferredBasePass() = default;
 	~DeferredBasePass() = default;
@@ -20,9 +21,8 @@ struct DeferredBasePass
 	void Init();
 	void Execute(struct ID3D12GraphicsCommandList* inCmdList);
 
+public:
 	SceneTextures GBufferTextures;
-
-
 
 };
 

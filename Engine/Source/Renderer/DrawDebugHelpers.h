@@ -44,8 +44,8 @@ private:
 
 	friend class ForwardRenderer;
 	friend class DeferredRenderer;
+	friend class DebugPrimitivesPass;
 	friend struct DrawDebugHelpers;
-	friend struct DebugPrimitivesPass;
 };
 
 struct DrawDebugHelpers

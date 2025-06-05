@@ -205,7 +205,7 @@ eastl::shared_ptr<D3D12Texture2D> AssimpModel3D::LoadMaterialTexture(const aiMat
 
 		const bool srgb = inAssimpTexType == aiTextureType_DIFFUSE;
 		newTex = D3D12RHI::Get()->CreateAndLoadTexture2D(path, srgb, true, inCommandList);
-		newTex->SourcePath = eastl::string(Str.C_Str());
+		newTex->Name = eastl::string(Str.C_Str());
 		LoadedTextures.push_back(newTex);
 	}
 
@@ -216,7 +216,7 @@ bool AssimpModel3D::IsTextureLoaded(const eastl::string& inTexPath, OUT eastl::s
 {
 	for (const eastl::shared_ptr<D3D12Texture2D>& loadedTexture : LoadedTextures)
 	{
-		if (loadedTexture->SourcePath == inTexPath)
+		if (loadedTexture->Name == inTexPath)
 		{
 			outTex = loadedTexture;
 			return true;

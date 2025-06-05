@@ -63,21 +63,22 @@ PSInput VSMain(float4 position : POSITION, float3 VertexNormal : NORMAL, float2 
 
     float3 vertexNormalWS = normalize(mul(n, LocalToWorldRotationOnly3x3)).xyz;
     float3 tangentWS = normalize(mul(t, LocalToWorldRotationOnly3x3)).xyz;
-    float3 bitangentWS = normalize(mul(b, LocalToWorldRotationOnly3x3)).xyz;
 
-    float3x3 tangentToLocal = 0;
-    tangentToLocal[0] = t;
-    tangentToLocal[1] = b;
-    tangentToLocal[2] = n;
+    //float3 bitangentWS = normalize(mul(b, LocalToWorldRotationOnly3x3)).xyz;
 
-    float3x3 tangentToWorld = mul(tangentToLocal, LocalToWorldRotationOnly3x3);
+    //float3x3 tangentToLocal = 0;
+    //tangentToLocal[0] = t;
+    //tangentToLocal[1] = b;
+    //tangentToLocal[2] = n;
+
+    //float3x3 tangentToWorld = mul(tangentToLocal, LocalToWorldRotationOnly3x3);
 
 	// Gram - Schmidt process
-//     float3 tangentWS = normalize(mul(tangent, LocalToWorldRotationOnly3x3));
-//     tangentWS = normalize(tangentWS - dot(tangentWS, vertexNormalWS) * vertexNormalWS);
-//     float3 bitangentWS = cross(vertexNormalWS, tangentWS);
-//     float3x3 tangentToWorld = float3x3(tangentWS, bitangentWS, vertexNormalWS);
-//     
+     //float3 tangentWS = normalize(mul(tangent, LocalToWorldRotationOnly3x3));
+     tangentWS = normalize(tangentWS - dot(tangentWS, vertexNormalWS) * vertexNormalWS);
+     float3 bitangentWS = cross(vertexNormalWS, tangentWS);
+     float3x3 tangentToWorld = float3x3(tangentWS, bitangentWS, vertexNormalWS);
+     
 
     PSInput result;
 

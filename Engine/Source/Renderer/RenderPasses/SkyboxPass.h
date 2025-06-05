@@ -4,8 +4,9 @@
 #include "glm/glm.hpp"
 #include "EASTL/shared_ptr.h"
 
-struct SkyboxPass
+class SkyboxPass
 {
+public:
 	SkyboxPass();
 	~SkyboxPass();
 

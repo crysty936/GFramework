@@ -133,7 +133,7 @@ glm::mat4 Camera::GetLookAt()
 
   	constexpr glm::vec3 globalUp = glm::vec3(0.0f, 1.0f, 0.0f);
  	const Transform& absTransf = GetAbsoluteTransform();
-  	glm::vec3 cameraDir = glm::normalize(absTransf.Rotation * glm::vec3(0.f, 0.f, 1.f));
+  	const glm::vec3 cameraDir = glm::normalize(absTransf.Rotation * glm::vec3(0.f, 0.f, 1.f)); // Extract Z column
 	const glm::mat4 lookAt = MathUtils::BuildLookAt(cameraDir, absTransf.Translation);
 
 	return lookAt;

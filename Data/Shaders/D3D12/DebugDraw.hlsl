@@ -7,7 +7,7 @@ static const float4 Quad[] =
     float4(1.f, -1.f, 0.0f, 1.0f),  // bottom right
     float4(1.f,  1.f, 0.0f, 1.0f),  // top right
     float4(-1.f,  1.f, 0.0f, 1.0f), // top left 
-    float4(-1.f, -1.f, 0.0f, 1.0f),  // bottom left
+    float4(-1.f, -1.f, 0.0f, 1.0f), // bottom left
 };
 
 
@@ -21,6 +21,7 @@ struct InterpolantsVSToPS
 struct SceneConstantBuffer
 {
     float4x4 WorldToClip;
+    float4x4 CameraToWorld;
 };
 
 struct PackedDebugPointInstanceData
@@ -38,11 +39,18 @@ StructuredBuffer<PackedDebugPointInstanceData> PointsBuffer : register(t0);
 
 InterpolantsVSToPS VSMainPoints(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
 {
-    float4 position = Quad[vertexId];
+    const float4 localPosition = Quad[vertexId];
     const PackedDebugPointInstanceData instanceData = PointsBuffer[instanceId];
-    position.xyz = (position.xyz * instanceData.Scale) + instanceData.Translation;
     
-    const float4 clipPos = mul(position, SceneBuffer.WorldToClip);
+    // World space origin oriented
+    //const float3 worldPosition = (localPosition.xyz * instanceData.Scale) + instanceData.Translation;
+
+    // Camera aligned    
+    const float4 cameraRight = mul(float4(1.f, 0.f, 0.f, 0.f), SceneBuffer.CameraToWorld);
+    const float4 cameraUp = mul(float4(0.f, 1.f, 0.f, 0.f), SceneBuffer.CameraToWorld);
+    const float3 worldPosition = ((cameraRight.xyz * localPosition.x) + (cameraUp.xyz * localPosition.y)) * instanceData.Scale + instanceData.Translation;
+
+    const float4 clipPos = mul(float4(worldPosition, 1.f), SceneBuffer.WorldToClip);
 
     InterpolantsVSToPS result;
     result.Position = clipPos;
@@ -69,7 +77,7 @@ StructuredBuffer<PackedDebugLineInstanceData> LinesBuffer : register(t0);
 InterpolantsVSToPS VSMainLines(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
 {
     const PackedDebugLineInstanceData instanceData = LinesBuffer[instanceId];
-    float4 position = float4(instanceData.Position[vertexId], 1.f);
+    const float4 position = float4(instanceData.Position[vertexId], 1.f);
 
     const float4 clipPos = mul(position, SceneBuffer.WorldToClip);
 

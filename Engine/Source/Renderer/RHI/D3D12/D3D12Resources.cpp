@@ -476,9 +476,11 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateTexture2D(const uint32_t inWid
 	newTexture->Height = textureDesc.Height;
 	newTexture->Width = textureDesc.Width;
 	newTexture->Precision = ERHITexturePrecision::UnsignedByte;
-	newTexture->SourcePath = "Raw Texture";
+	newTexture->Name = "Raw Texture";
 	newTexture->TextureType = ETextureType::Single;
 	newTexture->Resource = texResource;
+
+	//LiveTextures.push_back(newTexture);
 
 	return newTexture;
 }
@@ -572,9 +574,11 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	newTexture->Height = textureDesc.Height;
 	newTexture->Width = textureDesc.Width;
 	newTexture->Precision = ERHITexturePrecision::UnsignedByte;
-	newTexture->SourcePath = inDataPath;
+	newTexture->Name = inDataPath;
 	newTexture->TextureType = ETextureType::Single;
 	newTexture->Resource = texResource;
+
+	LiveTextures.push_back(newTexture);
 
 	return newTexture;
 }
@@ -673,8 +677,11 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 
 	ownedTexture->Width = inWidth;
 	ownedTexture->Height = inHeight;
+	ownedTexture->Name = WStringToAnsi(textureName.c_str());
 
 	newRT->Texture = std::move(ownedTexture);
+
+
 
 	return newRT;
 }

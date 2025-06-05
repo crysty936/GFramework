@@ -45,12 +45,11 @@ public:
 	uint64_t Height = 0;
 	uint16_t NumMips = 0;
 
-	// TODO: Debug only
-	eastl::string SourcePath;
-
 	ETextureType TextureType = ETextureType::Single;
 	ERHITextureChannelsType ChannelsType = ERHITextureChannelsType::RGBA;
 	ERHITexturePrecision Precision = ERHITexturePrecision::UnsignedByte;
 	ERHITextureFilter Filter = ERHITextureFilter::Linear;
+
+	eastl::string Name;
 };
 

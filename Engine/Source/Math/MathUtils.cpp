@@ -93,7 +93,7 @@ glm::mat4 MathUtils::BuildLookAt(const glm::vec3& inEyeDirection, const glm::vec
 
 	glm::vec3 right = glm::normalize(glm::cross(inUp, inEyeDirection));
 	//glm::vec3 right = glm::normalize(glm::cross(inEyeDirection, globalUp)); // For Opengl(right-handed)
-	glm::vec3 up = glm::normalize(glm::cross(inEyeDirection, right));
+	glm::vec3 up = glm::normalize(glm::cross(inEyeDirection, right)); // True orthogonal up. Gram-Shhmidt process.
 	//glm::vec3 cameraUp = glm::normalize(glm::cross(right, inEyeDirection)); // For Opengl(right-handed)
 
 	// Rotate inversely related to camera

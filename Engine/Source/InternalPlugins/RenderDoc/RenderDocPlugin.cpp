@@ -13,7 +13,7 @@ static int32_t NumFramesToCapture = 1;
 
 void RenderDocPlugin::Init()
 {
- 	//return;
+ 	return;
 
 	PostInitCallback& postInitMulticast = GEngine->GetPostInitMulticast();
 	postInitMulticast.BindRaw(this, &RenderDocPlugin::OnEngineInitDone);
