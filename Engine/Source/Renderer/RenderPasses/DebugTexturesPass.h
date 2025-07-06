@@ -16,7 +16,7 @@ public:
 
 private:
 
-	enum class TextureType : int32_t
+	enum class DebugPassTexType : int32_t
 	{
 		Standard = 0,
 		Render,
@@ -24,7 +24,7 @@ private:
 		Max
 	};
 
-	void DrawTexture(struct ID3D12GraphicsCommandList* inCmdList, const class D3D12RenderTarget2D& inTarget, const int32_t selectedTexIndex, const TextureType inType);
+	void DrawTexture(struct ID3D12GraphicsCommandList* inCmdList, const class D3D12RenderTarget2D& inTarget, const int32_t selectedTexIndex, const DebugPassTexType inType);
 
 	friend struct TexturesData;
 

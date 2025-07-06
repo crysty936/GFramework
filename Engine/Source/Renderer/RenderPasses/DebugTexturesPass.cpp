@@ -17,13 +17,11 @@
 struct DebugTexturesConstantBuffer
 {
 	glm::vec4 TranslationScale;
-	//glm::mat4 TranslationScale;
-	//float4x4 ProjInv;
-	//float4x4 Proj;
+	uint32_t TextureType;
+	float CameraNear;
+	float CameraFar;
 
-	//float4 ViewPos;
-	//float4 LightDir;
-	float Padding[51];
+	float Padding[48];
 };
 
 
@@ -192,23 +190,23 @@ void DrawTexturesArray(const eastl::vector<eastl::string*>& inTextureNames, cons
 	ImGui::EndListBox();
 }
 
-using TextureType = DebugTexturePass::TextureType;
+using DebugPassTexType = DebugTexturePass::DebugPassTexType;
 
-struct TexturesData 
+struct TexturesData
 {
 	int32_t SelectedItemIdx = -1;
-	TextureType SelectedTextureType = TextureType::Max;
+	DebugPassTexType SelectedTextureType = DebugPassTexType::Max;
 };
 
 TexturesData DrawAllTextures()
 {
 	eastl::vector<eastl::string*> allTextures;
 
-	int32_t texturesOffsets[static_cast<int32_t>(TextureType::Max)];
+	int32_t texturesOffsets[static_cast<int32_t>(DebugPassTexType::Max)];
 
 	// Separate lists for plain textures, render targets and depth buffers
 	{
-		texturesOffsets[static_cast<int32_t>(TextureType::Standard)] = 0;
+		texturesOffsets[static_cast<int32_t>(DebugPassTexType::Standard)] = 0;
 		const eastl::vector<eastl::shared_ptr<D3D12Texture2D>>& textures = D3D12RHI::Get()->GetLiveTextures();
 
 		for (const eastl::shared_ptr<D3D12Texture2D>& tex : textures)
@@ -218,7 +216,7 @@ TexturesData DrawAllTextures()
 	}
 
 	{
-		texturesOffsets[static_cast<int32_t>(TextureType::Render)] = allTextures.size();
+		texturesOffsets[static_cast<int32_t>(DebugPassTexType::Render)] = allTextures.size();
 		const eastl::vector<eastl::shared_ptr<D3D12RenderTarget2D>>& RTs = D3D12RHI::Get()->GetRTs();
 
 		for (const eastl::shared_ptr<D3D12RenderTarget2D>& RT : RTs)
@@ -228,7 +226,7 @@ TexturesData DrawAllTextures()
 	}
 
 	{
-		texturesOffsets[static_cast<int32_t>(TextureType::Depth)] = allTextures.size();
+		texturesOffsets[static_cast<int32_t>(DebugPassTexType::Depth)] = allTextures.size();
 		const eastl::vector<eastl::shared_ptr<D3D12DepthBuffer>>& DTs = D3D12RHI::Get()->GetDTs();
 
 		for (const eastl::shared_ptr<D3D12DepthBuffer>& DT : DTs)
@@ -238,21 +236,23 @@ TexturesData DrawAllTextures()
 	}
 
 	static int selectedItemIdx = -1;
-	DrawTexturesArray(allTextures, "Standard", texturesOffsets[(int32_t)TextureType::Standard], texturesOffsets[(int32_t)TextureType::Render] - 1, selectedItemIdx);
-	DrawTexturesArray(allTextures, "RenderTargets", texturesOffsets[(int32_t)TextureType::Render], texturesOffsets[(int32_t)TextureType::Depth] - 1, selectedItemIdx);
-	DrawTexturesArray(allTextures, "Depth", texturesOffsets[(int32_t)TextureType::Depth], allTextures.size() - 1, selectedItemIdx);
+	DrawTexturesArray(allTextures, "Standard", texturesOffsets[(int32_t)DebugPassTexType::Standard], texturesOffsets[(int32_t)DebugPassTexType::Render] - 1, selectedItemIdx);
+	DrawTexturesArray(allTextures, "RenderTargets", texturesOffsets[(int32_t)DebugPassTexType::Render], texturesOffsets[(int32_t)DebugPassTexType::Depth] - 1, selectedItemIdx);
+	DrawTexturesArray(allTextures, "Depth", texturesOffsets[(int32_t)DebugPassTexType::Depth], allTextures.size() - 1, selectedItemIdx);
 
-	TextureType resType = TextureType::Max;
+	DebugPassTexType resType = DebugPassTexType::Max;
+	int32_t selectedTexFinalIdx = -1;
 	if (selectedItemIdx != -1)
 	{
 		// Figure out what type of texture is selected
 
-		for (int32_t i = (int32_t)TextureType::Standard; i < (int32_t)TextureType::Max; ++i)
+		for (int32_t i = (int32_t)DebugPassTexType::Standard; i < (int32_t)DebugPassTexType::Max; ++i)
 		{
 			const int32_t currOffset = texturesOffsets[i];
-			if (selectedItemIdx > currOffset)
+			if (selectedItemIdx > currOffset - 1)
 			{
-				resType = static_cast<TextureType>(i);
+				resType = static_cast<DebugPassTexType>(i);
+				selectedTexFinalIdx = selectedItemIdx - texturesOffsets[i];
 			}
 			else
 			{
@@ -261,7 +261,7 @@ TexturesData DrawAllTextures()
 		}
 	}
 
-	return { selectedItemIdx, resType };
+	return { selectedTexFinalIdx, resType };
 }
 
 void DebugTexturePass::Execute(ID3D12GraphicsCommandList* inCmdList, const D3D12RenderTarget2D& inTarget)
@@ -281,28 +281,68 @@ void DebugTexturePass::Execute(ID3D12GraphicsCommandList* inCmdList, const D3D12
 		return;
 	}
 
-	
+
 
 	DrawTexture(inCmdList, inTarget, selectedTextureData.SelectedItemIdx, selectedTextureData.SelectedTextureType);
 }
 
-void DebugTexturePass::DrawTexture(ID3D12GraphicsCommandList* inCmdList, const D3D12RenderTarget2D& inTarget, const int32_t selectedTexIndex, const TextureType inType)
+void DebugTexturePass::DrawTexture(ID3D12GraphicsCommandList* inCmdList, const D3D12RenderTarget2D& inTarget, const int32_t selectedTexIdx, const DebugPassTexType inType)
 {
 	PIXMarker Marker(inCmdList, "Render Debug Textures");
 
-	// Draw screen quad
+	// Set up PSO
 
 	inCmdList->SetGraphicsRootSignature(m_DebugTexturesRS);
 	inCmdList->SetPipelineState(m_DebugTexturesPSO);
 
+	// Set scene color as output
 	D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[1];
 	renderTargets[0] = inTarget.RTV;
 
 	inCmdList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
 
+	uint32_t SRVIndex = -1;
+
+	switch (inType)
+	{
+	case DebugPassTexType::Standard:
+	{
+		const eastl::vector<eastl::shared_ptr<D3D12Texture2D>>& textures = D3D12RHI::Get()->GetLiveTextures();
+		const eastl::shared_ptr<D3D12Texture2D>& texture = textures[selectedTexIdx];
+		SRVIndex = texture->SRVIndex;
+
+		break;
+	}
+	case DebugPassTexType::Render:
+	{
+		const eastl::vector<eastl::shared_ptr<D3D12RenderTarget2D>>& rts = D3D12RHI::Get()->GetRTs();
+		const eastl::shared_ptr<D3D12RenderTarget2D>& rt = rts[selectedTexIdx];
+		SRVIndex = rt->Texture->SRVIndex;
+
+		break;
+	}
+	case DebugPassTexType::Depth:
+	{
+		const eastl::vector<eastl::shared_ptr<D3D12DepthBuffer>>& DTs = D3D12RHI::Get()->GetDTs();
+		const eastl::shared_ptr<D3D12DepthBuffer>& dt = DTs[selectedTexIdx];
+		SRVIndex = dt->Texture->SRVIndex;
+
+		break;
+	}
+	}
+
+	// Bind constant buffer
 	{
 		DebugTexturesConstantBuffer constantsBuffer = {};
 		constantsBuffer.TranslationScale = glm::vec4(Offset.x, Offset.y, Scale.x, Scale.y);
+		constantsBuffer.TextureType = static_cast<uint32_t>(inType);
+
+		SceneManager& sManager = SceneManager::Get();
+		const Scene& currentScene = sManager.GetCurrentScene();
+
+		constantsBuffer.CameraNear = currentScene.GetCurrentCamera()->GetNear();
+		constantsBuffer.CameraFar = currentScene.GetCurrentCamera()->GetFar();
+
 
 		// Use temp buffer in main constant buffer
 		MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(DebugTexturesConstantBuffer));
@@ -310,11 +350,16 @@ void DebugTexturePass::DrawTexture(ID3D12GraphicsCommandList* inCmdList, const D
 		inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
 	}
 
-	//inCmdList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(inSceneTextures.GBufferAlbedo->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
-	//inCmdList->SetGraphicsRootDescriptorTable(2, D3D12Globals::GlobalSRVHeap.GetGPUHandle(inSceneTextures.MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
+	ASSERT(SRVIndex != -1);
+
+	// Bind texture to display
+
+	inCmdList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(SRVIndex, D3D12Utility::CurrentFrameIndex));
 
 	inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+
+	// Set up quad and shader
 	const D3D12_VERTEX_BUFFER_VIEW vbView = ScreenQuadVertexBuffer->VBView();
 	const D3D12_INDEX_BUFFER_VIEW ibView = ScreenQuadIndexBuffer->IBView();
 	inCmdList->IASetVertexBuffers(0, 1, &vbView);

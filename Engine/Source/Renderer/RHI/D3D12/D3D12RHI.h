@@ -101,7 +101,7 @@ public:
 	eastl::shared_ptr<class D3D12Texture2D> CreateAndLoadTexture2D(const eastl::string& inDataPath, const bool inSRGB, const bool bGenerateMipMaps, struct ID3D12GraphicsCommandList* inCommandList);
 
 	eastl::shared_ptr<class D3D12RenderTarget2D> CreateRenderTarget(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName, const ERHITexturePrecision inPrecision = ERHITexturePrecision::UnsignedByte,
-		const ETextureState inInitialState = ETextureState::Render_Target, const ERHITextureFilter inFilter = ERHITextureFilter::Linear);
+		const ETextureState inInitialState = ETextureState::Render_Target, const ERHITextureFilter inFilter = ERHITextureFilter::Linear, const bool bInDebugViewable = true);
 
 	eastl::shared_ptr<class D3D12DepthBuffer> CreateDepthBuffer(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName, const ETextureState inInitialState = ETextureState::Render_Target, const int32_t inArraySize = 1);
 

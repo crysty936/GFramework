@@ -584,7 +584,7 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 }
 
 eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTarget(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName,
-	const ERHITexturePrecision inPrecision, const ETextureState inInitialState, const ERHITextureFilter inFilter)
+	const ERHITexturePrecision inPrecision, const ETextureState inInitialState, const ERHITextureFilter inFilter, const bool bInDebugViewable)
 {
 	eastl::shared_ptr<D3D12RenderTarget2D> newRT = eastl::make_shared<D3D12RenderTarget2D>();
 	eastl::unique_ptr<D3D12Texture2D> ownedTexture = eastl::make_unique<D3D12Texture2D>();
@@ -681,8 +681,10 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTarget(const 
 
 	newRT->Texture = std::move(ownedTexture);
 
-	RenderTargets.push_back(newRT);
-
+	if (bInDebugViewable)
+	{
+		RenderTargets.push_back(newRT);
+	}
 
 	return newRT;
 }
