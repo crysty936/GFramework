@@ -103,7 +103,7 @@ void AppModeBase::CreateInitialResources()
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
 
-	LightingTarget = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"FinalLighting", ERHITexturePrecision::UnsignedByte, ETextureState::Render_Target, ERHITextureFilter::Nearest);
+	LightingTarget = D3D12RHI::Get()->CreateRenderTarget(props.Width, props.Height, L"FinalLighting", ERHITexturePrecision::UnsignedByte, ETextureState::Render_Target, ERHITextureFilter::Nearest);
 
 	// Init Render Passes
 	DebugPrimitivesPassCommand.Init();

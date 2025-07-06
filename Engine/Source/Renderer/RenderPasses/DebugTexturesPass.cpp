@@ -152,87 +152,116 @@ void DebugTexturePass::Init()
 	}
 }
 
-void DrawTexturesArray(const eastl::vector<eastl::shared_ptr<D3D12Texture2D>>& inTextures, const char* inName, int& inOutCurentItemIdx, int& inOutElIdx)
+void DrawTexturesArray(const eastl::vector<eastl::string*>& inTextureNames, const char* inName, const int inStartIdx, const int inEndIdx, int& inOutCurentItemIdx)
 {
-	ImGui::BeginListBox(inName);
-
-	for (const eastl::shared_ptr<D3D12Texture2D>& texture : inTextures)
+	// Handle listbox being clipped
+	if (!ImGui::BeginListBox(inName))
 	{
-		const int32_t numTextures = inTextures.size();
-		for (; inOutElIdx < numTextures; inOutElIdx++)
-		{
-			const D3D12Texture2D& texture = *inTextures[inOutElIdx];
-			bool is_selected = (inOutCurentItemIdx == inOutElIdx);
-			if (ImGui::Selectable(texture.Name.c_str(), is_selected))
-			{
-				if (inOutCurentItemIdx == inOutElIdx)
-				{
-					inOutCurentItemIdx = -1;
-					is_selected = false;
-				}
-				else
-				{
-					inOutCurentItemIdx = inOutElIdx;
-				}
-			}
+		return;
+	}
 
-			// Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
-			if (is_selected)
+	const int32_t numTextures = inTextureNames.size();
+	ASSERT(inStartIdx >= 0 && numTextures > inEndIdx);
+
+	for (int32_t elIdx = inStartIdx; elIdx <= inEndIdx; ++elIdx)
+	{
+		const eastl::string& textureName = *inTextureNames[elIdx];
+		ASSERT(!textureName.empty());
+
+		bool is_selected = (inOutCurentItemIdx == elIdx);
+		if (ImGui::Selectable(textureName.c_str(), is_selected))
+		{
+			if (inOutCurentItemIdx == elIdx)
 			{
-				ImGui::SetItemDefaultFocus();
+				inOutCurentItemIdx = -1;
+				is_selected = false;
+			}
+			else
+			{
+				inOutCurentItemIdx = elIdx;
 			}
 		}
 
-
+		// Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+		if (is_selected)
+		{
+			ImGui::SetItemDefaultFocus();
+		}
 	}
 
 	ImGui::EndListBox();
-
-	ImGui::End();
 }
 
-int DrawAllTextures()
+using TextureType = DebugTexturePass::TextureType;
+
+struct TexturesData 
 {
-	eastl::vector< eastl::shared_ptr<D3D12Texture2D>> allTextures;
+	int32_t SelectedItemIdx = -1;
+	TextureType SelectedTextureType = TextureType::Max;
+};
 
-	enum class TextureType : int32_t
-	{
-		Standard = 0,
-		Render,
-		Depth,
-		Max
-	};
+TexturesData DrawAllTextures()
+{
+	eastl::vector<eastl::string*> allTextures;
 
-	struct TypeAndStartIdx
-	{
-		TextureType Type = TextureType::Standard;
-		int StartIdx = -1;
-	};
-
-	vectorInline<TypeAndStartIdx, static_cast<int32_t>(TextureType::Max)> texturesOffsets;
+	int32_t texturesOffsets[static_cast<int32_t>(TextureType::Max)];
 
 	// Separate lists for plain textures, render targets and depth buffers
-	const eastl::vector<eastl::shared_ptr<D3D12Texture2D>>& textures = D3D12RHI::Get()->GetLiveTextures();
-
-	allTextures.insert(allTextures.end(), textures.begin(), textures.end());
-	texturesOffsets.push_back({ TextureType::Standard, 0 });
-
-
-	const eastl::vector<eastl::shared_ptr<D3D12RenderTarget2D>>& RTs = D3D12RHI::Get()->GetRTs();
-	for (const eastl::shared_ptr<D3D12RenderTarget2D>& RT : RTs)
 	{
-		//allTextures.push_back(plainTex);
+		texturesOffsets[static_cast<int32_t>(TextureType::Standard)] = 0;
+		const eastl::vector<eastl::shared_ptr<D3D12Texture2D>>& textures = D3D12RHI::Get()->GetLiveTextures();
+
+		for (const eastl::shared_ptr<D3D12Texture2D>& tex : textures)
+		{
+			allTextures.push_back(&tex->Name);
+		}
 	}
 
-	
-	static int item_current_idx = -1;
+	{
+		texturesOffsets[static_cast<int32_t>(TextureType::Render)] = allTextures.size();
+		const eastl::vector<eastl::shared_ptr<D3D12RenderTarget2D>>& RTs = D3D12RHI::Get()->GetRTs();
 
-	int n = 0;
+		for (const eastl::shared_ptr<D3D12RenderTarget2D>& RT : RTs)
+		{
+			allTextures.push_back(&RT->Texture->Name);
+		}
+	}
 
+	{
+		texturesOffsets[static_cast<int32_t>(TextureType::Depth)] = allTextures.size();
+		const eastl::vector<eastl::shared_ptr<D3D12DepthBuffer>>& DTs = D3D12RHI::Get()->GetDTs();
 
+		for (const eastl::shared_ptr<D3D12DepthBuffer>& DT : DTs)
+		{
+			allTextures.push_back(&DT->Texture->Name);
+		}
+	}
 
+	static int selectedItemIdx = -1;
+	DrawTexturesArray(allTextures, "Standard", texturesOffsets[(int32_t)TextureType::Standard], texturesOffsets[(int32_t)TextureType::Render] - 1, selectedItemIdx);
+	DrawTexturesArray(allTextures, "RenderTargets", texturesOffsets[(int32_t)TextureType::Render], texturesOffsets[(int32_t)TextureType::Depth] - 1, selectedItemIdx);
+	DrawTexturesArray(allTextures, "Depth", texturesOffsets[(int32_t)TextureType::Depth], allTextures.size() - 1, selectedItemIdx);
 
-	return item_current_idx;
+	TextureType resType = TextureType::Max;
+	if (selectedItemIdx != -1)
+	{
+		// Figure out what type of texture is selected
+
+		for (int32_t i = (int32_t)TextureType::Standard; i < (int32_t)TextureType::Max; ++i)
+		{
+			const int32_t currOffset = texturesOffsets[i];
+			if (selectedItemIdx > currOffset)
+			{
+				resType = static_cast<TextureType>(i);
+			}
+			else
+			{
+				break;
+			}
+		}
+	}
+
+	return { selectedItemIdx, resType };
 }
 
 void DebugTexturePass::Execute(ID3D12GraphicsCommandList* inCmdList, const D3D12RenderTarget2D& inTarget)
@@ -243,15 +272,21 @@ void DebugTexturePass::Execute(ID3D12GraphicsCommandList* inCmdList, const D3D12
 	ImGui::DragFloat2("Scale", &Scale.x, 0.01f, 0.f, 1.f);
 
 
-	int selectedTextureIdx = DrawAllTextures();
-
+	const TexturesData selectedTextureData = DrawAllTextures();
 
 	ImGui::End();
 
-	DrawTexture(inCmdList, inTarget);
+	if (selectedTextureData.SelectedItemIdx == -1)
+	{
+		return;
+	}
+
+	
+
+	DrawTexture(inCmdList, inTarget, selectedTextureData.SelectedItemIdx, selectedTextureData.SelectedTextureType);
 }
 
-void DebugTexturePass::DrawTexture(struct ID3D12GraphicsCommandList* inCmdList, const D3D12RenderTarget2D& inTarget)
+void DebugTexturePass::DrawTexture(ID3D12GraphicsCommandList* inCmdList, const D3D12RenderTarget2D& inTarget, const int32_t selectedTexIndex, const TextureType inType)
 {
 	PIXMarker Marker(inCmdList, "Render Debug Textures");
 

@@ -33,9 +33,9 @@ void DeferredBasePass::Init()
 	const WindowProperties& props = mainWindow.GetProperties();
 
 	// Textures
-	GBufferTextures.GBufferAlbedo = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferAlbedo", ERHITexturePrecision::UnsignedByte, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
-	GBufferTextures.GBufferNormal = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferNormal", ERHITexturePrecision::Float32, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
-	GBufferTextures.GBufferRoughness = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"GBufferRoughness", ERHITexturePrecision::UnsignedByte, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
+	GBufferTextures.GBufferAlbedo = D3D12RHI::Get()->CreateRenderTarget(props.Width, props.Height, L"GBufferAlbedo", ERHITexturePrecision::UnsignedByte, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
+	GBufferTextures.GBufferNormal = D3D12RHI::Get()->CreateRenderTarget(props.Width, props.Height, L"GBufferNormal", ERHITexturePrecision::Float32, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
+	GBufferTextures.GBufferRoughness = D3D12RHI::Get()->CreateRenderTarget(props.Width, props.Height, L"GBufferRoughness", ERHITexturePrecision::UnsignedByte, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
 
 	GBufferTextures.MainDepthBuffer = D3D12RHI::Get()->CreateDepthBuffer(props.Width, props.Height, L"Main Depth Buffer", ETextureState::Shader_Resource);
 

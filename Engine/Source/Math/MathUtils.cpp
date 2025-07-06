@@ -119,6 +119,8 @@ glm::mat4 MathUtils::BuildLookAt(const glm::vec3& inEyeDirection, const glm::vec
 #define BUILD_SEPARATELY 0
 
 #if BUILD_SEPARATELY
+
+	// Transpose(Rotation), which is equal to Rotation^-1
 	float firstMatrixA[16] =
 	{
 		right.x,		up.x,		inEyeDirection.x,		0,
@@ -140,6 +142,7 @@ glm::mat4 MathUtils::BuildLookAt(const glm::vec3& inEyeDirection, const glm::vec
 // 
 // 	//Also, inverse of a TranslationRotation matrix (X)^-1 = (T(t) * R)^-1 = R^t * T(-t), so R^-1 * T^-1, open parantheses mean inverse of operations and inverse of each
 
+	// Translation^-1
 	float SecondMatrixA[16] =
 	{
 		1,		0,		0,		0,
@@ -152,6 +155,7 @@ glm::mat4 MathUtils::BuildLookAt(const glm::vec3& inEyeDirection, const glm::vec
 	glm::mat4 translationMatrix = glm::mat4(1.f);
 	memcpy(glm::value_ptr(translationMatrix), SecondMatrixA, sizeof(glm::mat4));
 
+	// Transpose(Rotation) * Translation^-1
 	glm::mat4 lookAt = rotationMatrix * translationMatrix;// In the shader it's pre-multiplied, meaning that it's first translated and then rotated with camera as center
 
 	return lookAt;

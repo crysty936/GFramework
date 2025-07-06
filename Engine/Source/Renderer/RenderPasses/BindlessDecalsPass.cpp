@@ -343,7 +343,7 @@ void BindlessDecalsPass::Init()
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
 
-	m_DebugRT = D3D12RHI::Get()->CreateRenderTexture(props.Width, props.Height, L"DebugRT", ERHITexturePrecision::Float32, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
+	m_DebugRT = D3D12RHI::Get()->CreateRenderTarget(props.Width, props.Height, L"DebugRT", ERHITexturePrecision::Float32, ETextureState::Shader_Resource, ERHITextureFilter::Nearest);
 
 
 	// The main idea of this binning is to combine MJPs bit representation of the binning result with the Forward+ algorithm for tiling only in 2D.

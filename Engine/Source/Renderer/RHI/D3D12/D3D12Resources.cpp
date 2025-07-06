@@ -583,7 +583,7 @@ eastl::shared_ptr<D3D12Texture2D> D3D12RHI::CreateAndLoadTexture2D(const eastl::
 	return newTexture;
 }
 
-eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName,
+eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTarget(const int32_t inWidth, const int32_t inHeight, const eastl::wstring& inName,
 	const ERHITexturePrecision inPrecision, const ETextureState inInitialState, const ERHITextureFilter inFilter)
 {
 	eastl::shared_ptr<D3D12RenderTarget2D> newRT = eastl::make_shared<D3D12RenderTarget2D>();
@@ -681,6 +681,7 @@ eastl::shared_ptr<class D3D12RenderTarget2D> D3D12RHI::CreateRenderTexture(const
 
 	newRT->Texture = std::move(ownedTexture);
 
+	RenderTargets.push_back(newRT);
 
 
 	return newRT;
@@ -804,8 +805,11 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 
 	ownedTexture->Width = inWidth;
 	ownedTexture->Height = inHeight;
+	ownedTexture->Name = WStringToAnsi(inName.c_str());
 
 	newDB->Texture = std::move(ownedTexture);
+
+	DepthTargets.push_back(newDB);
 
 	return newDB;
 }

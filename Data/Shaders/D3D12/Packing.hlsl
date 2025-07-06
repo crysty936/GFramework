@@ -3,6 +3,7 @@ namespace RGBA8_UNORM
 {
 	uint Pack(float4 value)
 	{
+		// Multiply by 256.f to convert to an 8 bit number and round (or add 0.5f) to round to the nearest integer
 		uint r = uint(round(saturate(value.r) * 255.0f));
 		uint g = uint(round(saturate(value.g) * 255.0f));
 		uint b = uint(round(saturate(value.b) * 255.0f));
@@ -15,11 +16,11 @@ namespace RGBA8_UNORM
 	float4 Unpack(uint value)
 	{
 		float4 res;
-		// Get the necessaary 8 bits, from right to left, then multiply by 256 scale
-		res.r = ((value << 24) >> 24) * 256.0f;
-		res.g = ((value << 16) >> 24) * 256.0f;
-		res.b = ((value << 8) >> 24)  * 256.0f;
-		res.a = ((value << 0) >> 24)  * 256.0f;
+		// Get the necessaary 8 bits, from right to left, then divide by 256 scale
+		res.r = ((value << 24) >> 24) / 256.0f;
+		res.g = ((value << 16) >> 24) / 256.0f;
+		res.b = ((value << 8) >> 24)  / 256.0f;
+		res.a = ((value << 0) >> 24)  / 256.0f;
 	
 		return res;
 	}

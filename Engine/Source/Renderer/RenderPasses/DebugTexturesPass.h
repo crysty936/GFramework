@@ -15,7 +15,18 @@ public:
 	void Execute(struct ID3D12GraphicsCommandList* inCmdList, const class D3D12RenderTarget2D& inTarget);
 
 private:
-	void DrawTexture(struct ID3D12GraphicsCommandList* inCmdList, const class D3D12RenderTarget2D& inTarget);
+
+	enum class TextureType : int32_t
+	{
+		Standard = 0,
+		Render,
+		Depth,
+		Max
+	};
+
+	void DrawTexture(struct ID3D12GraphicsCommandList* inCmdList, const class D3D12RenderTarget2D& inTarget, const int32_t selectedTexIndex, const TextureType inType);
+
+	friend struct TexturesData;
 
 private:
 	glm::mat4 QuadTransform;
