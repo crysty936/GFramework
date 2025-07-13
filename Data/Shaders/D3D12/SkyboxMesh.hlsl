@@ -1,4 +1,3 @@
-#include "DescriptorTables.hlsl"
 #include "Utils.hlsl"
 
 struct PSInput
@@ -90,7 +89,7 @@ PSOutput PSMain(PSInput input)
     }
 #endif
 
-    TextureCube cubeMap = TexCubeTable[CubemapIdxContainer.CubemapIdx];
+    TextureCube cubeMap = ResourceDescriptorHeap[CubemapIdxContainer.CubemapIdx];
     float3 color = cubeMap.Sample(g_sampler, normalize(input.CubemapUV)).xyz;
     color *= exp2(SceneBuffer.SkyOnlyExposure);
 

@@ -195,35 +195,20 @@ void SkyboxPass::Init()
 
 	// Skybox Pass signature
 	{
-		D3D12_ROOT_PARAMETER1 rootParameters[3];
-
-		// Main CBV_SRV_UAV heap
-		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-		//D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
-		//rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		//rangesPS[0].NumDescriptors = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-		//rangesPS[0].BaseShaderRegister = 0;
-		//rangesPS[0].RegisterSpace = 0;
-		//rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
-		//rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
-
-		rootParameters[0].DescriptorTable.pDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescs();
-		rootParameters[0].DescriptorTable.NumDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescsCount();
+		D3D12_ROOT_PARAMETER1 rootParameters[2];
 
 		// Constant Buffer
-		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-		rootParameters[1].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
-		rootParameters[1].Descriptor.RegisterSpace = 0;
-		rootParameters[1].Descriptor.ShaderRegister = 0;
+		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[0].Descriptor.RegisterSpace = 0;
+		rootParameters[0].Descriptor.ShaderRegister = 0;
 
-		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-		rootParameters[2].Constants.RegisterSpace = 1;
-		rootParameters[2].Constants.ShaderRegister = 0;
-		rootParameters[2].Constants.Num32BitValues = 1;
+		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		rootParameters[1].Constants.RegisterSpace = 1;
+		rootParameters[1].Constants.ShaderRegister = 0;
+		rootParameters[1].Constants.Num32BitValues = 1;
 
 		//////////////////////////////////////////////////////////////////////////
 
@@ -243,19 +228,12 @@ void SkyboxPass::Init()
 		sampler.RegisterSpace = 0;
 		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-		// Allow input layout and deny uneccessary access to certain pipeline stages.
-		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.NumParameters = _countof(rootParameters);
 		rootSignatureDesc.pParameters = &rootParameters[0];
 		rootSignatureDesc.NumStaticSamplers = 1;
 		rootSignatureDesc.pStaticSamplers = &sampler;
-		rootSignatureDesc.Flags = rootSignatureFlags;
+		rootSignatureDesc.Flags = D3D12Utility::GetBindlessRootSignatureFlags();;
 
 		D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedRootSignatureDesc = {};
 		versionedRootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -352,9 +330,8 @@ void SkyboxPass::Execute(ID3D12GraphicsCommandList* inCmdList, D3D12RenderTarget
 		MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constantBufferData));
 		memcpy(cBufferMap.CPUAddress, &constantBufferData, sizeof(constantBufferData));
 
-		inCmdList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
-		inCmdList->SetGraphicsRootConstantBufferView(1, cBufferMap.GPUAddress);
-		inCmdList->SetGraphicsRoot32BitConstant(2, Cubemap->SRVIndex, 0);
+		inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
+		inCmdList->SetGraphicsRoot32BitConstant(1, Cubemap->SRVIndex, 0);
 
 		inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 

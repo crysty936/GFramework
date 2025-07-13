@@ -66,8 +66,8 @@ namespace D3D12Utility
 
 	D3D12_HEAP_PROPERTIES& GetDefaultHeapProps();
 	D3D12_HEAP_PROPERTIES& GetUploadHeapProps();
-	D3D12_DESCRIPTOR_RANGE1* GetGlobalHeapDescriptorRangeDescs();
-	int32_t GetGlobalHeapDescriptorRangeDescsCount();
+	D3D12_ROOT_SIGNATURE_FLAGS GetDefaultRootSignatureFlags();
+	D3D12_ROOT_SIGNATURE_FLAGS GetBindlessRootSignatureFlags();
 
 	void UAVBarrier(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource);
 	void TransitionResource(ID3D12GraphicsCommandList* inCmdList, ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter, uint32_t inSubresourceIdx = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);

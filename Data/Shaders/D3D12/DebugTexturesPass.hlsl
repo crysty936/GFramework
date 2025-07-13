@@ -1,5 +1,3 @@
-#include "DescriptorTables.hlsl"
-
 
 struct PSInput
 {
@@ -58,7 +56,7 @@ PSOutput PSMain(PSInput input)
 		case 0:
 		{
 			//Texture2D Tex = Tex2DTable[NonUniformResourceIndex(ConstBuffer.TextureIdx)];
-			Texture2D Tex = Tex2DTable[ConstBuffer.TextureIdx];
+			Texture2D Tex = ResourceDescriptorHeap[ConstBuffer.TextureIdx];
 			float4 sample = Tex.Sample(g_sampler, uv);
 			const float gamma = 2.2;
 			const float inverseGamma = 1.0 / gamma;
@@ -72,7 +70,7 @@ PSOutput PSMain(PSInput input)
 		// Render target
 		case 1:
 		{
-			Texture2D Tex = Tex2DTable[ConstBuffer.TextureIdx];
+			Texture2D Tex = ResourceDescriptorHeap[ConstBuffer.TextureIdx];
 			const float4 sample = Tex.Sample(g_sampler, uv);
 			output.Color = sample;
 		
@@ -82,7 +80,7 @@ PSOutput PSMain(PSInput input)
 		// Depth target
 		case 2:
 		{
-			Texture2DArray TexArray = Tex2DArrayTable[ConstBuffer.TextureIdx];
+			Texture2DArray TexArray = ResourceDescriptorHeap[ConstBuffer.TextureIdx];
 			const float depth = TexArray.Sample(g_sampler, float3(uv, ConstBuffer.ArrayIdx)).r;
 		
 			// Transform depth into view space

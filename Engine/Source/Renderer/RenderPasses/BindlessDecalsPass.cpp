@@ -87,7 +87,7 @@ void BindlessDecalsPass::Init()
 {
 	// Decal Pass Signature
 	{
-		D3D12_ROOT_PARAMETER1 rootParameters[6];
+		D3D12_ROOT_PARAMETER1 rootParameters[5];
 
 		// 0. Main CBV_SRV_UAV heap
 		// 1. Structured Buffer
@@ -97,8 +97,8 @@ void BindlessDecalsPass::Init()
 		// 5. Output UAV
 
 		// Main CBV_SRV_UAV heap
-		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		//rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		//rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 		//D3D12_DESCRIPTOR_RANGE1 srvRangeCS[1] = {};
 		//srvRangeCS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -108,26 +108,26 @@ void BindlessDecalsPass::Init()
 		//srvRangeCS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
 		//srvRangeCS[0].OffsetInDescriptorsFromTableStart = 0;
 
-		rootParameters[0].DescriptorTable.pDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescs();
-		rootParameters[0].DescriptorTable.NumDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescsCount();
+		//rootParameters[0].DescriptorTable.pDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescs();
+		//rootParameters[0].DescriptorTable.NumDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescsCount();
 
 		// Structured Buffer
+		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
+		rootParameters[0].Descriptor.RegisterSpace = 100;
+		rootParameters[0].Descriptor.ShaderRegister = 0;
+
+		// Binning Buffer
 		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
 		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 		rootParameters[1].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
 		rootParameters[1].Descriptor.RegisterSpace = 100;
-		rootParameters[1].Descriptor.ShaderRegister = 0;
-
-		// Binning Buffer
-		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-		rootParameters[2].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
-		rootParameters[2].Descriptor.RegisterSpace = 100;
-		rootParameters[2].Descriptor.ShaderRegister = 1;
+		rootParameters[1].Descriptor.ShaderRegister = 1;
 
 		// Depth Buffer
-		rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 		D3D12_DESCRIPTOR_RANGE1 depthBufferRange[1];
 		depthBufferRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -137,15 +137,15 @@ void BindlessDecalsPass::Init()
 		depthBufferRange[0].OffsetInDescriptorsFromTableStart = 0;
 		depthBufferRange[0].NumDescriptors = 1;
 
-		rootParameters[3].DescriptorTable.NumDescriptorRanges = _countof(depthBufferRange);
-		rootParameters[3].DescriptorTable.pDescriptorRanges = &depthBufferRange[0];
+		rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(depthBufferRange);
+		rootParameters[2].DescriptorTable.pDescriptorRanges = &depthBufferRange[0];
 
 		// Constant Buffer
-		rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-		rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-		rootParameters[4].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
-		rootParameters[4].Descriptor.RegisterSpace = 0;
-		rootParameters[4].Descriptor.ShaderRegister = 0;
+		rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[3].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[3].Descriptor.RegisterSpace = 0;
+		rootParameters[3].Descriptor.ShaderRegister = 0;
 
 		// Output UAV
 		D3D12_DESCRIPTOR_RANGE1 uavRangeCS[1] = {};
@@ -155,10 +155,10 @@ void BindlessDecalsPass::Init()
 		uavRangeCS[0].RegisterSpace = 0;
 		uavRangeCS[0].OffsetInDescriptorsFromTableStart = 0;
 
-		rootParameters[5].DescriptorTable.pDescriptorRanges = &uavRangeCS[0];
-		rootParameters[5].DescriptorTable.NumDescriptorRanges = _countof(uavRangeCS);
-		rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[4].DescriptorTable.pDescriptorRanges = &uavRangeCS[0];
+		rootParameters[4].DescriptorTable.NumDescriptorRanges = _countof(uavRangeCS);
+		rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 		//////////////////////////////////////////////////////////////////////////
 
@@ -177,20 +177,12 @@ void BindlessDecalsPass::Init()
 		sampler.RegisterSpace = 0;
 		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-		// Allow input layout and deny uneccessary access to certain pipeline stages.
-		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-		//| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.NumParameters = _countof(rootParameters);
 		rootSignatureDesc.pParameters = &rootParameters[0];
 		rootSignatureDesc.NumStaticSamplers = 1;
 		rootSignatureDesc.pStaticSamplers = &sampler;
-		rootSignatureDesc.Flags = rootSignatureFlags;
+		rootSignatureDesc.Flags = D3D12Utility::GetBindlessRootSignatureFlags();;
 
 		D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedRootSignatureDesc = {};
 		versionedRootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -275,20 +267,12 @@ void BindlessDecalsPass::Init()
 		sampler.RegisterSpace = 0;
 		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-		// Allow input layout and deny uneccessary access to certain pipeline stages.
-		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-		//| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-
 		D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 		rootSignatureDesc.NumParameters = _countof(rootParameters);
 		rootSignatureDesc.pParameters = &rootParameters[0];
 		rootSignatureDesc.NumStaticSamplers = 1;
 		rootSignatureDesc.pStaticSamplers = &sampler;
-		rootSignatureDesc.Flags = rootSignatureFlags;
+		rootSignatureDesc.Flags = D3D12Utility::GetBindlessRootSignatureFlags();;
 
 		D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedRootSignatureDesc = {};
 		versionedRootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -551,10 +535,10 @@ void BindlessDecalsPass::ComputeDecals(ID3D12GraphicsCommandList* inCmdList, Sce
 
 	D3D12Utility::UAVBarrier(inCmdList, m_DecalsTiledBinningBuffer.Resource);
 
-	inCmdList->SetComputeRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
-	inCmdList->SetComputeRootShaderResourceView(1, m_DecalsBuffer.GetCurrentGPUAddress());
-	inCmdList->SetComputeRootShaderResourceView(2, m_DecalsTiledBinningBuffer.GetGPUAddress());
-	inCmdList->SetComputeRootDescriptorTable(3, D3D12Globals::GlobalSRVHeap.GetGPUHandle(inSceneTextures.MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
+	//inCmdList->SetComputeRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
+	inCmdList->SetComputeRootShaderResourceView(0, m_DecalsBuffer.GetCurrentGPUAddress());
+	inCmdList->SetComputeRootShaderResourceView(1, m_DecalsTiledBinningBuffer.GetGPUAddress());
+	inCmdList->SetComputeRootDescriptorTable(2, D3D12Globals::GlobalSRVHeap.GetGPUHandle(inSceneTextures.MainDepthBuffer->Texture->SRVIndex, D3D12Utility::CurrentFrameIndex));
 
 	{
 		DecalConstantBuffer decalConstantBufferData;
@@ -568,11 +552,11 @@ void BindlessDecalsPass::ComputeDecals(ID3D12GraphicsCommandList* inCmdList, Sce
 		// Use temp buffer in main constant buffer
 		MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(decalConstantBufferData));
 		memcpy(cBufferMap.CPUAddress, &decalConstantBufferData, sizeof(decalConstantBufferData));
-		inCmdList->SetComputeRootConstantBufferView(4, cBufferMap.GPUAddress);
+		inCmdList->SetComputeRootConstantBufferView(3, cBufferMap.GPUAddress);
 	}
 
 	const eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE> uavHandles = { inSceneTextures.GBufferAlbedo->UAV, inSceneTextures.GBufferNormal->UAV, inSceneTextures.GBufferRoughness->UAV };
-	D3D12Utility::BindTempDescriptorTable(5, inCmdList, uavHandles);
+	D3D12Utility::BindTempDescriptorTable(4, inCmdList, uavHandles);
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();

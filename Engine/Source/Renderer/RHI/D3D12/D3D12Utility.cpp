@@ -8,16 +8,6 @@ D3D12_RASTERIZER_DESC RasterizerStates[uint8_t(ERasterizerState::Count)];
 D3D12_BLEND_DESC BlendStates[uint8_t(EBlendState::Count)];
 D3D12_DEPTH_STENCIL_DESC DepthStates[uint8_t(EDepthState::Count)];
 
-enum GlobalDescriptorRanges
-{
-	Texture = 0,
-	TextureArray,
-	TextureCube,
-	Count
-};
-
-static D3D12_DESCRIPTOR_RANGE1 GlobalDescriptorRangeDescs[GlobalDescriptorRanges::Count] = {};
-
 void D3D12Utility::Init()
 {
 	// Rasterirez States
@@ -137,16 +127,6 @@ void D3D12Utility::Init()
 			desc.DepthFunc = D3D12_COMPARISON_FUNC_NEVER;
 		}
 	}
-
-	for (int i = 0; i < GlobalDescriptorRanges::Count; ++i)
-	{
-		GlobalDescriptorRangeDescs[i].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		GlobalDescriptorRangeDescs[i].NumDescriptors = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-		GlobalDescriptorRangeDescs[i].BaseShaderRegister = 0;
-		GlobalDescriptorRangeDescs[i].RegisterSpace = i;
-		GlobalDescriptorRangeDescs[i].OffsetInDescriptorsFromTableStart = 0;
-		GlobalDescriptorRangeDescs[i].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
-	}
 }
 
 D3D12_HEAP_PROPERTIES& D3D12Utility::GetDefaultHeapProps()
@@ -184,15 +164,29 @@ D3D12_HEAP_PROPERTIES& D3D12Utility::GetUploadHeapProps()
 	return UploadHeapProps;
 }
 
-
-D3D12_DESCRIPTOR_RANGE1* D3D12Utility::GetGlobalHeapDescriptorRangeDescs()
+D3D12_ROOT_SIGNATURE_FLAGS D3D12Utility::GetDefaultRootSignatureFlags()
 {
-	return GlobalDescriptorRangeDescs;
+	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+		| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
+		| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
+		| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+	//| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+
+	return rootSignatureFlags;
 }
 
-int32_t D3D12Utility::GetGlobalHeapDescriptorRangeDescsCount()
+D3D12_ROOT_SIGNATURE_FLAGS D3D12Utility::GetBindlessRootSignatureFlags()
 {
-	return GlobalDescriptorRanges::Count;
+	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+		| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
+		| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
+		| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS
+		| D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+	//| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+
+	return rootSignatureFlags;
 }
 
 D3D12_RESOURCE_BARRIER MakeTransitionBarrier(ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter, uint32_t inSubresourceIdx)

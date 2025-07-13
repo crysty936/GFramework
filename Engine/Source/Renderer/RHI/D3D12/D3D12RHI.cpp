@@ -355,6 +355,7 @@ bool DXCCompile(const eastl::string& inFilePath, const eastl::wstring& inEntryPo
 		operationResult->GetErrorBuffer(&vsErrorBlob);
 		outErrors.InitialiseToSize(vsErrorBlob->GetBufferSize(), '\0');
 		memcpy(outErrors.data(), vsErrorBlob->GetBufferPointer(), vsErrorBlob->GetBufferSize());
+		ASSERT(outErrors.size() < 1024);
 		LOG_ERROR("%s", outErrors.c_str());
 	}
 
@@ -390,8 +391,8 @@ IDxcBlob* CompileWithRetry(const eastl::string& inFilePath, const eastl::string&
 
 CompiledShaderResult D3D12RHI::CompileGraphicsShaderFromFile(const eastl::string& inFilePath, const eastl::string& inVSEntry, const eastl::string& inPSEntry)
 {
-	IDxcBlob* vsBlob = CompileWithRetry(inFilePath, inVSEntry, L"vs_6_5");
-	IDxcBlob* psBlob = CompileWithRetry(inFilePath, inPSEntry, L"ps_6_5");
+	IDxcBlob* vsBlob = CompileWithRetry(inFilePath, inVSEntry, L"vs_6_6");
+	IDxcBlob* psBlob = CompileWithRetry(inFilePath, inPSEntry, L"ps_6_6");
 
 
 	return { vsBlob, psBlob };
@@ -399,7 +400,7 @@ CompiledShaderResult D3D12RHI::CompileGraphicsShaderFromFile(const eastl::string
 
 CompiledShaderResult D3D12RHI::CompileComputeShaderFromFile(const eastl::string& inFilePath)
 {
-	IDxcBlob* csBlob = CompileWithRetry(inFilePath, "CSMain", L"cs_6_5");
+	IDxcBlob* csBlob = CompileWithRetry(inFilePath, "CSMain", L"cs_6_6");
 
 	return { csBlob };
 }

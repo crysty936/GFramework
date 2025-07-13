@@ -1,4 +1,3 @@
-#include "DescriptorTables.hlsl"
 #include "Utils.hlsl"
 
 #define TILE_SIZE 16
@@ -107,11 +106,11 @@ void CSMain(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_G
 			decalUVW.y >= -1.f && decalUVW.y <= 1.f &&
 			decalUVW.z >= -1.f && decalUVW.z <= 1.f)
 		{
-			Texture2D AlbedoMap = Tex2DTable[usedDecal.AlbedoMapIdx];
+			Texture2D AlbedoMap = ResourceDescriptorHeap[usedDecal.AlbedoMapIdx];
 			//OutputTexture[pixelPos] = float4(1.f, 0.f, 0.f, 1.f);
 			OutputAlbedo[pixelPos] = AlbedoMap.SampleLevel(g_sampler, decalUVW.xy, 0);
 		
-			Texture2D NormalMap = Tex2DTable[usedDecal.NormalMapIdx];
+			Texture2D NormalMap = ResourceDescriptorHeap[usedDecal.NormalMapIdx];
 
 			float3 decalNormalTS = NormalMap.SampleLevel(g_sampler, decalUVW.xy, 0).xyz;
 			//float3 decalNormalTS = float3(0.f, 0.f, 1.f);

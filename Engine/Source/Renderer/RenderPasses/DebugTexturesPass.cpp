@@ -36,21 +36,21 @@ static eastl::shared_ptr<D3D12VertexBuffer> ScreenQuadVertexBuffer = nullptr;
 void DebugTexturePass::Init()
 {
 	{
-		D3D12_ROOT_PARAMETER1 rootParameters[2] = {};
+		D3D12_ROOT_PARAMETER1 rootParameters[1] = {};
 
 		// Main CBV_SRV_UAV heap
-		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		//rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		//rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-		rootParameters[0].DescriptorTable.pDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescs();
-		rootParameters[0].DescriptorTable.NumDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescsCount();
+		//rootParameters[0].DescriptorTable.pDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescs();
+		//rootParameters[0].DescriptorTable.NumDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescsCount();
 
 		// Constant Buffer
-		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-		rootParameters[1].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
-		rootParameters[1].Descriptor.RegisterSpace = 0;
-		rootParameters[1].Descriptor.ShaderRegister = 0;
+		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[0].Descriptor.RegisterSpace = 0;
+		rootParameters[0].Descriptor.ShaderRegister = 0;
 
 		// Textures
 		//rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -85,21 +85,13 @@ void DebugTexturePass::Init()
 		sampler.RegisterSpace = 0;
 		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-		// Allow input layout and deny uneccessary access to certain pipeline stages.
-		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-		//| D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-
 		D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
 		rootSignatureDesc.Desc_1_1.NumParameters = _countof(rootParameters);
 		rootSignatureDesc.Desc_1_1.pParameters = &rootParameters[0];
 		rootSignatureDesc.Desc_1_1.NumStaticSamplers = 1;
 		rootSignatureDesc.Desc_1_1.pStaticSamplers = &sampler;
-		rootSignatureDesc.Desc_1_1.Flags = rootSignatureFlags;
+		rootSignatureDesc.Desc_1_1.Flags = D3D12Utility::GetBindlessRootSignatureFlags();
 
 		m_DebugTexturesRS = D3D12RHI::Get()->CreateRootSignature(rootSignatureDesc);
 	}
@@ -363,14 +355,14 @@ void DebugTexturePass::DrawTexture(ID3D12GraphicsCommandList* inCmdList, const D
 			// Use temp buffer in main constant buffer
 			MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(DebugTexturesConstantBuffer));
 			memcpy(cBufferMap.CPUAddress, &constantsBuffer, sizeof(DebugTexturesConstantBuffer));
-			inCmdList->SetGraphicsRootConstantBufferView(1, cBufferMap.GPUAddress);
+			inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
 		}
 
 		ASSERT(SRVIndex != -1);
 
 		// Bind texture to display
 
-		inCmdList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
+		//inCmdList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
 
 		inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
