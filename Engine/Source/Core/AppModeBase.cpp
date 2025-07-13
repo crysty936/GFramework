@@ -307,6 +307,8 @@ void AppModeBase::BeginFrame()
 
 void AppModeBase::ExecutePasses()
 {
+	PIXMarker Marker(D3D12Globals::GraphicsCmdList, "Passes");
+
 	// TODO: Fix transition to remove hack
 	static bool doOnce = false;
 	if (!doOnce)

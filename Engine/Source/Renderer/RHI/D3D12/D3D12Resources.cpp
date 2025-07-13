@@ -810,6 +810,7 @@ eastl::shared_ptr<class D3D12DepthBuffer> D3D12RHI::CreateDepthBuffer(const int3
 	ownedTexture->Name = WStringToAnsi(inName.c_str());
 
 	newDB->Texture = std::move(ownedTexture);
+	newDB->ArraySize = inArraySize;
 
 	DepthTargets.push_back(newDB);
 

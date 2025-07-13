@@ -75,6 +75,7 @@ public:
 	DXGI_FORMAT DSVFormat = DXGI_FORMAT_UNKNOWN;
 
 	eastl::vector<D3D12_CPU_DESCRIPTOR_HANDLE> ArrayDSVs;
+	int32_t ArraySize = 1;
 };
 
 

@@ -100,16 +100,16 @@ void BindlessDecalsPass::Init()
 		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-		D3D12_DESCRIPTOR_RANGE1 srvRangeCS[1] = {};
-		srvRangeCS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		srvRangeCS[0].NumDescriptors = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-		srvRangeCS[0].BaseShaderRegister = 0;
-		srvRangeCS[0].RegisterSpace = 0;
-		srvRangeCS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
-		srvRangeCS[0].OffsetInDescriptorsFromTableStart = 0;
+		//D3D12_DESCRIPTOR_RANGE1 srvRangeCS[1] = {};
+		//srvRangeCS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		//srvRangeCS[0].NumDescriptors = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+		//srvRangeCS[0].BaseShaderRegister = 0;
+		//srvRangeCS[0].RegisterSpace = 0;
+		//srvRangeCS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+		//srvRangeCS[0].OffsetInDescriptorsFromTableStart = 0;
 
-		rootParameters[0].DescriptorTable.pDescriptorRanges = &srvRangeCS[0];
-		rootParameters[0].DescriptorTable.NumDescriptorRanges = _countof(srvRangeCS);
+		rootParameters[0].DescriptorTable.pDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescs();
+		rootParameters[0].DescriptorTable.NumDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescsCount();
 
 		// Structured Buffer
 		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;

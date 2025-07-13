@@ -278,7 +278,7 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& 
 		D3D12Utility::TransitionResource(inCmdList, ShadowDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE, i);
 		inCmdList->ClearDepthStencilView(ShadowDepthBuffer->ArrayDSVs[i], D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.f, 0, 0, nullptr);
 
-		//// Populate Command List
+		// Populate Command List
 
 
 		// Handle RTs

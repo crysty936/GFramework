@@ -17,11 +17,13 @@
 struct DebugTexturesConstantBuffer
 {
 	glm::vec4 TranslationScale;
+	uint32_t TextureIdx;
+	uint32_t ArrayIdx;
 	uint32_t TextureType;
 	float CameraNear;
 	float CameraFar;
 
-	float Padding[48];
+	float Padding[47];
 };
 
 
@@ -36,28 +38,35 @@ void DebugTexturePass::Init()
 	{
 		D3D12_ROOT_PARAMETER1 rootParameters[2] = {};
 
-		// Constant Buffer
-		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		// Main CBV_SRV_UAV heap
+		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-		rootParameters[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
-		rootParameters[0].Descriptor.RegisterSpace = 0;
-		rootParameters[0].Descriptor.ShaderRegister = 0;
+
+		rootParameters[0].DescriptorTable.pDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescs();
+		rootParameters[0].DescriptorTable.NumDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescsCount();
+
+		// Constant Buffer
+		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		rootParameters[1].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[1].Descriptor.RegisterSpace = 0;
+		rootParameters[1].Descriptor.ShaderRegister = 0;
 
 		// Textures
-		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		//rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		//rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-		D3D12_DESCRIPTOR_RANGE1 texturesRange[1];
-		texturesRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		texturesRange[0].BaseShaderRegister = 0;
-		texturesRange[0].RegisterSpace = 0;
-		texturesRange[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
-		texturesRange[0].OffsetInDescriptorsFromTableStart = 0;
+		//D3D12_DESCRIPTOR_RANGE1 texturesRange[1];
+		//texturesRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		//texturesRange[0].BaseShaderRegister = 0;
+		//texturesRange[0].RegisterSpace = 0;
+		//texturesRange[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+		//texturesRange[0].OffsetInDescriptorsFromTableStart = 0;
 
-		// Texture to present
-		texturesRange[0].NumDescriptors = 1;
-		rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(texturesRange);
-		rootParameters[1].DescriptorTable.pDescriptorRanges = &texturesRange[0];
+		//// Texture to present
+		//texturesRange[0].NumDescriptors = 1;
+		//rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(texturesRange);
+		//rootParameters[1].DescriptorTable.pDescriptorRanges = &texturesRange[0];
 
 		//////////////////////////////////////////////////////////////////////////
 
@@ -74,7 +83,7 @@ void DebugTexturePass::Init()
 		sampler.MaxLOD = D3D12_FLOAT32_MAX;
 		sampler.ShaderRegister = 0;
 		sampler.RegisterSpace = 0;
-		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 		// Allow input layout and deny uneccessary access to certain pipeline stages.
 		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
@@ -302,6 +311,7 @@ void DebugTexturePass::DrawTexture(ID3D12GraphicsCommandList* inCmdList, const D
 	inCmdList->OMSetRenderTargets(1, renderTargets, FALSE, nullptr);
 
 	uint32_t SRVIndex = -1;
+	int32_t ArrayNum = 1;
 
 	switch (inType)
 	{
@@ -326,45 +336,53 @@ void DebugTexturePass::DrawTexture(ID3D12GraphicsCommandList* inCmdList, const D
 		const eastl::vector<eastl::shared_ptr<D3D12DepthBuffer>>& DTs = D3D12RHI::Get()->GetDTs();
 		const eastl::shared_ptr<D3D12DepthBuffer>& dt = DTs[selectedTexIdx];
 		SRVIndex = dt->Texture->SRVIndex;
+		ArrayNum = dt->ArraySize;
 
 		break;
 	}
 	}
 
-	// Bind constant buffer
+	for (int i = 0; i < ArrayNum; ++i)
 	{
-		DebugTexturesConstantBuffer constantsBuffer = {};
-		constantsBuffer.TranslationScale = glm::vec4(Offset.x, Offset.y, Scale.x, Scale.y);
-		constantsBuffer.TextureType = static_cast<uint32_t>(inType);
+		// Bind constant buffer
+		{
+			glm::vec2 usedOffset = Offset + glm::vec2(Scale.x * i * 2, 0);
 
-		SceneManager& sManager = SceneManager::Get();
-		const Scene& currentScene = sManager.GetCurrentScene();
+			DebugTexturesConstantBuffer constantsBuffer = {};
+			constantsBuffer.TextureIdx = SRVIndex;
+			constantsBuffer.ArrayIdx = i;
+			constantsBuffer.TranslationScale = glm::vec4(usedOffset.x, usedOffset.y, Scale.x, Scale.y);
+			constantsBuffer.TextureType = static_cast<uint32_t>(inType);
 
-		constantsBuffer.CameraNear = currentScene.GetCurrentCamera()->GetNear();
-		constantsBuffer.CameraFar = currentScene.GetCurrentCamera()->GetFar();
+			SceneManager& sManager = SceneManager::Get();
+			const Scene& currentScene = sManager.GetCurrentScene();
+
+			constantsBuffer.CameraNear = currentScene.GetCurrentCamera()->GetNear();
+			constantsBuffer.CameraFar = currentScene.GetCurrentCamera()->GetFar();
+
+			// Use temp buffer in main constant buffer
+			MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(DebugTexturesConstantBuffer));
+			memcpy(cBufferMap.CPUAddress, &constantsBuffer, sizeof(DebugTexturesConstantBuffer));
+			inCmdList->SetGraphicsRootConstantBufferView(1, cBufferMap.GPUAddress);
+		}
+
+		ASSERT(SRVIndex != -1);
+
+		// Bind texture to display
+
+		inCmdList->SetGraphicsRootDescriptorTable(0, D3D12Globals::GlobalSRVHeap.GPUStart[D3D12Utility::CurrentFrameIndex]);
+
+		inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 
-		// Use temp buffer in main constant buffer
-		MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(DebugTexturesConstantBuffer));
-		memcpy(cBufferMap.CPUAddress, &constantsBuffer, sizeof(DebugTexturesConstantBuffer));
-		inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
+		// Set up quad and shader
+		const D3D12_VERTEX_BUFFER_VIEW vbView = ScreenQuadVertexBuffer->VBView();
+		const D3D12_INDEX_BUFFER_VIEW ibView = ScreenQuadIndexBuffer->IBView();
+		inCmdList->IASetVertexBuffers(0, 1, &vbView);
+		inCmdList->IASetIndexBuffer(&ibView);
+
+		inCmdList->DrawIndexedInstanced(ScreenQuadIndexBuffer->IndexCount, 1, 0, 0, 0);
+
 	}
-
-	ASSERT(SRVIndex != -1);
-
-	// Bind texture to display
-
-	inCmdList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(SRVIndex, D3D12Utility::CurrentFrameIndex));
-
-	inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-
-	// Set up quad and shader
-	const D3D12_VERTEX_BUFFER_VIEW vbView = ScreenQuadVertexBuffer->VBView();
-	const D3D12_INDEX_BUFFER_VIEW ibView = ScreenQuadIndexBuffer->IBView();
-	inCmdList->IASetVertexBuffers(0, 1, &vbView);
-	inCmdList->IASetIndexBuffer(&ibView);
-
-	inCmdList->DrawIndexedInstanced(ScreenQuadIndexBuffer->IndexCount, 1, 0, 0, 0);
 }
 

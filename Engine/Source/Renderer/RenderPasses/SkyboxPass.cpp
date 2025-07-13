@@ -201,16 +201,16 @@ void SkyboxPass::Init()
 		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 		rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-		D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
-		rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		rangesPS[0].NumDescriptors = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-		rangesPS[0].BaseShaderRegister = 0;
-		rangesPS[0].RegisterSpace = 0;
-		rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
-		rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
+		//D3D12_DESCRIPTOR_RANGE1 rangesPS[1];
+		//rangesPS[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		//rangesPS[0].NumDescriptors = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+		//rangesPS[0].BaseShaderRegister = 0;
+		//rangesPS[0].RegisterSpace = 0;
+		//rangesPS[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+		//rangesPS[0].OffsetInDescriptorsFromTableStart = 0;
 
-		rootParameters[0].DescriptorTable.pDescriptorRanges = &rangesPS[0];
-		rootParameters[0].DescriptorTable.NumDescriptorRanges = _countof(rangesPS);
+		rootParameters[0].DescriptorTable.pDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescs();
+		rootParameters[0].DescriptorTable.NumDescriptorRanges = D3D12Utility::GetGlobalHeapDescriptorRangeDescsCount();
 
 		// Constant Buffer
 		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;

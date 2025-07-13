@@ -8,6 +8,16 @@ D3D12_RASTERIZER_DESC RasterizerStates[uint8_t(ERasterizerState::Count)];
 D3D12_BLEND_DESC BlendStates[uint8_t(EBlendState::Count)];
 D3D12_DEPTH_STENCIL_DESC DepthStates[uint8_t(EDepthState::Count)];
 
+enum GlobalDescriptorRanges
+{
+	Texture = 0,
+	TextureArray,
+	TextureCube,
+	Count
+};
+
+static D3D12_DESCRIPTOR_RANGE1 GlobalDescriptorRangeDescs[GlobalDescriptorRanges::Count] = {};
+
 void D3D12Utility::Init()
 {
 	// Rasterirez States
@@ -71,22 +81,22 @@ void D3D12Utility::Init()
 	{
 		D3D12_BLEND_DESC& disabledBlendDesc = BlendStates[uint8_t(EBlendState::Disabled)];
 
-disabledBlendDesc.AlphaToCoverageEnable = FALSE;
-disabledBlendDesc.IndependentBlendEnable = FALSE;
+		disabledBlendDesc.AlphaToCoverageEnable = FALSE;
+		disabledBlendDesc.IndependentBlendEnable = FALSE;
 
-const D3D12_RENDER_TARGET_BLEND_DESC defaultRenderTargetBlendDesc =
-{
-	FALSE,FALSE,
-	D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
-	D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
-	D3D12_LOGIC_OP_NOOP,
-	D3D12_COLOR_WRITE_ENABLE_ALL,
-};
+		const D3D12_RENDER_TARGET_BLEND_DESC defaultRenderTargetBlendDesc =
+		{
+			FALSE,FALSE,
+			D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
+			D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
+			D3D12_LOGIC_OP_NOOP,
+			D3D12_COLOR_WRITE_ENABLE_ALL,
+		};
 
-for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
-{
-	disabledBlendDesc.RenderTarget[i] = defaultRenderTargetBlendDesc;
-}
+		for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+		{
+			disabledBlendDesc.RenderTarget[i] = defaultRenderTargetBlendDesc;
+		}
 	}
 
 	// Depth States
@@ -128,6 +138,15 @@ for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
 		}
 	}
 
+	for (int i = 0; i < GlobalDescriptorRanges::Count; ++i)
+	{
+		GlobalDescriptorRangeDescs[i].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		GlobalDescriptorRangeDescs[i].NumDescriptors = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+		GlobalDescriptorRangeDescs[i].BaseShaderRegister = 0;
+		GlobalDescriptorRangeDescs[i].RegisterSpace = i;
+		GlobalDescriptorRangeDescs[i].OffsetInDescriptorsFromTableStart = 0;
+		GlobalDescriptorRangeDescs[i].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+	}
 }
 
 D3D12_HEAP_PROPERTIES& D3D12Utility::GetDefaultHeapProps()
@@ -165,6 +184,16 @@ D3D12_HEAP_PROPERTIES& D3D12Utility::GetUploadHeapProps()
 	return UploadHeapProps;
 }
 
+
+D3D12_DESCRIPTOR_RANGE1* D3D12Utility::GetGlobalHeapDescriptorRangeDescs()
+{
+	return GlobalDescriptorRangeDescs;
+}
+
+int32_t D3D12Utility::GetGlobalHeapDescriptorRangeDescsCount()
+{
+	return GlobalDescriptorRanges::Count;
+}
 
 D3D12_RESOURCE_BARRIER MakeTransitionBarrier(ID3D12Resource* inResource, D3D12_RESOURCE_STATES inStateBefore, D3D12_RESOURCE_STATES inStateAfter, uint32_t inSubresourceIdx)
 {

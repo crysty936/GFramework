@@ -201,8 +201,11 @@ void D3D12ConstantBuffer::ClearUsedMemory()
 
 D3D12StructuredBuffer::~D3D12StructuredBuffer()
 {
-	Resource->Release();
-	Resource = nullptr;
+	if (Resource)
+	{
+		Resource->Release();
+		Resource = nullptr;
+	}
 }
 
 void D3D12StructuredBuffer::Init(const uint64_t inNumElements, const uint64_t inStride)
@@ -352,8 +355,11 @@ uint64_t D3D12RawBuffer::GetGPUAddress()
 
 D3D12Fence::~D3D12Fence()
 {
-	FenceHandle->Release();
-	CloseHandle(FenceEvent);
+	if (FenceHandle)
+	{
+		FenceHandle->Release();
+		CloseHandle(FenceEvent);
+	}
 }
 
 void D3D12Fence::Init(uint64_t inInitialValue)
