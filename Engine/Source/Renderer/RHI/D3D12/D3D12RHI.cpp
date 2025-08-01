@@ -392,8 +392,12 @@ IDxcBlob* CompileWithRetry(const eastl::string& inFilePath, const eastl::string&
 CompiledShaderResult D3D12RHI::CompileGraphicsShaderFromFile(const eastl::string& inFilePath, const eastl::string& inVSEntry, const eastl::string& inPSEntry)
 {
 	IDxcBlob* vsBlob = CompileWithRetry(inFilePath, inVSEntry, L"vs_6_6");
-	IDxcBlob* psBlob = CompileWithRetry(inFilePath, inPSEntry, L"ps_6_6");
 
+	IDxcBlob* psBlob = nullptr;
+	if (!inPSEntry.empty())
+	{
+		psBlob = CompileWithRetry(inFilePath, inPSEntry, L"ps_6_6");
+	}
 
 	return { vsBlob, psBlob };
 }

@@ -16,7 +16,7 @@ Camera::~Camera() = default;
 // TODO: Make these customizable
 const float CAMERA_FOV = 45.f;
 const float CAMERA_NEAR = 0.1f;
-const float CAMERA_FAR = 100.f;
+const float CAMERA_FAR = 500.f;
 
 void Camera::Init()
 {

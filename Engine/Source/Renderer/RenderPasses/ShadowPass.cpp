@@ -21,7 +21,8 @@
 struct MeshConstantBuffer
 {
 	glm::mat4 LocalToClip;
-	uint32_t Padding[48];
+	glm::vec4 Test;
+	float Padding[44];
 };
 static_assert((sizeof(MeshConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
@@ -63,9 +64,9 @@ void ShadowPass::Init()
 	// PSO
 	{
 		eastl::string fullPath = "../Data/Shaders/D3D12/"; ;
-		fullPath += "MeshPass.hlsl";
+		fullPath += "ShadowPass.hlsl";
 
-		CompiledShaderResult meshShaderPair = D3D12RHI::Get()->CompileGraphicsShaderFromFile(fullPath);
+		CompiledShaderResult meshShaderPair = D3D12RHI::Get()->CompileGraphicsShaderFromFile(fullPath, "VSMain", "");
 
 		// Define the vertex input layout.
 		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
@@ -105,8 +106,9 @@ void ShadowPass::Init()
 
 }
 
-uint64_t TestNrMeshesToDraw = uint64_t(-1);
-uint64_t NrMeshesDrawn = 0;
+int32_t TestNrMeshesToDraw = 62;
+int32_t NrMeshesDrawn = 0;
+int32_t CurrentCascade = 0;
 
 void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl::vector<TransformObjPtr>& inChildNodes, const Scene& inCurrentScene, const eastl::vector<MeshMaterial>& inMaterials, const glm::mat4& inToShadowClipMatrix)
 {
@@ -121,6 +123,11 @@ void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl:
 		//	return;
 		//}
 
+		//if (NrMeshesDrawn > 60 && CurrentCascade == 1)
+		//{
+		//	__debugbreak();
+		//}
+
 		if (const MeshNode* modelChild = dynamic_cast<const MeshNode*>(childPtr))
 		{
 			if (modelChild->MatIndex == uint32_t(-1) || inMaterials.size() == 0)
@@ -132,18 +139,31 @@ void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl:
 			const glm::mat4 modelMatrix = absTransform.GetMatrix();
 
 			{
-				MeshConstantBuffer constantBufferData;
+				MeshConstantBuffer constantBufferData = {};
+				memset(&constantBufferData, 0, sizeof(constantBufferData));
 
-
-				//constantBufferData.LocalToClip = glm::transpose(Proj * inCurrentScene.GetMainCameraLookAt() * modelMatrix);
 				constantBufferData.LocalToClip = glm::transpose(inToShadowClipMatrix * modelMatrix);
-				//constantBufferData.LocalToClip = glm::transpose(inCurrentScene.GetMainCameraProj() * inCurrentScene.GetMainCameraLookAt() * modelMatrix);
+
+				static int test = 0;
+				++test;
+
+				constantBufferData.Test.x = 1.f;
+				constantBufferData.Test.y = 2.f;
+				constantBufferData.Test.z = 3.f;
+				constantBufferData.Test.w = 4.f;
 
 				MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constantBufferData));
 				memcpy(cBufferMap.CPUAddress, &constantBufferData, sizeof(constantBufferData));
+				
+
+				//MeshConstantBuffer testReadback = {};
+				//memcpy(&testReadback, cBufferMap.CPUAddress, sizeof(constantBufferData));
+
 
 				inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
 			}
+
+			
 
 			inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			const D3D12_VERTEX_BUFFER_VIEW vbView = modelChild->VertexBuffer->VBView();
@@ -153,7 +173,7 @@ void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl:
 
 			inCmdList->DrawIndexedInstanced(modelChild->IndexBuffer->IndexCount, 1, 0, 0, 0);
 
-			//++NrMeshesDrawn;
+			++NrMeshesDrawn;
 		}
 	}
 }
@@ -191,7 +211,7 @@ vectorInline<glm::mat4, MAX_NUM_CASCADES> ShadowPass::CreateCascadesMatrices(con
 	const float cameraNear = currentCamera->GetNear();
 	const float cameraFar = currentCamera->GetFar();
 	const float cameraFOV = currentCamera->GetFOV();
-	eastl::vector<float> shadowCascadeFarPlanes = { cameraFar / 40.0f , cameraFar / 30.0f, cameraFar / 20.0f, cameraFar / 10.0f, cameraFar / 2.0f, cameraFar };
+	eastl::vector<float> shadowCascadeFarPlanes = { cameraFar / 20.0f , cameraFar / 10.0f, cameraFar / 5.0f, cameraFar / 2.0f, cameraFar };
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
@@ -234,25 +254,27 @@ vectorInline<glm::mat4, MAX_NUM_CASCADES> ShadowPass::CreateCascadesMatrices(con
 
 void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& inLightDir)
 {
-	PIXMarker Marker(inCmdList, "Draw Depth Pass");
+	PIXMarker Marker(inCmdList, "Shadow Depth Passes");
 
 	ImGuiUtils::ImGuiScope ImGuiShadow("Shadow");
 
-	ImGui::DragInt("Cascade Count", &NumCascades, 1.0f, 0, MAX_NUM_CASCADES);
+	ImGui::DragInt("Cascade Count", &NumCascades, 1, 0, MAX_NUM_CASCADES);
+	ImGui::DragInt("Meshes to draw", &TestNrMeshesToDraw, 1, 0, 500);
 	ImGui::Checkbox("Update Shadow Matrix", &bUpdateShadowValues);
 	ImGui::Checkbox("Draw Cascades Projections", &bDrawCascadesProjection);
 	ImGui::Checkbox("Draw Cascades Camera Frustums", &bDrawCascadesCameraFrustums);
 
-	D3D12Globals::GlobalConstantsBuffer.ClearUsedMemory();
 	SceneManager& sManager = SceneManager::Get();
 	const Scene& currentScene = sManager.GetCurrentScene();
 
 	vectorInline<glm::mat4, MAX_NUM_CASCADES> cascadeMatrices = CreateCascadesMatrices(inLightDir, currentScene);
 
-	if (cascadeMatrices.size() == 0)
+	const int32_t numCascades = cascadeMatrices.size();
+	if (numCascades == 0)
 	{
 		return;
 	}
+
 	inCmdList->SetGraphicsRootSignature(m_ShadowPassRootSignature);
 	inCmdList->SetPipelineState(m_ShadowPassPSO);
 
@@ -266,25 +288,33 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& 
 
 	const eastl::vector<eastl::shared_ptr<TransformObject>>& objects = currentScene.GetAllObjects();
 
-	for (int32_t i = 0; i < NumCascades; ++i)
+
+	for (int32_t i = 0; i < numCascades; ++i) // TODO
 	{
+		CurrentCascade = i;
+
+		char Temp[12] = { 0 };
+		itoa(i, &Temp[0], 10);
+		eastl::string depthPassName = "Shadow Depth Pass ";
+		depthPassName += Temp;
+
+		PIXMarker Marker(inCmdList, depthPassName.c_str());
+
 		D3D12Utility::TransitionResource(inCmdList, ShadowDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE, i);
 		inCmdList->ClearDepthStencilView(ShadowDepthBuffer->ArrayDSVs[i], D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.f, 0, 0, nullptr);
 
-		// Populate Command List
+		//// Populate Command List
 
 
 		// Handle RTs
 		inCmdList->OMSetRenderTargets(0, nullptr, false, &ShadowDepthBuffer->ArrayDSVs[i]);
 
-		// Draw meshes
 		NrMeshesDrawn = 0;
 
-
-		for (int32_t i = 0; i < objects.size(); ++i)
+		for (int32_t j = 0; j < objects.size(); ++j)
 		{
 			// TODO: Possibly replace with RenderCommand self registration because this way it needs to be recursive and casting
-			const eastl::shared_ptr<TransformObject>& currObj = objects[i];
+			const eastl::shared_ptr<TransformObject>& currObj = objects[j];
 			const eastl::shared_ptr<Model3D> currModel = eastl::dynamic_shared_pointer_cast<Model3D>(currObj);
 
 			if (currModel.get() == nullptr)
@@ -294,7 +324,7 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& 
 
 			// Record commands
 			const eastl::vector<TransformObjPtr>& children = currModel->GetChildren();
-			DrawMeshNodesRecursively(inCmdList, children, currentScene, currModel->Materials, cascadeMatrices[0]);
+			DrawMeshNodesRecursively(inCmdList, children, currentScene, currModel->Materials, cascadeMatrices[i]);
 		}
 
 		D3D12Utility::TransitionResource(inCmdList, ShadowDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, i);

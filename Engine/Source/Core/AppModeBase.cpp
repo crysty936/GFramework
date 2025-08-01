@@ -184,7 +184,12 @@ void AppModeBase::CreateInitialResources()
 	}
 #endif
 
-	currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 3.f);
+	//currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 3.f);
+
+	eastl::shared_ptr<TransformObject> cameraParent = currentScene.GetCurrentCamera()->GetParent().lock();
+	cameraParent->SetRelativeLocation(glm::vec3(0.683f, 1.537f, 5.061f));
+	cameraParent->SetRotationDegrees(glm::vec3(-180.f, 28.480f, -180.f));
+	currentScene.GetCurrentCamera()->SetRotationDegrees(glm::vec3(25.f, 0.f, 0.f));
 	//currentScene.GetCurrentCamera()->Move(EMovementDirection::Back, 21.f);
 	//currentScene.GetCurrentCamera()->Move(EMovementDirection::Up, 15.f);
 
@@ -364,6 +369,8 @@ void AppModeBase::ExecutePasses()
 		D3D12Utility::TransitionResource(D3D12Globals::GraphicsCmdList, D3D12Globals::BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 	}
+
+	D3D12Globals::GlobalConstantsBuffer.ClearUsedMemory();
 
 	// Setup scene hierarchy draws
 	if (GEngine->IsImguiEnabled())

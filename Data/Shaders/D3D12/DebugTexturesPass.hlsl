@@ -81,15 +81,19 @@ PSOutput PSMain(PSInput input)
 		case 2:
 		{
 			Texture2DArray TexArray = ResourceDescriptorHeap[ConstBuffer.TextureIdx];
-			const float depth = TexArray.Sample(g_sampler, float3(uv, ConstBuffer.ArrayIdx)).r;
+			float depth = TexArray.Sample(g_sampler, float3(uv, ConstBuffer.ArrayIdx)).r;
 		
 			// Transform depth into view space
 			// Basically inverse of projection, only applied to z
-			float linearizedDepth = (ConstBuffer.CameraNear * ConstBuffer.CameraFar) / (ConstBuffer.CameraFar +  depth * (ConstBuffer.CameraNear - ConstBuffer.CameraFar));
-			linearizedDepth /= (ConstBuffer.CameraFar);
-			linearizedDepth = 1.f - linearizedDepth;
+			//depth = (ConstBuffer.CameraNear * ConstBuffer.CameraFar) / (ConstBuffer.CameraFar +  depth * (ConstBuffer.CameraNear - ConstBuffer.CameraFar));
+
+			// Further divide for more contrast
+			//depth /= (ConstBuffer.CameraFar);
+
+			// Inverse color
+			//depth = 1.f - linearizedDepth;
 			
-			output.Color = float4(linearizedDepth, linearizedDepth, linearizedDepth, 1.f);
+			output.Color = float4(depth, depth, depth, 1.f);
 		
 			// Same as above, mathematically derived pre-projection z out of 
 			// the operations that happen with z when multiplied with the projection

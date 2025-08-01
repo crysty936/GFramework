@@ -6,7 +6,7 @@
 #include "glm/ext/matrix_float4x4.hpp"
 #include "Utils/InlineVector.h"
 
-#define MAX_NUM_CASCADES 6
+#define MAX_NUM_CASCADES 3
 
 class ShadowPass
 {
@@ -23,7 +23,7 @@ private:
 	vectorInline<glm::mat4, MAX_NUM_CASCADES> CreateCascadesMatrices(const glm::vec3& inLightDir, const class Scene& inCurrentScene) const;
 
 private:
-	int32_t NumCascades = 4;
+	int32_t NumCascades = MAX_NUM_CASCADES;
 	mutable glm::mat4 CachedCameraShadowMatrix;
 	mutable bool bUpdateShadowValues = true;
 	mutable bool bDrawCascadesProjection = false;

@@ -358,8 +358,6 @@ void DeferredBasePass::Execute(ID3D12GraphicsCommandList* inCmdList)
 	D3D12Utility::TransitionResource(inCmdList, GBufferTextures.MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
 
-	D3D12Globals::GlobalConstantsBuffer.ClearUsedMemory();
-
 	// Populate Command List
 
 	inCmdList->SetGraphicsRootSignature(m_GBufferMainMeshRootSignature);

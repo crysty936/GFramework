@@ -82,7 +82,7 @@ D3D12DescHeapAllocationDesc D3D12DescriptorHeap::AllocateTemporary(uint32_t inCo
 	D3D12DescHeapAllocationDesc newAllocation;
 	newAllocation.Index = NumPersistentDescriptors + AllocatedTemp;
 
-	newAllocation.CPUHandle[0] = CPUStart[D3D12Utility::CurrentFrameIndex];
+	newAllocation.CPUHandle[0] = CPUStart[D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight];
 	newAllocation.CPUHandle[0].ptr += newAllocation.Index * DescriptorSize;
 
 	AllocatedTemp+= inCount;
@@ -173,13 +173,17 @@ MapResult D3D12ConstantBuffer::Map()
 
 MapResult D3D12ConstantBuffer::ReserveTempBufferMemory(const uint64_t inSize)
 {
-	uint64_t& currentMemoryCounter = UsedMemory[D3D12Utility::CurrentFrameIndex];
+	const int frameInFlightIdx = D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight;
+	uint64_t& currentMemoryCounter = UsedMemory[frameInFlightIdx];
+
 	const uint64_t alignedSize = Utils::AlignTo(inSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 	ASSERT_MSG(alignedSize < (Size - currentMemoryCounter), "More memory required than available, increase buffer size.");
 
-
 	// Use current memory counter position as offset from current buffer start
 	const uint64_t offset = currentMemoryCounter;
+
+	// Add this to the used memory
+	currentMemoryCounter += alignedSize;
 
 	MapResult currentBufferStartMap = Map();
 	uint8_t* CPUAddress = currentBufferStartMap.CPUAddress;
@@ -188,15 +192,12 @@ MapResult D3D12ConstantBuffer::ReserveTempBufferMemory(const uint64_t inSize)
 	CPUAddress += offset;
 	GPUAddress += offset;
 
-	// Add this to the used memory
-	currentMemoryCounter += alignedSize;
-
 	return { CPUAddress, GPUAddress };
 }
 
 void D3D12ConstantBuffer::ClearUsedMemory()
 {
-	UsedMemory[D3D12Utility::CurrentFrameIndex] = 0;
+	UsedMemory[D3D12Utility::CurrentFrameIndex % D3D12Utility::NumFramesInFlight] = 0;
 }
 
 D3D12StructuredBuffer::~D3D12StructuredBuffer()
