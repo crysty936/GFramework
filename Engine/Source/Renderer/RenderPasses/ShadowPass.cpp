@@ -267,9 +267,9 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& 
 	SceneManager& sManager = SceneManager::Get();
 	const Scene& currentScene = sManager.GetCurrentScene();
 
-	vectorInline<glm::mat4, MAX_NUM_CASCADES> cascadeMatrices = CreateCascadesMatrices(inLightDir, currentScene);
+	CascadesMatrices = CreateCascadesMatrices(inLightDir, currentScene);
 
-	const int32_t numCascades = cascadeMatrices.size();
+	const int32_t numCascades = CascadesMatrices.size();
 	if (numCascades == 0)
 	{
 		return;
@@ -324,7 +324,7 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& 
 
 			// Record commands
 			const eastl::vector<TransformObjPtr>& children = currModel->GetChildren();
-			DrawMeshNodesRecursively(inCmdList, children, currentScene, currModel->Materials, cascadeMatrices[i]);
+			DrawMeshNodesRecursively(inCmdList, children, currentScene, currModel->Materials, CascadesMatrices[i]);
 		}
 
 		D3D12Utility::TransitionResource(inCmdList, ShadowDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, i);
@@ -336,4 +336,16 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& 
 	viewport.Width = static_cast<float>(props.Width);
 	viewport.Height = static_cast<float>(props.Height);
 	D3D12Globals::GraphicsCmdList->RSSetViewports(1, &viewport);
+}
+
+ShadowPassOutput ShadowPass::GetOutput() const
+{
+	ShadowPassOutput output(*this);
+	return output;
+}
+
+ShadowPassOutput::ShadowPassOutput(const class ShadowPass& inPass)
+	: /*DepthBuffer{ inPass.GetShadowDepthBuffer() },*/ CascadesMatrices{ inPass.GetCascadesMatrices() }
+{
+
 }

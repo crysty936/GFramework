@@ -12,6 +12,7 @@
 #include "imgui.h"
 #include "Renderer/Drawable/ShapesUtils/BasicShapesData.h"
 #include "Core/AppCore.h"
+#include "Renderer/RenderPasses/ShadowPass.h"
 
 struct LightingConstantBuffer
 {
@@ -25,14 +26,18 @@ struct LightingConstantBuffer
 };
 static_assert((sizeof(LightingConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
+D3D12RawBuffer m_ShadowMatricesBuffer;
+
 static ID3D12RootSignature* m_LightingRootSignature;
 static ID3D12PipelineState* m_LightingPipelineState;
 
-void DeferredLightingPass::Init(SceneTextures& inSceneTextures)
+void DeferredLightingPass::Init(SceneTextures& inSceneTextures, eastl::shared_ptr<class D3D12DepthBuffer> inShadowDepthBuffer)
 {
+	m_ShadowMatricesBuffer.Init(MAX_NUM_CASCADES);
+
 	// Final lighting root signature
 	{
-		D3D12_ROOT_PARAMETER1 rootParameters[2] = {};
+		D3D12_ROOT_PARAMETER1 rootParameters[3] = {};
 
 		// Constant Buffer
 		rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -41,11 +46,18 @@ void DeferredLightingPass::Init(SceneTextures& inSceneTextures)
 		rootParameters[0].Descriptor.RegisterSpace = 0;
 		rootParameters[0].Descriptor.ShaderRegister = 0;
 
-		// Textures
-		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		// Shadows Buffer
+		rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
 		rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		rootParameters[1].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+		rootParameters[1].Descriptor.RegisterSpace = 100;
+		rootParameters[1].Descriptor.ShaderRegister = 0;
 
-		D3D12_DESCRIPTOR_RANGE1 texturesRange[2];
+		// Textures
+		rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+		D3D12_DESCRIPTOR_RANGE1 texturesRange[3];
 		texturesRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 		texturesRange[0].BaseShaderRegister = 0;
 		texturesRange[0].RegisterSpace = 0;
@@ -63,8 +75,16 @@ void DeferredLightingPass::Init(SceneTextures& inSceneTextures)
 		texturesRange[1].OffsetInDescriptorsFromTableStart = inSceneTextures.MainDepthBuffer->Texture->SRVIndex;
 		texturesRange[1].NumDescriptors = 1;
 
-		rootParameters[1].DescriptorTable.NumDescriptorRanges = _countof(texturesRange);
-		rootParameters[1].DescriptorTable.pDescriptorRanges = &texturesRange[0];
+		// Shadow depth buffer
+		texturesRange[2].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+		texturesRange[2].BaseShaderRegister = 4;
+		texturesRange[2].RegisterSpace = 0;
+		texturesRange[2].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+		texturesRange[2].OffsetInDescriptorsFromTableStart = inShadowDepthBuffer->Texture->SRVIndex;
+		texturesRange[2].NumDescriptors = 1;
+
+		rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(texturesRange);
+		rootParameters[2].DescriptorTable.pDescriptorRanges = &texturesRange[0];
 
 		//////////////////////////////////////////////////////////////////////////
 
@@ -137,19 +157,18 @@ void DeferredLightingPass::Init(SceneTextures& inSceneTextures)
 	}
 }
 
-void DeferredLightingPass::Execute(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir)
+void DeferredLightingPass::Execute(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir, const ShadowPassOutput& inShadowOutput)
 {
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.GBufferAlbedo->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.GBufferNormal->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.GBufferRoughness->Texture->Resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	D3D12Utility::TransitionResource(inCmdList, inSceneTextures.MainDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-	RenderLighting(inCmdList, inSceneTextures, inTarget, inLightDir);
+	RenderLighting(inCmdList, inSceneTextures, inTarget, inLightDir, inShadowOutput);
 }
 
-
 // TODO: Convert to compute
-void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir)
+void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir, const ShadowPassOutput& inShadowOutput)
 {
 	PIXMarker Marker(inCmdList, "Render Deferred Lighting");
 
@@ -185,7 +204,8 @@ void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, 
 		inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
 	}
 
-	inCmdList->SetGraphicsRootDescriptorTable(1, D3D12Globals::GlobalSRVHeap.GetGPUHandle(0, D3D12Utility::CurrentFrameIndex));
+	inCmdList->SetComputeRootShaderResourceView(1, m_ShadowMatricesBuffer.GetGPUAddress());
+	inCmdList->SetGraphicsRootDescriptorTable(2, D3D12Globals::GlobalSRVHeap.GetGPUHandle(0, D3D12Utility::CurrentFrameIndex));
 	inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	inCmdList->DrawIndexedInstanced(3, 1, 0, 0, 0);

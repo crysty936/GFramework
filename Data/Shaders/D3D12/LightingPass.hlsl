@@ -23,11 +23,14 @@ struct LightingConstantBuffer
 };
 
 ConstantBuffer<LightingConstantBuffer> ConstBuffer : register(b0);
+StructuredBuffer<float4x4> ShadowMatrices : register(t0, space100);
 
 Texture2D GBufferAlbedo : register(t0);
 Texture2D GBufferNormal : register(t1);
 Texture2D GBufferRoughness : register(t2);
 Texture2D GBufferDepth : register(t3);
+Texture2DArray ShadowBuffers : register(t4);
+
 
 SamplerState g_sampler : register(s0);
 

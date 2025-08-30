@@ -110,7 +110,7 @@ void AppModeBase::CreateInitialResources()
 	DeferredBasePassCommand.Init();
 	ShadowDepthsPass.Init();
 	BindlessDecalsPassCommmand.Init();
-	DeferredLightingPassCommand.Init(DeferredBasePassCommand.GBufferTextures);
+	DeferredLightingPassCommand.Init(DeferredBasePassCommand.GBufferTextures, ShadowDepthsPass.GetShadowDepthBuffer());
 	SkyboxPassCommand.Init();
 	DebugTexturesPassCommand.Init();
 
@@ -345,8 +345,8 @@ void AppModeBase::ExecutePasses()
 		D3D12Utility::TransitionResource(D3D12Globals::GraphicsCmdList, D3D12Globals::BackBuffers[D3D12Utility::CurrentFrameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		SceneTextures& sceneTextures = DeferredBasePassCommand.GBufferTextures;
 
-
-		DeferredLightingPassCommand.Execute(D3D12Globals::GraphicsCmdList, DeferredBasePassCommand.GBufferTextures, *LightingTarget, normLightDir);
+		ShadowPassOutput shadowOutput = ShadowDepthsPass.GetOutput();
+		DeferredLightingPassCommand.Execute(D3D12Globals::GraphicsCmdList, DeferredBasePassCommand.GBufferTextures, *LightingTarget, normLightDir, shadowOutput);
 	}
 
 	SkyboxPassCommand.Execute(D3D12Globals::GraphicsCmdList, *LightingTarget, DeferredBasePassCommand.GBufferTextures);

@@ -11,11 +11,11 @@ public:
 	DeferredLightingPass() = default;
 	~DeferredLightingPass() = default;
 
-	void Init(struct SceneTextures& inSceneTextures);
-	void Execute(struct ID3D12GraphicsCommandList* inCmdList, struct SceneTextures& inSceneTextures, const class D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir);
+	void Init(struct SceneTextures& inSceneTextures, eastl::shared_ptr<class D3D12DepthBuffer> inShadowDepthBuffer);
+	void Execute(struct ID3D12GraphicsCommandList* inCmdList, struct SceneTextures& inSceneTextures, const class D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir, const struct ShadowPassOutput& inShadowOutput);
 
 private:
-	void RenderLighting(struct ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const class D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir);
+	void RenderLighting(struct ID3D12GraphicsCommandList* inCmdList, SceneTextures& inSceneTextures, const class D3D12RenderTarget2D& inTarget, const glm::vec3& inLightDir, const ShadowPassOutput& inShadowOutput);
 };
 
 
