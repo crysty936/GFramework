@@ -2,8 +2,15 @@
 #include "EASTL/allocator.h"
 #include "EASTL/vector.h"
 #include "Core/EngineUtils.h"
+#include "Math/MathUtils.h"
 
 // TODO: Needs more work, eastl::vector swaps the allocators as well as mpBegin and mpEnd when moving and that leaves the new vector with pointers to the previous stack segment
+
+// EASTL uses doubling when growing capacity as amortization strategy. Have to take that into account here.
+constexpr uint32_t GetAlignedNumElements(const uint32_t NumElements)
+{
+	return NumElements == 1 ? 1 : MathUtils::PowInt(2, NumElements);
+}
 
 template<typename T, uint32_t NumInlineElements>
 class TFixedInlineAllocator
@@ -25,7 +32,7 @@ public:
 	static eastl_size_t GetNewCapacity(eastl_size_t currentCapacity);
 
 protected:
-	T InlineElements[NumInlineElements];
+	T InlineElements[GetAlignedNumElements(NumInlineElements)];
 	//const char* mpName; // Debug name, used to track memory.
 private:
 	void CopyAllocator(const TFixedInlineAllocator<T, NumInlineElements>& inAlloc);
@@ -34,7 +41,7 @@ private:
 template<typename T, uint32_t NumInlineElements>
 void TFixedInlineAllocator<T, NumInlineElements>::CopyAllocator(const TFixedInlineAllocator<T, NumInlineElements>& inAlloc)
 {
-	for (int i = 0; i < NumInlineElements; ++i)
+	for (uint32_t i = 0; i < GetAlignedNumElements(NumInlineElements); ++i)
 	{
 		InlineElements[i] = inAlloc.InlineElements[i];
 	}
@@ -70,7 +77,7 @@ TFixedInlineAllocator<T, NumInlineElements>& TFixedInlineAllocator<T, NumInlineE
 template<typename T, uint32_t NumInlineElements>
 inline void* TFixedInlineAllocator<T, NumInlineElements>::allocate(size_t n, int flags)
 {
-	ASSERT_MSG(n <= sizeof(T)* NumInlineElements, "Fixed inline array used with more elements than declared, will crash.");
+	ASSERT_MSG(n <= sizeof(T) * GetAlignedNumElements(NumInlineElements), "Fixed inline array used with more elements than declared, will crash.");
 
 	return &InlineElements;
 }
@@ -91,7 +98,10 @@ inline void TFixedInlineAllocator<T, NumInlineElements>::deallocate(void* p, siz
 template<typename T, uint32_t NumInlineElements>
 inline eastl_size_t TFixedInlineAllocator<T, NumInlineElements>::GetNewCapacity(eastl_size_t currentCapacity)
 {
-	return currentCapacity + 1;
+	//return currentCapacity + 1;
+
+	// From eastl vector
+	return (currentCapacity > 0) ? (2 * currentCapacity) : 1;
 }
 
 template<typename T, uint32_t NumInlineElements>

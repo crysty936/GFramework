@@ -26,14 +26,23 @@ struct LightingConstantBuffer
 };
 static_assert((sizeof(LightingConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
-D3D12RawBuffer m_ShadowMatricesBuffer;
+// 16 bytes aligned
+struct ShadowCascadeProjectionData
+{
+	glm::mat4 Projection;	// 64 bytes
+	float FarPlaneDistance; // 68 bytes
+	float Padding[3];		// 80 bytes
+};
+static_assert((sizeof(ShadowCascadeProjectionData) % 16) == 0, "Structured Buffer size must be 16-byte aligned");
+
+D3D12StructuredBuffer m_ShadowDataBuffer;
 
 static ID3D12RootSignature* m_LightingRootSignature;
 static ID3D12PipelineState* m_LightingPipelineState;
 
 void DeferredLightingPass::Init(SceneTextures& inSceneTextures, eastl::shared_ptr<class D3D12DepthBuffer> inShadowDepthBuffer)
 {
-	m_ShadowMatricesBuffer.Init(MAX_NUM_CASCADES);
+	m_ShadowDataBuffer.Init(MAX_NUM_CASCADES, sizeof(ShadowCascadeProjectionData));
 
 	// Final lighting root signature
 	{
@@ -173,6 +182,25 @@ void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, 
 	PIXMarker Marker(inCmdList, "Render Deferred Lighting");
 
 	// Draw screen quad
+	
+	vectorInline<ShadowCascadeProjectionData, MAX_NUM_CASCADES> shadowDatas;
+
+	const int32_t numCascades = inShadowOutput.CascadesMatrices.size();
+
+	for (int i = 0; i < numCascades; ++i)
+	{
+		ShadowCascadeProjectionData shadowData = {};
+
+		const glm::mat4& cascadeMatrix = inShadowOutput.CascadesMatrices[i];
+		const float farPlaneDistance = inShadowOutput.CascadesFarPlanes[i];
+
+		shadowData.Projection = cascadeMatrix;
+		shadowData.FarPlaneDistance = farPlaneDistance;
+
+		shadowDatas.push_back(shadowData);
+	}
+
+	m_ShadowDataBuffer.UploadDataAllFrames(&shadowDatas[0], sizeof(ShadowCascadeProjectionData) * shadowDatas.size());
 
 	inCmdList->ClearRenderTargetView(inTarget.RTV, D3D12Utility::ClearColor, 0, nullptr);
 
@@ -204,7 +232,7 @@ void DeferredLightingPass::RenderLighting(ID3D12GraphicsCommandList* inCmdList, 
 		inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
 	}
 
-	inCmdList->SetComputeRootShaderResourceView(1, m_ShadowMatricesBuffer.GetGPUAddress());
+	inCmdList->SetComputeRootShaderResourceView(1, m_ShadowDataBuffer.GetCurrentGPUAddress());
 	inCmdList->SetGraphicsRootDescriptorTable(2, D3D12Globals::GlobalSRVHeap.GetGPUHandle(0, D3D12Utility::CurrentFrameIndex));
 	inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 

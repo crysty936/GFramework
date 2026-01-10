@@ -15,4 +15,29 @@ namespace MathUtils
 	}
 
 	glm::mat4 BuildLookAt(const glm::vec3& inEyeDirection, const glm::vec3& inEyePos, const glm::vec3& inUp = glm::vec3(0.f, 1.f, 0.f));
+
+	constexpr uint32_t PowInt(uint32_t inBase, uint32_t inExp);
+}
+
+// Exponentiation by squaring
+constexpr uint32_t MathUtils::PowInt(uint32_t inBase, uint32_t inExp)
+{
+	uint32_t result = 1;
+
+	while (inExp > 0)
+	{
+		// Take into account odd numbers
+		if (inExp & 1)
+		{
+			result *= inBase;
+		}
+
+		// Square base
+		inBase *= inBase;
+
+		// Halve exponent
+		inExp >>= 1;
+	}
+
+	return result;
 }

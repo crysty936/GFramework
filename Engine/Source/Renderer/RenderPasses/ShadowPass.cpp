@@ -154,7 +154,7 @@ void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl:
 
 				MapResult cBufferMap = D3D12Globals::GlobalConstantsBuffer.ReserveTempBufferMemory(sizeof(constantBufferData));
 				memcpy(cBufferMap.CPUAddress, &constantBufferData, sizeof(constantBufferData));
-				
+
 
 				//MeshConstantBuffer testReadback = {};
 				//memcpy(&testReadback, cBufferMap.CPUAddress, sizeof(constantBufferData));
@@ -163,7 +163,7 @@ void DrawMeshNodesRecursively(ID3D12GraphicsCommandList* inCmdList, const eastl:
 				inCmdList->SetGraphicsRootConstantBufferView(0, cBufferMap.GPUAddress);
 			}
 
-			
+
 
 			inCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			const D3D12_VERTEX_BUFFER_VIEW vbView = modelChild->VertexBuffer->VBView();
@@ -201,17 +201,22 @@ glm::mat4 CreateCascadeMatrix(const glm::mat4& inCameraProj, const glm::mat4& in
 	return lightProjection * lightView;
 }
 
-vectorInline<glm::mat4, MAX_NUM_CASCADES> ShadowPass::CreateCascadesMatrices(const glm::vec3& inLightDir, const Scene& inCurrentScene) const
+void ShadowPass::CreateCascadesMatrices(const glm::vec3& inLightDir, const Scene& inCurrentScene)
 {
-	vectorInline<glm::mat4, MAX_NUM_CASCADES> cascades;
-	cascades.reserve(NumCascades);
-
+	CascadesMatrices.clear();
 	const eastl::shared_ptr<Camera>& currentCamera = inCurrentScene.GetCurrentCamera();
 
 	const float cameraNear = currentCamera->GetNear();
 	const float cameraFar = currentCamera->GetFar();
 	const float cameraFOV = currentCamera->GetFOV();
-	eastl::vector<float> shadowCascadeFarPlanes = { cameraFar / 20.0f , cameraFar / 10.0f, cameraFar / 5.0f, cameraFar / 2.0f, cameraFar };
+
+	//CascadesFarPlanes = { cameraFar / 20.0f , cameraFar / 10.0f, cameraFar / 5.0f, cameraFar / 2.0f, cameraFar };
+	CascadesFarPlanes.clear();
+	CascadesFarPlanes.push_back(cameraFar / 20.0f);
+	CascadesFarPlanes.push_back(cameraFar / 10.0f);
+	CascadesFarPlanes.push_back(cameraFar / 5.0f);
+	//CascadesFarPlanes.push_back(cameraFar / 2.0f);
+	//CascadesFarPlanes.push_back(cameraFar);
 
 	const WindowsWindow& mainWindow = GEngine->GetMainWindow();
 	const WindowProperties& props = mainWindow.GetProperties();
@@ -221,8 +226,8 @@ vectorInline<glm::mat4, MAX_NUM_CASCADES> ShadowPass::CreateCascadesMatrices(con
 
 	for (int32_t i = 0; i < NumCascades; ++i)
 	{
-		const float cascadeNear = i == 0 ? cameraNear : shadowCascadeFarPlanes[i - 1];
-		const float cascadeFar = shadowCascadeFarPlanes[i];
+		const float cascadeNear = i == 0 ? cameraNear : CascadesFarPlanes[i - 1];
+		const float cascadeFar = CascadesFarPlanes[i];
 
 		const glm::mat4 cameraProj = glm::perspectiveLH_ZO(glm::radians(cameraFOV), windowWidth / windowHeight, cascadeNear, cascadeFar);
 
@@ -245,10 +250,8 @@ vectorInline<glm::mat4, MAX_NUM_CASCADES> ShadowPass::CreateCascadesMatrices(con
 			DrawDebugHelpers::DrawProjectionPoints(worldToLightClip);
 		}
 
-		cascades.push_back(worldToLightClip);
+		CascadesMatrices.push_back(worldToLightClip);
 	}
-
-	return cascades;
 }
 
 
@@ -267,7 +270,7 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& 
 	SceneManager& sManager = SceneManager::Get();
 	const Scene& currentScene = sManager.GetCurrentScene();
 
-	CascadesMatrices = CreateCascadesMatrices(inLightDir, currentScene);
+	CreateCascadesMatrices(inLightDir, currentScene);
 
 	const int32_t numCascades = CascadesMatrices.size();
 	if (numCascades == 0)
@@ -289,7 +292,7 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& 
 	const eastl::vector<eastl::shared_ptr<TransformObject>>& objects = currentScene.GetAllObjects();
 
 
-	for (int32_t i = 0; i < numCascades; ++i) // TODO
+	for (int32_t i = 0; i < numCascades; ++i)
 	{
 		CurrentCascade = i;
 
@@ -303,8 +306,7 @@ void ShadowPass::Execute(ID3D12GraphicsCommandList* inCmdList, const glm::vec3& 
 		D3D12Utility::TransitionResource(inCmdList, ShadowDepthBuffer->Texture->Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE, i);
 		inCmdList->ClearDepthStencilView(ShadowDepthBuffer->ArrayDSVs[i], D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.f, 0, 0, nullptr);
 
-		//// Populate Command List
-
+		// Populate Command List
 
 		// Handle RTs
 		inCmdList->OMSetRenderTargets(0, nullptr, false, &ShadowDepthBuffer->ArrayDSVs[i]);
@@ -345,7 +347,7 @@ ShadowPassOutput ShadowPass::GetOutput() const
 }
 
 ShadowPassOutput::ShadowPassOutput(const class ShadowPass& inPass)
-	: /*DepthBuffer{ inPass.GetShadowDepthBuffer() },*/ CascadesMatrices{ inPass.GetCascadesMatrices() }
+	: /*DepthBuffer{ inPass.GetShadowDepthBuffer() },*/ CascadesMatrices{ inPass.GetCascadesMatrices() }, CascadesFarPlanes{ inPass.GetCascadesFarPlanes() }
 {
 
 }

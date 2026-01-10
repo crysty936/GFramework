@@ -14,6 +14,7 @@ struct ShadowPassOutput
 
 	//eastl::shared_ptr<class D3D12DepthBuffer> DepthBuffer;
 	vectorInline<glm::mat4, MAX_NUM_CASCADES> CascadesMatrices;
+	vectorInline<float, MAX_NUM_CASCADES> CascadesFarPlanes;
 };
 
 class ShadowPass
@@ -27,16 +28,18 @@ public:
 
 	inline eastl::shared_ptr<class D3D12DepthBuffer> GetShadowDepthBuffer() const { return ShadowDepthBuffer; }
 	inline vectorInline<glm::mat4, MAX_NUM_CASCADES> GetCascadesMatrices() const { return CascadesMatrices; }
+	inline vectorInline<float, MAX_NUM_CASCADES> GetCascadesFarPlanes() const { return CascadesFarPlanes; }
 
 	ShadowPassOutput GetOutput() const;
 
 private:
-	vectorInline<glm::mat4, MAX_NUM_CASCADES> CreateCascadesMatrices(const glm::vec3& inLightDir, const class Scene& inCurrentScene) const;
+	void CreateCascadesMatrices(const glm::vec3& inLightDir, const class Scene& inCurrentScene);
 
 private:
-	eastl::shared_ptr<class D3D12DepthBuffer> ShadowDepthBuffer;
 	int32_t NumCascades = MAX_NUM_CASCADES;
+	eastl::shared_ptr<class D3D12DepthBuffer> ShadowDepthBuffer;
 	vectorInline<glm::mat4, MAX_NUM_CASCADES> CascadesMatrices;
+	vectorInline<float, MAX_NUM_CASCADES> CascadesFarPlanes;
 	mutable glm::mat4 CachedCameraShadowMatrix;
 	mutable bool bUpdateShadowValues = true;
 	mutable bool bDrawCascadesProjection = false;
